@@ -1,0 +1,143 @@
+# ═══════════════════════════════════════════════════════════
+# Wibsite — Campaign Content Generator (Dify Workflow)
+# ═══════════════════════════════════════════════════════════
+# Input:  { campaign_name, campaign_message, contact_name, company_name }
+# Output: { personalized_message, template_name, language, metadata }
+# ═══════════════════════════════════════════════════════════
+
+version: "1.0"
+kind: workflow
+name: "Wibsite Campaign Content Generator"
+description: "Genera contenido personalizado de campanas para cada contacto usando IA"
+
+input_schema:
+  type: object
+  properties:
+    campaign_name:
+      type: string
+      description: "Nombre de la campana"
+    campaign_message:
+      type: string
+      description: "Mensaje base de la campana"
+    contact_name:
+      type: string
+      description: "Nombre del contacto destinatario"
+    company_name:
+      type: string
+      description: "Empresa del contacto (opcional)"
+
+nodes:
+  # ─── 1. Personalizar mensaje ───────────────────────────
+  - id: personalize_message
+    type: llm
+    model: gpt-4o-mini
+    system_prompt: |
+      Eres un especialista en marketing conversacional B2B para una empresa de tecnologia en Latinoamerica llamada "Wibsite".
+
+      Tu tarea: tomar el mensaje base de una campana y personalizarlo para el destinatario especifico.
+
+      Reglas:
+      - Manten el tono profesional pero calido y cercano
+      - Personaliza con el nombre del contacto y empresa si estan disponibles
+      - Usa espanol neutro latinoamericano
+      - Si no hay nombre de empresa, omite esa parte naturalmente
+      - El mensaje debe ser conciso (maximo 300 caracteres)
+      - Manten el mensaje principal de la campana intacto
+      - Incluye un call-to-action claro al final
+      - NO uses emojis excesivos (maximo 1-2)
+      - NO uses markdown ni HTML
+
+      Responde SOLO con JSON:
+      {
+        "personalized_message": "texto completo personalizado",
+        "greeting": "saludo usado",
+        "call_to_action": "CTA usado",
+        "tone": "professional|friendly|urgent|casual"
+      }
+    input: |
+      Campana: {{input.campaign_name}}
+      Mensaje base: {{input.campaign_message}}
+      Destinatario: {{input.contact_name}}
+      Empresa: {{input.company_name || 'No especificada'}}
+    output: personalized_content
+
+  # ─── 2. Seleccionar template ────────────────────────────
+  - id: select_template
+    type: code
+    language: python
+    code: |
+      import json
+
+      content = json.loads({{personalize_message.output}})
+
+      base_message = {{input.campaign_message}} or ""
+      lower = base_message.lower()
+
+      if any(w in lower for w in ["bienvenida", "welcome", "hola", "nuevo"]):
+          template = "welcome_message"
+      elif any(w in lower for w in ["promo", "descuento", "oferta", "sale"]):
+          template = "promotional_offer"
+      elif any(w in lower for w in ["recordatorio", "sigue", "pendiente", "recuerda"]):
+          template = "follow_up_reminder"
+      elif any(w in lower for w in ["evento", "invitacion", "webinar", "demo"]):
+          template = "event_invitation"
+      else:
+          template = "campaign_generic"
+
+      result = {
+          "template_name": template,
+          "language": "es",
+          "greeting": content["greeting"],
+          "call_to_action": content["call_to_action"],
+          "tone": content["tone"]
+      }
+      print(json.dumps(result))
+    output: template_selection
+
+  # ─── 3. Ensamble final ──────────────────────────────────
+  - id: assemble_output
+    type: code
+    language: python
+    code: |
+      import json
+
+      content = json.loads({{personalize_message.output}})
+      template = json.loads({{select_template.output}})
+
+      result = {
+          "personalized_message": content["personalized_message"],
+          "template_name": template["template_name"],
+          "language": template["language"],
+          "greeting": template["greeting"],
+          "call_to_action": template["call_to_action"],
+          "tone": template["tone"],
+          "contact_name": {{input.contact_name}} or ""
+      }
+
+      print(json.dumps(result))
+    output: final_result
+
+output_schema:
+  type: object
+  properties:
+    personalized_message:
+      type: string
+      description: "Mensaje personalizado para el destinatario"
+    template_name:
+      type: string
+      description: "Nombre del template de WhatsApp a usar"
+    language:
+      type: string
+      description: "Codigo de idioma (es, en)"
+    greeting:
+      type: string
+      description: "Saludo usado"
+    call_to_action:
+      type: string
+      description: "Llamada a la accion"
+    tone:
+      type: string
+      description: "Tono del mensaje"
+    contact_name:
+      type: string
+      description: "Nombre confirmado del contacto"

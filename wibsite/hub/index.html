@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wibsite — Diccionario Visual del Proyecto</title>
+<meta name="description" content="Centro de documentación visual e interactiva de la plataforma Wibsite: diccionario de módulos, flujos paso a paso, objetivos y guías de verificación">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:#080e1a; --bg2:#0d1525; --card:#111827; --card-hover:#162032;
+  --border:#1e2d3d; --border-hover:#2a4a6b;
+  --text:#e2e8f4; --muted:#64748b; --muted2:#8899a8;
+  --green:#22c55e; --green-bg:rgba(34,197,94,.1);
+  --yellow:#eab308; --yellow-bg:rgba(234,179,8,.1);
+  --red:#ef4444; --red-bg:rgba(239,68,68,.1);
+  --blue:#3b82f6; --blue-bg:rgba(59,130,246,.1);
+  --purple:#a855f7; --purple-bg:rgba(168,85,247,.1);
+  --cyan:#06b6d4; --cyan-bg:rgba(6,182,212,.1);
+  --orange:#f97316; --orange-bg:rgba(249,115,22,.1);
+  --pink:#ec4899; --pink-bg:rgba(236,72,153,.1);
+  --sidebar-w:260px;
+}
+body {
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+  display:flex;
+}
+/* ── Sidebar ── */
+.sidebar {
+  width:var(--sidebar-w); min-height:100vh; background:var(--bg2);
+  border-right:1px solid var(--border); padding:20px 0;
+  position:fixed; top:0; left:0; overflow-y:auto; z-index:100;
+  display:flex; flex-direction:column;
+}
+.sidebar-logo { padding:0 20px 16px; border-bottom:1px solid var(--border); margin-bottom:12px; }
+.sidebar-logo h2 { font-size:1.1rem; font-weight:700; }
+.sidebar-logo h2 .brand { color:var(--blue); }
+.sidebar-logo .sub { font-size:0.65rem; color:var(--muted); margin-top:2px; }
+.nav-item {
+  display:flex; align-items:center; gap:10px; padding:10px 20px;
+  cursor:pointer; color:var(--muted2); font-size:0.85rem; font-weight:500;
+  transition:all .15s; border-left:3px solid transparent;
+}
+.nav-item:hover { color:var(--text); background:rgba(255,255,255,.03); }
+.nav-item.active { color:var(--blue); background:var(--blue-bg); border-left-color:var(--blue); }
+.nav-item .icon { font-size:1.1rem; width:20px; text-align:center; }
+.sidebar-spacer { flex:1; }
+.sidebar-footer { padding:12px 20px; border-top:1px solid var(--border); font-size:0.65rem; color:var(--muted); }
+.sidebar-footer .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:4px; }
+.dot-green { background:var(--green); box-shadow:0 0 4px var(--green); }
+.dot-yellow { background:var(--yellow); }
+.dot-red { background:var(--red); }
+
+/* ── Main ── */
+.main { margin-left:var(--sidebar-w); flex:1; padding:24px 32px; max-width:calc(100vw - var(--sidebar-w)); }
+.main-header { margin-bottom:24px; }
+.main-header h1 { font-size:1.5rem; font-weight:700; }
+.main-header p { color:var(--muted2); font-size:0.85rem; margin-top:4px; }
+
+/* ── Search ── */
+.search-box {
+  display:flex; gap:8px; margin-bottom:20px; position:relative;
+}
+.search-box input {
+  flex:1; padding:10px 16px; border-radius:10px; border:1px solid var(--border);
+  background:var(--card); color:var(--text); font-size:0.9rem;
+  outline:none; transition:border .2s;
+}
+.search-box input:focus { border-color:var(--blue); }
+.search-box input::placeholder { color:var(--muted); }
+#searchResults {
+  position:absolute; top:100%; left:0; right:0; z-index:50;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  max-height:320px; overflow-y:auto; display:none; margin-top:4px;
+}
+.search-result-item {
+  padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px; font-size:0.82rem;
+}
+.search-result-item:hover { background:rgba(255,255,255,.05); }
+.search-result-item .tag {
+  font-size:0.6rem; padding:2px 6px; border-radius:4px;
+  background:var(--blue-bg); color:var(--blue); flex-shrink:0;
+}
+.search-result-item .tag.module { background:var(--cyan-bg); color:var(--cyan); }
+.search-result-item .tag.flow { background:var(--orange-bg); color:var(--orange); }
+.search-result-item .tag.obj { background:var(--purple-bg); color:var(--purple); }
+.search-result-item .tag.guide { background:var(--green-bg); color:var(--green); }
+
+/* ── Tab Content ── */
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
+/* ── Status Bar ── */
+.status-bar {
+  display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px;
+}
+.status-chip {
+  padding:4px 10px; border-radius:100px; font-size:0.7rem; font-weight:500;
+  border:1px solid var(--border); background:var(--card); color:var(--muted2);
+}
+.status-chip.online { border-color:rgba(34,197,94,.3); color:var(--green); }
+.status-chip.offline { border-color:rgba(239,68,68,.3); color:var(--red); }
+.status-chip.pending { border-color:rgba(234,179,8,.3); color:var(--yellow); }
+
+/* ── Cards Grid ── */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+.card {
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:20px; transition:all .2s;
+}
+.card:hover { border-color:var(--border-hover); transform:translateY(-2px); }
+.card-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:10px; }
+.card h3 { font-size:0.95rem; font-weight:600; margin-bottom:6px; }
+.card .desc { font-size:0.78rem; color:var(--muted2); line-height:1.5; margin-bottom:10px; }
+.card .meta { font-size:0.7rem; color:var(--muted); display:flex; gap:8px; }
+.card .badge { font-size:0.6rem; padding:2px 8px; border-radius:100px; font-weight:600; }
+.badge-green { background:var(--green-bg); color:var(--green); }
+.badge-yellow { background:var(--yellow-bg); color:var(--yellow); }
+.badge-red { background:var(--red-bg); color:var(--red); }
+.badge-blue { background:var(--blue-bg); color:var(--blue); }
+
+/* ── Flow Diagrams ── */
+.flow-container { display:flex; flex-direction:column; gap:6px; align-items:center; margin:20px 0; }
+.flow-step {
+  display:flex; align-items:center; gap:14px;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:12px 18px; min-width:320px; max-width:480px;
+}
+.flow-step .num {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.75rem; font-weight:700; flex-shrink:0;
+}
+.flow-step .num.done { background:var(--green-bg); color:var(--green); }
+.flow-step .num.pending { background:var(--yellow-bg); color:var(--yellow); }
+.flow-step .num.future { background:rgba(100,116,139,.15); color:var(--muted); }
+.flow-step .info { flex:1; }
+.flow-step .info .title { font-size:0.82rem; font-weight:600; }
+.flow-step .info .sub { font-size:0.7rem; color:var(--muted2); }
+.flow-step .status-label { font-size:0.6rem; font-weight:600; padding:2px 8px; border-radius:100px; }
+.flow-arrow { color:var(--muted); font-size:0.8rem; }
+
+/* ── Table ── */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+th { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); color:var(--muted); font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; }
+td { padding:10px 12px; border-bottom:1px solid rgba(30,45,61,.4); }
+tr:hover td { background:rgba(255,255,255,.02); }
+
+/* ── Progress Bar ── */
+.progress { display:flex; align-items:center; gap:10px; }
+.progress-bar { flex:1; height:6px; background:rgba(255,255,255,.08); border-radius:10px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:10px; transition:width .5s; }
+
+/* ── Impact Lines ── */
+.impact-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+.impact-card {
+  background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px;
+}
+.impact-card h4 { font-size:0.85rem; margin-bottom:8px; }
+.impact-card .affects { font-size:0.75rem; color:var(--muted2); line-height:1.6; }
+.impact-card .affects span {
+  display:inline-block; padding:2px 8px; border-radius:100px; margin:2px;
+  font-size:0.65rem; font-weight:500;
+}
+
+/* ── Responsive ── */
+@media(max-width:768px) {
+  .sidebar { display:none; }
+  .main { margin-left:0; padding:16px; max-width:100vw; }
+  .cards { grid-template-columns:1fr; }
+  .flow-step { min-width:auto; max-width:100%; }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:10px; }
+::-webkit-scrollbar-thumb:hover { background:var(--border-hover); }
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h2>Wibsite <span class="brand">Hub</span></h2>
+    <div class="sub">Diccionario Visual del Proyecto</div>
+  </div>
+  <div class="nav-item active" data-tab="dashboard"><span class="icon">📊</span> Dashboard</div>
+  <div class="nav-item" data-tab="diccionario"><span class="icon">📖</span> Diccionario de Módulos</div>
+  <div class="nav-item" data-tab="flujos"><span class="icon">🔀</span> Flujos Paso a Paso</div>
+  <div class="nav-item" data-tab="objetivos"><span class="icon">🎯</span> Objetivos</div>
+  <div class="nav-item" data-tab="verificacion"><span class="icon">✅</span> Guía de Verificación</div>
+  <div class="nav-item" data-tab="impacto"><span class="icon">🔗</span> Impacto y Dependencias</div>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-footer">
+    <span class="dot dot-green"></span> v3.0.0 &bull; 2026-07-18
+  </div>
+</nav>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+  <div class="main-header">
+    <h1>📖 <span id="pageTitle">Dashboard</span></h1>
+    <p id="pageDesc">Vista general del estado del proyecto Wibsite Business</p>
+  </div>
+
+  <!-- ── Search ── -->
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Buscar módulos, funciones, flujos, objetivos..." autocomplete="off">
+    <div id="searchResults"></div>
+  </div>
+
+  <!-- ── Status Bar ── -->
+  <div class="status-bar" id="statusBar">
+    <span class="status-chip pending">⟳ Verificando servicios...</span>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: DASHBOARD -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-dashboard">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;" id="dashStats">
+      <div class="card" style="border-left:3px solid var(--green);"><h3 style="font-size:1.5rem;color:var(--green);">11</h3><div class="desc">Servicios Docker</div></div>
+      <div class="card" style="border-left:3px solid var(--blue);"><h3 style="font-size:1.5rem;color:var(--blue);">35+</h3><div class="desc">Endpoints API</div></div>
+      <div class="card" style="border-left:3px solid var(--cyan);"><h3 style="font-size:1.5rem;color:var(--cyan);">41</h3><div class="desc">Documentos Técnicos</div></div>
+      <div class="card" style="border-left:3px solid var(--orange);"><h3 style="font-size:1.5rem;color:var(--orange);">70%</h3><div class="desc">Fase 1 Completa</div></div>
+    </div>
+
+    <h3 style="font-size:0.85rem;color:var(--muted);margin-bottom:12px;">⬛ Progreso por Área</h3>
+    <div style="display:grid;gap:8px;margin-bottom:24px;" id="progressAreas"></div>
+
+    <h3 style="font-size:0.85rem;color:var(--muted);margin-bottom:12px;">⚡ Servicios en Línea</h3>
+    <div class="cards" id="dashServices"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: DICCIONARIO -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-diccionario">
+    <div class="cards" id="moduleCards"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: FLUJOS -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-flujos">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;" id="flowTabs"></div>
+    <div id="flowContent"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: OBJETIVOS -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-objetivos">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+      <span class="status-chip" onclick="filterObjectives('all')" data-ofilter="all" style="cursor:pointer;">Todos</span>
+      <span class="status-chip" onclick="filterObjectives('done')" data-ofilter="done" style="cursor:pointer;">✅ Logrados</span>
+      <span class="status-chip" onclick="filterObjectives('pending')" data-ofilter="pending" style="cursor:pointer;">🚫 Pendientes</span>
+    </div>
+    <div id="objectivesList"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: VERIFICACIÓN -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-verificacion">
+    <div id="verificationContent"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TAB: IMPACTO -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-impacto">
+    <p style="color:var(--muted2);font-size:0.85rem;margin-bottom:16px;">
+      Mapa de dependencias entre componentes del sistema. Cada servicio muestra qué otros componentes afecta y de cuáles depende.
+    </p>
+    <div class="impact-grid" id="impactGrid"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════
+
+const MODULES = [
+  { id:'postgres', name:'PostgreSQL', icon:'🗄️', color:'var(--blue)', desc:'Base de datos principal con pgvector. Alberga 5 bases de datos: chatwoot, dify, n8n, twenty, wibsite.', status:'done', port:'-', creds:'wibsite / wibsite_pass', health:'pg_isready', features:['5 bases de datos separadas','pgvector para embeddings','Health check configurado','Fallback JSON store en helper'] },
+  { id:'redis', name:'Redis', icon:'⚡', color:'var(--red)', desc:'Caché y cola de mensajes en memoria. Usado por Chatwoot, Dify y n8n.', status:'done', port:'-', creds:'-', health:'redis-cli ping', features:['Caché de sesiones','Cola de trabajos Sidekiq','Cola Celery para Dify'] },
+  { id:'weaviate', name:'Weaviate', icon:'🔍', color:'var(--purple)', desc:'Base de datos vectorial para búsqueda semántica y RAG en Dify.', status:'done', port:'-', creds:'-', health:'-', features:['Búsqueda vectorial','Integración con Dify','Transformers para embeddings'] },
+  { id:'nginx', name:'Nginx', icon:'🌐', color:'var(--green)', desc:'Proxy reverso unificado que expone todos los servicios en puerto 8080 con rutas por subpath.', status:'done', port:'8080', creds:'-', health:'-', features:['Proxy reverso unificado','Resolución DNS dinámica','Rutas /chatwoot/, /dify/, /n8n/, /crm/, /admin/, /hub/','Soporte subpath para SPAs'] },
+  { id:'chatwoot', name:'Chatwoot', icon:'💬', color:'var(--green)', desc:'Inbox omnicanal para mensajes entrantes de WhatsApp, Messenger y más.', status:'partial', port:'3002', creds:'admin@wibsite.com / Admin@123', health:'-', features:['✅ UI funcional','⚠️ Inbox WhatsApp pendiente (requiere Meta App)','⚠️ Webhook a n8n pendiente','Sidekiq worker activo','API key generada'] },
+  { id:'dify', name:'Dify', icon:'🧠', color:'var(--blue)', desc:'Plataforma de orquestación de IA con workflows visuales, agentes y RAG.', status:'done', port:'5001 / 3003', creds:'joserobertoquirogasalvador@gmail.com / Admin@123', health:'POST /v1/workflows/run', features:['API + Web + Worker funcionales','Plugin openai_api_compatible instalado','OpenRouter como proveedor LLM','Workflow WhatsApp Lead Classifier funcional (8 nodos LLM)','7 modelos registrados','Plugin Daemon + Sandbox operativos'] },
+  { id:'n8n', name:'n8n', icon:'⚡', color:'var(--yellow)', desc:'Orquestador de flujos visual. Conecta Chatwoot, Dify, Twenty CRM y Meta API.', status:'partial', port:'5679', creds:'admin@wibsite.com / Admin@123', health:'/healthz', features:['✅ Servicio funcional','✅ 3 workflows importados y activos en BD','✅ Login funcional (emailOrLdapLoginId)','⚠️ Body parser bug en REST API','⚠️ Credenciales Dify/Twenty/Meta pendientes','⚠️ Workflows requieren toggle manual desde UI'] },
+  { id:'twenty', name:'Twenty CRM', icon:'📇', color:'var(--purple)', desc:'CRM open-source con API GraphQL/REST. Gestiona leads, contactos y empresas.', status:'done', port:'3001', creds:'API Key JWT configurada', health:'/healthz', features:['✅ Servicio funcional','✅ API key JWT configurada','✅ 10 campos custom en people','✅ Sync endpoints funcionales (12/12 leads)','✅ Normalización de teléfonos'] },
+  { id:'helper', name:'Helper Node', icon:'📊', color:'var(--cyan)', desc:'Servicio Express.js central con lógica de integración: campañas, scoring, templates, sync CRM, dashboard SPA.', status:'done', port:'3100', creds:'API pública interna', health:'/api/health', features:['✅ 35+ endpoints funcionales','✅ CRUD campañas multi-canal','✅ Upload Excel/CSV con drag & drop','✅ 11 plantillas de mensajes','✅ Motor de scoring rule-based','✅ Dashboard SPA con 5 tabs','✅ Twenty CRM sync','✅ PostgreSQL + fallback JSON','✅ Seed data para pruebas'] },
+  { id:'authelia', name:'Authelia', icon:'🔐', color:'var(--orange)', desc:'Servidor de autenticación SSO con 2FA. Gateway unificado para todos los servicios.', status:'pending', port:'9091', creds:'admin@wibsite.com / Admin@123', health:'-', features:['⚠️ Configuración preparada (configuration.yml, users.yml)','⚠️ No implementado como gateway','⚠️ Checklist SSO documentado'] },
+  { id:'meta', name:'Meta WhatsApp API', icon:'📱', color:'var(--red)', desc:'API de Meta Cloud para enviar y recibir mensajes de WhatsApp Business.', status:'pending', port:'-', creds:'META_APP_ID, WHATSAPP_PHONE_NUMBER_ID', health:'-', features:['🚫 No configurado','🚫 Falta crear App Business','🚫 Falta WHATSAPP_PHONE_NUMBER_ID','🚫 Falta token permanente (System User)'] },
+  { id:'openrouter', name:'OpenRouter', icon:'🤖', color:'var(--pink)', desc:'Plataforma unificada de APIs de LLM. Reemplaza xAI Grok como proveedor de modelos.', status:'done', port:'-', creds:'API key en .env', health:'POST /api/llm/chat', features:['✅ API key configurada en .env','✅ 7 modelos registrados en Dify','✅ GPT-4o-mini como default','✅ Endpoints de chat y scoring LLM','✅ Integrado con helper-node y Dify'] },
+];
+
+const FLOWS = [
+  {
+    id:'inbound', name:'Mensaje Entrante (Inbound)',
+    steps:[
+      { num:1, title:'Usuario envía WhatsApp', sub:'Cliente escribe a tu número de WhatsApp Business', status:'pending', service:'Meta API', affect:'Sin Meta App configurada, este paso no puede probarse' },
+      { num:2, title:'Meta Cloud API → Chatwoot', sub:'Meta entrega el mensaje al inbox de Chatwoot via webhook', status:'pending', service:'Chatwoot', affect:'Requiere inbox WhatsApp configurado en Chatwoot' },
+      { num:3, title:'Chatwoot → n8n (webhook)', sub:'Chatwoot dispara webhook message_created a n8n', status:'pending', service:'Chatwoot → n8n', affect:'Requiere webhook configurado en Chatwoot Settings > Integrations' },
+      { num:4, title:'n8n filtra mensaje entrante', sub:'n8n valida que sea message_type=incoming y construye payload', status:'done', service:'n8n', affect:'Workflow 01 importado. Requiere toggle Active desde UI' },
+      { num:5, title:'n8n → Dify (clasificar lead)', sub:'n8n envía mensaje a Dify workflow WhatsApp Lead Classifier', status:'done', service:'Dify', affect:'Workflow funcional con 8 nodos LLM via OpenRouter' },
+      { num:6, title:'Dify procesa y clasifica', sub:'Detecta idioma → clasifica intención → extrae datos → calcula score → genera respuesta', status:'done', service:'Dify', affect:'Output: JSON con response_text (score, intent, suggested_response)' },
+      { num:7, title:'Dify → n8n (respuesta)', sub:'Dify retorna JSON estructurado a n8n', status:'done', service:'Dify → n8n', affect:'Formato: data.outputs.response_text' },
+      { num:8, title:'n8n responde por Chatwoot', sub:'Si puede auto-responder, envía respuesta via Chatwoot API', status:'pending', service:'n8n → Chatwoot', affect:'Requiere credencial Chatwoot API en n8n' },
+      { num:9, title:'n8n → Twenty CRM (crear/actualizar)', sub:'Crea o actualiza lead en Twenty CRM con datos y score', status:'pending', service:'n8n → Twenty', affect:'Requiere credencial Twenty API en n8n' },
+      { num:10, title:'n8n agrega nota privada', sub:'Agrega nota con análisis IA en Chatwoot para el agente humano', status:'pending', service:'n8n', affect:'Si requiere escalamiento humano' },
+    ]
+  },
+  {
+    id:'campaign', name:'Campaña Broadcast',
+    steps:[
+      { num:1, title:'n8n Schedule Trigger', sub:'Cada 30 min, n8n consulta campañas pendientes en helper-node', status:'partial', service:'n8n', affect:'Workflow 02 importado. Requiere toggle Active' },
+      { num:2, title:'Helper → campañas pendientes', sub:'GET /campaigns/pending retorna campañas con status=scheduled', status:'done', service:'Helper', affect:'Endpoint funcional con PostgreSQL' },
+      { num:3, title:'n8n → Twenty CRM (audiencia)', sub:'Obtiene contactos filtrados para la campaña', status:'partial', service:'n8n → Twenty', affect:'Requiere credencial Twenty API en n8n' },
+      { num:4, title:'n8n → Dify (personalizar contenido)', sub:'Genera contenido personalizado para cada contacto', status:'done', service:'Dify', affect:'Workflow Dify funcional' },
+      { num:5, title:'n8n → Meta WhatsApp API', sub:'Envía mensaje WhatsApp via Meta Cloud API', status:'pending', service:'Meta', affect:'Requiere Meta App + token + credencial en n8n' },
+      { num:6, title:'Meta → Helper (tracking)', sub:'Meta envía status callback (sent/delivered/read/failed) a helper-node', status:'pending', service:'Meta → Helper', affect:'Requiere webhook Meta configurado apuntando a helper:3100/webhooks/whatsapp' },
+    ]
+  },
+  {
+    id:'optout', name:'Opt-Out',
+    steps:[
+      { num:1, title:'Usuario responde "STOP"', sub:'Cliente envía mensaje "STOP", "BAJA" o "NO"', status:'pending', service:'Meta', affect:'Requisito legal de cumplimiento' },
+      { num:2, title:'Meta → Helper (webhook)', sub:'Meta envía notificación de mensaje entrante al helper', status:'pending', service:'Meta → Helper', affect:'Requiere webhook Meta configurado' },
+      { num:3, title:'Helper registra opt-out', sub:'POST /opt-outs registra el número, canal y fecha', status:'done', service:'Helper', affect:'Endpoint funcional' },
+      { num:4, title:'Helper → n8n (notificación)', sub:'Helper notifica a n8n para actualizar lead en Twenty CRM', status:'pending', service:'Helper → n8n', affect:'Requiere webhook n8n configurado en helper' },
+    ]
+  },
+  {
+    id:'sync', name:'Sincronización Twenty CRM',
+    steps:[
+      { num:1, title:'Helper obtiene leads sin sync', sub:'Consulta leads en PostgreSQL con twenty_sync = false', status:'done', service:'Helper', affect:'Endpoint POST /api/twenty/sync-all' },
+      { num:2, title:'Normaliza teléfonos', sub:'Prefijo +, valida formato, omite vacíos', status:'done', service:'Helper', affect:'Bug corregido en v2.1.1' },
+      { num:3, title:'Busca persona en Twenty', sub:'GET /rest/people con paginación (limit=100, offset=N)', status:'done', service:'Helper → Twenty', affect:'Paginación implementada en v2.1.1' },
+      { num:4, title:'Upsert: crea o actualiza', sub:'Si existe → PATCH, si no → POST /rest/people', status:'done', service:'Helper → Twenty', affect:'GraphQL-wrapped response manejado' },
+      { num:5, title:'Guarda twenty_contact_id', sub:'Almacena el ID de Twenty en el lead local', status:'done', service:'Helper', affect:'Para futuras actualizaciones' },
+    ]
+  },
+  {
+    id:'scoring', name:'Evaluación de Scoring',
+    steps:[
+      { num:1, title:'Helper obtiene lead', sub:'GET lead por ID con datos y delivery history', status:'done', service:'Helper', affect:'Endpoint POST /api/scoring/evaluate' },
+      { num:2, title:'Calcula 5 factores', sub:'Engagement (35%) + Recency (25%) + Channel Affinity (15%) + Profile Completeness (15%) + Interest Match (10%)', status:'done', service:'Helper', affect:'Factores configurables via PUT /api/scoring/rules' },
+      { num:3, title:'Aplica 8 reglas condicionales', sub:'+20 reply, +10 open, +15 click, -100 opt-out, +5 per campaign, etc.', status:'done', service:'Helper', affect:'Reglas configurables' },
+      { num:4, title:'Determina umbral', sub:'Hot >= 70, Warm >= 40, Cold < 40', status:'done', service:'Helper', affect:'Umbrales configurables' },
+      { num:5, title:'Guarda score en BD', sub:'Inserta en lead_scores y actualiza lastScore en lead', status:'done', service:'Helper', affect:'Historial de scores disponible' },
+    ]
+  },
+];
+
+const OBJECTIVES = [
+  { id:'o1', title:'Docker Compose funcional', area:'Infraestructura', status:'done', desc:'11 servicios orquestados con health checks' },
+  { id:'o2', title:'PostgreSQL + Redis + Weaviate operativos', area:'Infraestructura', status:'done', desc:'Bases de datos funcionales con pgvector, Redis cache, Weaviate vectores' },
+  { id:'o3', title:'Helper Node completo', area:'Helper', status:'done', desc:'35+ endpoints, PostgreSQL + JSON fallback, dashboard SPA' },
+  { id:'o4', title:'Dify workflow clasificador funcional', area:'Dify', status:'done', desc:'WhatsApp Lead Classifier con 8 nodos LLM via OpenRouter' },
+  { id:'o5', title:'OpenRouter configurado', area:'Dify', status:'done', desc:'7 modelos LLM disponibles, GPT-4o-mini default' },
+  { id:'o6', title:'n8n workflows importados', area:'n8n', status:'done', desc:'3 workflows en BD activos (seteados vía SQL)' },
+  { id:'o7', title:'Twenty CRM + campos custom', area:'Twenty', status:'done', desc:'10 campos custom en people, API key JWT configurada' },
+  { id:'o8', title:'Sistema de campañas multi-canal', area:'Helper', status:'done', desc:'CRUD, tracking, estadísticas, estados completos' },
+  { id:'o9', title:'Upload Excel/CSV con drag & drop', area:'Helper', status:'done', desc:'Auto-detección de columnas, validación, custom fields' },
+  { id:'o10', title:'Plantillas de mensajes', area:'Helper', status:'done', desc:'11 plantillas, CRUD, preview con variables' },
+  { id:'o11', title:'Motor de scoring rule-based', area:'Helper', status:'done', desc:'5 factores + 8 reglas + umbrales configurables' },
+  { id:'o12', title:'Sync con Twenty CRM', area:'Helper', status:'done', desc:'Sync individual + batch, normalización de teléfonos' },
+  { id:'o13', title:'Documentación completa', area:'Documentación', status:'done', desc:'41 archivos en docs/, specs/, Avances/, hub/' },
+  { id:'o14', title:'Hub visual interactivo', area:'Documentación', status:'done', desc:'Diccionario visual con buscador, flujos, objetivos' },
+  { id:'o15', title:'Configurar Meta App Business', area:'Meta', status:'pending', desc:'Crear App Business en Facebook Developers, obtener credenciales' },
+  { id:'o16', title:'Configurar Inbox WhatsApp en Chatwoot', area:'Chatwoot', status:'pending', desc:'Inbox WhatsApp Business con credenciales Meta' },
+  { id:'o17', title:'Webhook Chatwoot → n8n', area:'Chatwoot', status:'pending', desc:'Configurar webhook para message_created, conversation_created' },
+  { id:'o18', title:'Credenciales n8n (Dify, Twenty, Meta)', area:'n8n', status:'pending', desc:'Configurar credenciales desde UI (workaround body parser bug)' },
+  { id:'o19', title:'Webhook Meta → helper-node', area:'Meta', status:'pending', desc:'Callback URL apuntando a helper:3100/webhooks/whatsapp' },
+  { id:'o20', title:'Token permanente Meta (System User)', area:'Meta', status:'pending', desc:'Token que no expire, con permisos whatsapp_business_messaging' },
+  { id:'o21', title:'Flujo inbound completo (real)', area:'Integración', status:'pending', desc:'WhatsApp real → Chatwoot → n8n → Dify → responder → Twenty' },
+  { id:'o22', title:'Flujo campaign broadcast (real)', area:'Integración', status:'pending', desc:'Schedule n8n → Helper → Twenty → Dify → Meta WhatsApp → tracking' },
+  { id:'o23', title:'Resolver body parser bug n8n', area:'n8n', status:'pending', desc:'Bug en body-parser.ts impide REST API con JSON. Afecta activación y configuración de credenciales' },
+  { id:'o24', title:'Authelia SSO Gateway', area:'Infraestructura', status:'pending', desc:'Implementar Authelia como gateway de autenticación unificada' },
+  { id:'o25', title:'Canales alternativos (Messenger, TikTok, SMS, Email)', area:'Helper', status:'pending', desc:'Soporte estructural listo, falta conexión real a APIs' },
+  { id:'o26', title:'Frappe ERP (Fase 2)', area:'Integración', status:'pending', desc:'Setup Frappe + sincronización leads/pedidos/facturación' },
+  { id:'o27', title:'Pipeline IA Avanzado (Fase 4)', area:'Dify', status:'pending', desc:'RAG, state machine, function calling, multi-idioma, sentimiento' },
+  { id:'o28', title:'Endurecimiento Producción (Fase 5)', area:'Infraestructura', status:'pending', desc:'Seguridad, monitoreo, backups CI/CD, DR plan' },
+  { id:'o29', title:'Analytics / BI (Fase 6)', area:'Datos', status:'pending', desc:'Data Warehouse, dashboards ejecutivos, forecasting' },
+  { id:'o30', title:'Multi-Tenant (Fase 7)', area:'Infraestructura', status:'pending', desc:'Aislamiento, white-label, billing, API pública' },
+];
+
+const VERIFICATIONS = [
+  { id:'v1', title:'Health Check General', service:'Todos', command:'docker compose ps', expected:'11 servicios "Up"', status:'done', doc:'PROCEDIMIENTOS.md#5' },
+  { id:'v2', title:'Helper Node API', service:'Helper', command:'curl http://localhost:3100/health', expected:'JSON con status OK, stats, db type', status:'done', doc:'PROCEDIMIENTOS.md#5' },
+  { id:'v3', title:'Dify Workflow', service:'Dify', command:'curl -X POST http://localhost:5001/v1/workflows/run -H "Authorization: Bearer app-IohwPPX3HDWA46TQLEcGBZq0" -H "Content-Type: application/json" -d \'{"inputs":{"message":"Hola, quiero info","conversation_history":"[]","contact_name":"Test","platform":"whatsapp"},"response_mode":"blocking","user":"test"}\'', expected:'succeeded con score y clasificación', status:'done', doc:'DIFY.md' },
+  { id:'v4', title:'Twenty CRM Health', service:'Twenty', command:'curl http://localhost:3100/api/twenty/health', expected:'{connected: true, hasApiKey: true}', status:'done', doc:'TWENTY-CRM.md' },
+  { id:'v5', title:'Seed Data', service:'Helper', command:'curl -X POST http://localhost:3100/api/seed', expected:'3 campañas, 12 leads, 12 deliveries, 12 scores', status:'done', doc:'PROCEDIMIENTOS.md#6' },
+  { id:'v6', title:'Scoring Evaluate', service:'Helper', command:'curl -X POST http://localhost:3100/api/scoring/evaluate-all', expected:'Todos los leads evaluados sin errores', status:'done', doc:'HELPER-NODE.md' },
+  { id:'v7', title:'Templates List', service:'Helper', command:'curl http://localhost:3100/api/templates', expected:'11 plantillas (whatsapp, messenger, tiktok, sms, email)', status:'done', doc:'HELPER-NODE.md' },
+  { id:'v8', title:'LLM Chat Test', service:'Helper', command:'curl -X POST http://localhost:3100/api/llm/chat -H "Content-Type: application/json" -d \'{"message":"Hola","model":"openai/gpt-4o-mini"}\'', expected:'Respuesta del modelo', status:'done', doc:'DIFY.md' },
+  { id:'v9', title:'n8n Health', service:'n8n', command:'curl http://localhost:5679/healthz', expected:'OK', status:'done', doc:'N8N.md' },
+  { id:'v10', title:'Webhook WhatsApp Test', service:'Helper', command:'curl -X POST http://localhost:3100/webhooks/whatsapp -H "Content-Type: application/json" -d \'{"object":"whatsapp_business_account","entry":[]}\'', expected:'"OK"', status:'done', doc:'PROCEDIMIENTOS.md#4' },
+  { id:'v11', title:'Flujo Inbound (simulado)', service:'Integración', command:'curl -X POST http://localhost:5679/webhook/chatwoot-inbound -H "Content-Type: application/json" -d \'{"message_type":"incoming","content":"Quiero precios"}\'', expected:'webhook received', status:'partial', doc:'N8N.md' },
+  { id:'v12', title:'Sync Twenty CRM', service:'Helper', command:'curl -X POST http://localhost:3100/api/twenty/sync-all', expected:'synced: N, errors: 0', status:'done', doc:'TWENTY-CRM.md' },
+];
+
+const IMPACTS = [
+  { name:'Meta WhatsApp API', icon:'📱', color:'var(--red)', depends:['Facebook Developers Account'], affects:['Chatwoot (inbox)', 'n8n (credenciales)', 'Helper (webhook)', 'Flujo Inbound', 'Flujo Campaign'], status:'pending' },
+  { name:'Chatwoot', icon:'💬', color:'var(--green)', depends:['PostgreSQL', 'Redis', 'Meta WhatsApp API'], affects:['n8n (webhook source)', 'Helper (normalize)', 'Agentes Humanos'], status:'partial' },
+  { name:'n8n', icon:'⚡', color:'var(--yellow)', depends:['PostgreSQL', 'Dify', 'Twenty CRM', 'Meta WhatsApp API', 'Chatwoot'], affects:['Dify (triggers)', 'Twenty (sync)', 'Meta (sends)', 'Helper (campaigns)'], status:'partial' },
+  { name:'Dify', icon:'🧠', color:'var(--blue)', depends:['PostgreSQL', 'Redis', 'Weaviate', 'Plugin Daemon', 'OpenRouter'], affects:['n8n (classification)', 'Helper (scoring LLM)'], status:'done' },
+  { name:'OpenRouter', icon:'🤖', color:'var(--pink)', depends:['API key', 'Saldo/credits'], affects:['Dify (LLM models)', 'Helper (LLM scoring)'], status:'done' },
+  { name:'Helper Node', icon:'📊', color:'var(--cyan)', depends:['PostgreSQL', 'Twenty CRM', 'OpenRouter'], affects:['Dashboard SPA', 'Campañas API', 'Scoring', 'Templates', 'Sync CRM', 'Webhooks'], status:'done' },
+  { name:'Twenty CRM', icon:'📇', color:'var(--purple)', depends:['PostgreSQL'], affects:['Helper (sync)', 'n8n (audiencia)', 'Agentes Humanos'], status:'done' },
+  { name:'Authelia', icon:'🔐', color:'var(--orange)', depends:['Redis', 'Config users.yml'], affects:['Nginx (auth_request)', 'Todos los servicios (SSO)'], status:'pending' },
+  { name:'Nginx', icon:'🌐', color:'var(--green)', depends:['Todos los servicios'], affects:['Usuarios (acceso unificado)', 'Autenticación (auth_request)'], status:'done' },
+  { name:'PostgreSQL', icon:'🗄️', color:'var(--blue)', depends:[], affects:['Chatwoot', 'Dify', 'n8n', 'Twenty', 'Helper'], status:'done' },
+];
+
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+
+function renderDashboard() {
+  // Progress areas
+  const areas = [
+    { name:'Infraestructura', pct:100, color:'var(--green)' },
+    { name:'Helper Node', pct:100, color:'var(--cyan)' },
+    { name:'Dify (IA)', pct:100, color:'var(--blue)' },
+    { name:'Twenty CRM', pct:100, color:'var(--purple)' },
+    { name:'n8n Workflows', pct:90, color:'var(--yellow)' },
+    { name:'Documentación', pct:100, color:'var(--muted2)' },
+    { name:'Chatwoot Inbox', pct:20, color:'var(--orange)' },
+    { name:'Meta WhatsApp API', pct:0, color:'var(--red)' },
+    { name:'Authelia SSO', pct:0, color:'var(--orange)' },
+    { name:'Flujo Inbound Real', pct:0, color:'var(--red)' },
+  ];
+  document.getElementById('progressAreas').innerHTML = areas.map(a =>
+    `<div class="progress"><span style="width:130px;font-size:0.78rem;">${a.name}</span><div class="progress-bar"><div class="progress-fill" style="width:${a.pct}%;background:${a.color};"></div></div><span style="font-size:0.7rem;color:var(--muted2);width:36px;text-align:right;">${a.pct}%</span></div>`
+  ).join('');
+
+  // Services
+  const services = [
+    { name:'PostgreSQL', icon:'🗄️', status:'online' },
+    { name:'Redis', icon:'⚡', status:'online' },
+    { name:'Weaviate', icon:'🔍', status:'online' },
+    { name:'Nginx', icon:'🌐', status:'online' },
+    { name:'Chatwoot', icon:'💬', status:'online' },
+    { name:'Dify API', icon:'🧠', status:'online' },
+    { name:'Dify Web', icon:'🧠', status:'online' },
+    { name:'n8n', icon:'⚡', status:'online' },
+    { name:'Twenty CRM', icon:'📇', status:'online' },
+    { name:'Helper Node', icon:'📊', status:'online' },
+    { name:'Authelia', icon:'🔐', status:'offline' },
+    { name:'Meta API', icon:'📱', status:'offline' },
+  ];
+  document.getElementById('dashServices').innerHTML = services.map(s =>
+    `<div class="card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="font-size:1.3rem;">${s.icon}</span><h3 style="margin:0;font-size:0.9rem;">${s.name}</h3><span class="badge ${s.status==='online'?'badge-green':'badge-red'}" style="margin-left:auto;">${s.status==='online'?'● Online':'○ Offline'}</span></div></div>`
+  ).join('');
+}
+
+function renderModules() {
+  document.getElementById('moduleCards').innerHTML = MODULES.map(m => {
+    const badgeCls = m.status==='done'?'badge-green':m.status==='partial'?'badge-yellow':'badge-red';
+    const badgeTxt = m.status==='done'?'✅ Completo':m.status==='partial'?'⚠️ Parcial':'🚫 Pendiente';
+    return `<div class="card">
+      <div class="card-icon" style="background:${m.color}15;">${m.icon}</div>
+      <h3>${m.name}</h3>
+      <div class="desc">${m.desc}</div>
+      <div class="meta">
+        <span class="badge ${badgeCls}">${badgeTxt}</span>
+        ${m.port ? `<span>🔌 ${m.port}</span>` : ''}
+      </div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--muted2);line-height:1.6;">
+        ${m.features.map(f => `<div>• ${f}</div>`).join('')}
+      </div>
+      ${m.creds && m.creds !== '-' ? `<div style="margin-top:6px;font-size:0.65rem;color:var(--muted);background:rgba(255,255,255,.03);padding:4px 8px;border-radius:6px;">🔑 ${m.creds}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderFlows() {
+  const tabs = FLOWS.map((f,i) => `<span class="status-chip" style="cursor:pointer;${i===0?'background:var(--blue-bg);color:var(--blue);border-color:rgba(59,130,246,.3);':''}" onclick="showFlow(${i})">${f.name}</span>`).join('');
+  document.getElementById('flowTabs').innerHTML = tabs;
+  showFlow(0);
+}
+
+function showFlow(idx) {
+  const flow = FLOWS[idx];
+  // Update tab styles
+  document.querySelectorAll('#flowTabs .status-chip').forEach((el,i) => {
+    el.style.background = i===idx ? 'var(--blue-bg)' : '';
+    el.style.color = i===idx ? 'var(--blue)' : '';
+    el.style.borderColor = i===idx ? 'rgba(59,130,246,.3)' : '';
+  });
+  const html = flow.steps.map(s => {
+    const numCls = s.status==='done'?'done':s.status==='partial'?'pending':'pending';
+    const stCls = s.status==='done'?'badge-green':s.status==='partial'?'badge-yellow':'badge-red';
+    const stTxt = s.status==='done'?'✅':s.status==='partial'?'⚠️':'🚫';
+    return `<div class="flow-step">
+      <div class="num ${numCls}">${s.num}</div>
+      <div class="info">
+        <div class="title">${s.title}</div>
+        <div class="sub">${s.sub}</div>
+        <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="badge ${stCls}">${stTxt}</span>
+          <span style="font-size:0.65rem;color:var(--muted);">🔧 ${s.service} ${s.affect ? '— ' + s.affect : ''}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('<div class="flow-arrow">⬇</div>');
+  document.getElementById('flowContent').innerHTML = `<h3 style="margin-bottom:12px;">${flow.name}</h3><div class="flow-container">${html}</div>`;
+}
+
+function renderObjectives() {
+  filterObjectives('all');
+}
+
+function filterObjectives(filter) {
+  // Update filter tab styles
+  document.querySelectorAll('[data-ofilter]').forEach(el => {
+    el.style.background = el.dataset.ofilter === filter ? 'var(--blue-bg)' : '';
+    el.style.color = el.dataset.ofilter === filter ? 'var(--blue)' : '';
+  });
+  let items = OBJECTIVES;
+  if (filter === 'done') items = items.filter(o => o.status === 'done');
+  else if (filter === 'pending') items = items.filter(o => o.status === 'pending');
+  const done = items.filter(o => o.status === 'done').length;
+  const pend = items.filter(o => o.status === 'pending').length;
+  document.getElementById('objectivesList').innerHTML =
+    `<div style="margin-bottom:12px;font-size:0.8rem;color:var(--muted2);">${done} ✅ logrados · ${pend} 🚫 pendientes</div>` +
+    `<div class="table-wrap"><table>
+      <tr><th>Estado</th><th>Objetivo</th><th>Área</th><th>Detalle</th></tr>
+      ${items.map(o => `<tr><td>${o.status==='done'?'✅':'🚫'}</td><td>${o.title}</td><td><span class="badge badge-blue">${o.area}</span></td><td style="color:var(--muted2);font-size:0.78rem;">${o.desc}</td></tr>`).join('')}
+    </table></div>`;
+}
+
+function renderVerification() {
+  document.getElementById('verificationContent').innerHTML = `
+    <p style="color:var(--muted2);font-size:0.85rem;margin-bottom:16px;">
+      Procedimientos de verificación para cada componente. Ejecutar en orden numérico.
+    </p>
+    <div class="table-wrap"><table>
+      <tr><th>#</th><th>Prueba</th><th>Servicio</th><th>Comando / Procedimiento</th><th>Esperado</th><th>Estado</th></tr>
+      ${VERIFICATIONS.map((v,i) => `
+        <tr>
+          <td style="color:var(--muted);">${i+1}</td>
+          <td style="font-weight:500;">${v.title}</td>
+          <td><span class="badge badge-blue">${v.service}</span></td>
+          <td style="font-size:0.72rem;font-family:monospace;color:var(--muted2);max-width:300px;word-break:break-all;">${v.command}</td>
+          <td style="font-size:0.75rem;color:var(--muted2);">${v.expected}</td>
+          <td>${v.status==='done'?'✅':'⚠️'}</td>
+        </tr>
+      `).join('')}
+    </table></div>`;
+}
+
+function renderImpacts() {
+  document.getElementById('impactGrid').innerHTML = IMPACTS.map(m => {
+    const stCls = m.status==='done'?'badge-green':m.status==='partial'?'badge-yellow':'badge-red';
+    const stTxt = m.status==='done'?'✅ Completo':m.status==='partial'?'⚠️ Parcial':'🚫 Pendiente';
+    const colorMap = {'done':'var(--green)','partial':'var(--yellow)','pending':'var(--red)'};
+    return `<div class="impact-card" style="border-left:3px solid ${colorMap[m.status]};">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:1.2rem;">${m.icon}</span>
+        <h4 style="margin:0;">${m.name}</h4>
+        <span class="badge ${stCls}" style="margin-left:auto;">${stTxt}</span>
+      </div>
+      <div class="affects">
+        <strong style="font-size:0.7rem;color:var(--muted);">⬅ Depende de:</strong><br>
+        ${m.depends.length ? m.depends.map(d => `<span style="background:var(--yellow-bg);color:var(--yellow);">${d}</span>`).join('') : '<span style="background:rgba(100,116,139,.15);color:var(--muted);">Ninguno (raíz)</span>'}
+        <br><br>
+        <strong style="font-size:0.7rem;color:var(--muted);">➡ Afecta a:</strong><br>
+        ${m.affects.map(a => `<span style="background:var(--blue-bg);color:var(--blue);">${a}</span>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════════
+
+const SEARCH_ITEMS = [
+  ...MODULES.map(m => ({ id:m.id, type:'module', label:m.name, desc:m.desc, icon:m.icon })),
+  ...FLOWS.map(f => ({ id:f.id, type:'flow', label:f.name, desc:`${f.steps.length} pasos`, icon:'🔀' })),
+  ...OBJECTIVES.map(o => ({ id:o.id, type:'obj', label:o.title, desc:`${o.area} — ${o.status==='done'?'✅ Logrado':'🚫 Pendiente'}`, icon:'🎯' })),
+  ...VERIFICATIONS.map(v => ({ id:v.id, type:'guide', label:v.title, desc:v.service, icon:'✅' })),
+  ...IMPACTS.map(m => ({ id:m.name, type:'module', label:m.name, desc:`Dependencias y afectaciones`, icon:m.icon })),
+];
+
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+
+searchInput.addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const results = SEARCH_ITEMS.filter(item =>
+    item.label.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q)
+  ).slice(0, 10);
+  if (!results.length) { searchResults.style.display = 'none'; return; }
+  searchResults.innerHTML = results.map(r => {
+    const tagCls = r.type==='module'?'module':r.type==='flow'?'flow':r.type==='obj'?'obj':'guide';
+    const tagMap = {module:'Módulo',flow:'Flujo',obj:'Objetivo',guide:'Guía'};
+    return `<div class="search-result-item" onclick="navigateTo('${r.type}','${r.id}')">
+      <span>${r.icon}</span>
+      <span style="flex:1;">${r.label}</span>
+      <span class="tag ${tagCls}">${tagMap[r.type]}</span>
+    </div>`;
+  }).join('');
+  searchResults.style.display = 'block';
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-box')) searchResults.style.display = 'none';
+});
+
+function navigateTo(type, id) {
+  searchResults.style.display = 'none';
+  searchInput.value = '';
+  const tabMap = { module:'diccionario', flow:'flujos', obj:'objetivos', guide:'verificacion' };
+  const tab = tabMap[type] || 'dashboard';
+  switchTab(tab);
+  if (type === 'flow') {
+    const idx = FLOWS.findIndex(f => f.id === id);
+    if (idx >= 0) showFlow(idx);
+  }
+  document.getElementById('pageTitle').textContent = document.querySelector(`[data-tab="${tab}"]`)?.textContent.trim() || 'Dashboard';
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+  const labels = {
+    dashboard:'Dashboard', diccionario:'Diccionario de Módulos', flujos:'Flujos Paso a Paso',
+    objetivos:'Objetivos', verificacion:'Guía de Verificación', impacto:'Impacto y Dependencias'
+  };
+  const descs = {
+    dashboard:'Vista general del estado del proyecto Wibsite Business',
+    diccionario:'Todos los módulos del sistema con su estado, funcionalidades y credenciales',
+    flujos:'Diagramas paso a paso de los procesos del sistema',
+    objetivos:'Objetivos completados y pendientes del proyecto',
+    verificacion:'Procedimientos de verificación y tests para cada componente',
+    impacto:'Mapa de dependencias y relaciones entre componentes'
+  };
+  document.getElementById('pageTitle').textContent = labels[tab] || 'Dashboard';
+  document.getElementById('pageDesc').textContent = descs[tab] || '';
+  // Render on first visit
+  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'diccionario') renderModules();
+  if (tab === 'flujos') renderFlows();
+  if (tab === 'objetivos') renderObjectives();
+  if (tab === 'verificacion') renderVerification();
+  if (tab === 'impacto') renderImpacts();
+}
+
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => switchTab(el.dataset.tab));
+});
+
+// ═══════════════════════════════════════════════════════════
+// STATUS CHECKER
+// ═══════════════════════════════════════════════════════════
+
+async function checkServices() {
+  const checks = [
+    { name:'🧠 Dify', url:'http://localhost:3003/', mode:'no-cors' },
+    { name:'⚡ n8n', url:'/n8n/', mode:'same' },
+    { name:'📊 Helper', url:'/health', mode:'same' },
+    { name:'💬 Chatwoot', url:'http://localhost:3002/', mode:'no-cors' },
+    { name:'📇 Twenty', url:'http://localhost:3001/', mode:'no-cors' },
+  ];
+  const bar = document.getElementById('statusBar');
+  bar.innerHTML = checks.map(c => `<span class="status-chip pending">${c.name}</span>`).join('');
+  for (const c of checks) {
+    try {
+      if (c.mode === 'no-cors') {
+        await fetch(c.url, { method:'HEAD', mode:'no-cors', cache:'no-store' });
+        // no-cors always succeeds opaque → if no error, service is up
+      } else {
+        const r = await fetch(c.url, { method:'HEAD', cache:'no-store' });
+        if (!r.ok) throw new Error('status ' + r.status);
+      }
+      bar.innerHTML = bar.innerHTML.replace(`<span class="status-chip pending">${c.name}</span>`, `<span class="status-chip online">${c.name}</span>`);
+    } catch(e) {
+      bar.innerHTML = bar.innerHTML.replace(`<span class="status-chip pending">${c.name}</span>`, `<span class="status-chip offline">${c.name}</span>`);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+
+renderDashboard();
+checkServices();
+setInterval(checkServices, 30000);
+</script>
+</body>
+</html>

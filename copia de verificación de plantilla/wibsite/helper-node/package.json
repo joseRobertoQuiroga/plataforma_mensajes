@@ -1,0 +1,19 @@
+{
+  "name": "wibsite-helper",
+  "version": "1.0.0",
+  "description": "Helper service for Wibsite Business - integration logic between Chatwoot, Dify, n8n, and Twenty CRM",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "axios": "^1.15.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.2.0",
+    "pg": "^8.13.0",
+    "pino": "^10.3.1",
+    "xlsx": "^0.18.5"
+  }
+}

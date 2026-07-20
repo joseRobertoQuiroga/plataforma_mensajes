@@ -1,0 +1,6 @@
+phone,name,email,notes,segment
++521234567890,Juan Pérez,juan@example.com,Cliente VIP,premium
++521234567891,María García,maria@example.com,Lead caliente,premium
++521234567892,Roberto Sánchez,,Interesado en demo,standard
++521234567893,,roberto@example.com,Solo email,standard
+,Anónimo sin teléfono,anon@example.com,Sin teléfono,test

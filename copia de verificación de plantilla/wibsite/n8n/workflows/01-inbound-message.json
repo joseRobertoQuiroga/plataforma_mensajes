@@ -1,0 +1,422 @@
+{
+  "name": "01 - Inbound WhatsApp → Dify → Twenty CRM",
+  "nodes": [
+    {
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "path": "chatwoot-inbound",
+        "options": {
+          "responseData": "json",
+          "responseJSON": "{\"status\":\"received\"}"
+        }
+      }
+    },
+    {
+      "id": "filter-message-type",
+      "name": "Filter Message Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-message-type",
+              "leftValue": "={{ $json.message_type }}",
+              "rightValue": "incoming",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "build-payload",
+      "name": "Build Dify Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 200],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "={{ $json.content }}"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $json.sender.name || $json.sender.phone_number || 'Desconocido' }}"
+            },
+            {
+              "name": "platform",
+              "value": "whatsapp"
+            },
+            {
+              "name": "conversation_id",
+              "value": "={{ $json.conversation_id }}"
+            },
+            {
+              "name": "chatwoot_account_id",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "name": "chatwoot_inbox_id",
+              "value": "={{ $json.inbox_id }}"
+            },
+            {
+              "name": "contact_inbox_id",
+              "value": "={{ $json.source_id }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "conversation_history",
+              "value": "={{ $json.conversation_history || '[]' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "call-dify",
+      "name": "Call Dify API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [750, 200],
+      "parameters": {
+        "url": "=http://dify-api:5001/v1/workflows/run",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "inputs",
+              "value": "={{\n  {\n    \"message\": $json.message,\n    \"contact_name\": $json.contact_name,\n    \"platform\": $json.platform,\n    \"conversation_history\": []\n  }\n}}"
+            },
+            {
+              "name": "response_mode",
+              "value": "blocking"
+            },
+            {
+              "name": "user",
+              "value": "={{ $json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "parse-dify-response",
+      "name": "Parse Dify Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1000, 200],
+      "parameters": {
+        "jsCode": "const difyResponse = $json.data.outputs.final_result;\n\nlet parsed;\nif (typeof difyResponse === 'string') {\n  try {\n    parsed = JSON.parse(difyResponse);\n  } catch (e) {\n    parsed = JSON.parse(JSON.parse(difyResponse));\n  }\n} else {\n  parsed = difyResponse;\n}\n\nreturn {\n  response_text: parsed.response_text,\n  intent_score: parsed.intent_score,\n  intent_label: parsed.intent_label,\n  lead_status: parsed.lead_status,\n  priority: parsed.priority,\n  confidence: parsed.confidence,\n  captured_data: parsed.captured_data,\n  recommended_action: parsed.recommended_action,\n  needs_human: parsed.needs_human,\n  should_auto_reply: parsed.should_auto_reply,\n  suggested_tags: parsed.suggested_tags,\n  suggested_response: parsed.suggested_response,\n  escalation_reason: parsed.escalation_reason,\n  conversation_id: $json.inputs.conversation_id,\n  contact_name: $json.inputs.contact_name\n};"
+      }
+    },
+    {
+      "id": "check-needs-human",
+      "name": "Needs Human?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "check-human",
+              "leftValue": "={{ $json.needs_human }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "send-to-chatwoot",
+      "name": "Send Reply via Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1500, 100],
+      "parameters": {
+        "url": "=http://chatwoot:3000/api/v1/accounts/{{ $json.chatwoot_account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.suggested_response || $json.response_text }}"
+            },
+            {
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "name": "private",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "add-private-note",
+      "name": "Add AI Analysis Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1500, 300],
+      "parameters": {
+        "url": "=http://chatwoot:3000/api/v1/accounts/{{ $json.chatwoot_account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=🤖 Análisis IA:\n- Intención: {{ $json.intent_label }}\n- Score: {{ $json.intent_score }}/100 ({{ $json.lead_status }})\n- Prioridad: {{ $json.priority }}\n- Confianza: {{ $json.confidence }}\n- Próxima acción: {{ $json.recommended_action }}\n\nDatos extraídos:\n{{ JSON.stringify($json.captured_data, null, 2) }}"
+            },
+            {
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "name": "private",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "upsert-lead-twenty",
+      "name": "Upsert Lead in Twenty CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1500, 500],
+      "parameters": {
+        "url": "=http://twenty-server:3000/rest/leads",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $json.captured_data.name || $json.contact_name || 'Lead WhatsApp' }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.captured_data.email || '' }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $json.captured_data.phone || '' }}"
+            },
+            {
+              "name": "companyName",
+              "value": "={{ $json.captured_data.company || '' }}"
+            },
+            {
+              "name": "position",
+              "value": "={{ $json.captured_data.position || '' }}"
+            },
+            {
+              "name": "leadSource",
+              "value": "WhatsApp"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.captured_data.interest || '' }}"
+            },
+            {
+              "name": "city",
+              "value": "={{ $json.captured_data.location || '' }}"
+            },
+            {
+              "name": "intentScore",
+              "value": "={{ $json.intent_score }}"
+            },
+            {
+              "name": "leadStatus",
+              "value": "={{ $json.lead_status | upper }}"
+            },
+            {
+              "name": "priority",
+              "value": "={{ $json.priority | upper }}"
+            },
+            {
+              "name": "buyingStage",
+              "value": "={{ $json.buying_stage || 'awareness' }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ JSON.stringify($json.suggested_tags || []) }}"
+            },
+            {
+              "name": "aiSummary",
+              "value": "={{ 'Intención: ' + $json.intent_label + ' | Score: ' + $json.intent_score + '/100 | ' + ($json.escalation_reason || 'Sin escalamiento') }}"
+            },
+            {
+              "name": "sourceConversationId",
+              "value": "={{ $json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "escalate-human",
+      "name": "Escalate to Human Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1500, 700],
+      "parameters": {
+        "url": "=http://chatwoot:3000/api/v1/accounts/{{ $json.chatwoot_account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $env.CHATWOOT_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=🚨 ESCALADO AUTOMÁTICO\n\nEste mensaje requiere atención humana.\nRazón: {{ $json.escalation_reason }}\n\n📊 Score: {{ $json.intent_score }}/100 ({{ $json.lead_status }})\n📋 Intención: {{ $json.intent_label }}\n🎯 Próxima acción: {{ $json.recommended_action }}\n\nVer lead en Twenty CRM para más detalles."
+            },
+            {
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "name": "private",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [500, 500],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [[{ "node": "Filter Message Type", "type": "main", "index": 0 }]]
+    },
+    "Filter Message Type": {
+      "main": [
+        [{ "node": "Build Dify Payload", "type": "main", "index": 0 }],
+        [{ "node": "Log Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Dify Payload": {
+      "main": [[{ "node": "Call Dify API", "type": "main", "index": 0 }]]
+    },
+    "Call Dify API": {
+      "main": [[{ "node": "Parse Dify Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Dify Response": {
+      "main": [[{ "node": "Needs Human?", "type": "main", "index": 0 }]]
+    },
+    "Needs Human?": {
+      "main": [
+        [{ "node": "Send Reply via Chatwoot", "type": "main", "index": 0 }],
+        [{ "node": "Escalate to Human Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Reply via Chatwoot": {
+      "main": [[{ "node": "Add AI Analysis Note", "type": "main", "index": 0 }]]
+    },
+    "Add AI Analysis Note": {
+      "main": [[{ "node": "Upsert Lead in Twenty CRM", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["wibsite", "inbound", "whatsapp", "lead-classification"],
+  "pinData": {}
+}

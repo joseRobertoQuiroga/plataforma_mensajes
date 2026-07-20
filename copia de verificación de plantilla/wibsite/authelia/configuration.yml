@@ -1,0 +1,72 @@
+---
+theme: dark
+
+jwt_secret: ${AUTHELIA_JWT_SECRET}
+default_redirection_url: http://localhost:8080/hub/
+
+server:
+  host: 0.0.0.0
+  port: 9091
+
+log:
+  level: info
+
+totp:
+  issuer: wibsite.com
+  period: 30
+  skew: 1
+
+authentication_backend:
+  file:
+    path: /config/users.yml
+    password:
+      algorithm: argon2id
+      iterations: 3
+      memory: 65536
+      parallelism: 4
+      key_length: 32
+      salt_length: 16
+
+access_control:
+  default_policy: deny
+  rules:
+    - domain: localhost
+      policy: bypass
+      resources:
+        - '^/hub/.*'
+        - '^/$'
+        - '^/health[/]?$'
+        - '^/api/health[/]?$'
+        - '^/webhooks/.*'
+        - '^/webhook/.*'
+        - '^/opt-outs/.*'
+        - '^/authelia/.*'
+    - domain: localhost
+      policy: one_factor
+      resources:
+        - '^/.*'
+
+session:
+  name: wibsite_session
+  secret: ${AUTHELIA_SESSION_SECRET}
+  domain: localhost
+  expiration: 8h
+  inactivity: 1h
+  remember_me_duration: 30d
+  redis:
+    host: redis
+    port: 6379
+    database_index: 1
+
+regulation:
+  max_retries: 5
+  find_time: 2m
+  ban_time: 5m
+
+storage:
+  local:
+    path: /config/db.sqlite3
+
+notifier:
+  filesystem:
+    filename: /config/notifications.yml

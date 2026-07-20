@@ -1,0 +1,26 @@
+Wibsite Business - COPIA DE VERIFICACIÓN DE PLANTILLA
+=====================================================
+Versión: v2.1.1 (estable)
+Fecha:    2026-07-10
+
+Esta copia representa la versión base estable de la plantilla SaaS
+de mensajería omnicanal con IA 24/7.
+
+Estado:
+- Fase 0.5 al 95% (conectividad)
+- Fases 1-2 completadas
+- Todos los bugs críticos corregidos (14/14 issues + 2 encontrados en auditoría)
+- 37/37 pruebas de simulación pasadas
+- OpenRouter LLM integrado
+- Legacy v1 endpoints restaurados
+- Storage lock implementado (promise chain)
+- Scoring refactorizado con función compartida
+
+Contenido:
+  wibsite/   - Proyecto principal (Docker, helper, nginx, scripts, docs)
+  lumi/      - Backend Lumi (migrations PostgreSQL, modelos multi-tenant)
+  doc/       - Documentación del proyecto (ESTADO, roadmap)
+
+Uso: Esta copia es un respaldo antes de implementar cambios mayores
+     (Gateway/SSO, migración PostgreSQL, multi-tenant).
+     Para restaurar, copiar el contenido al directorio raíz del proyecto.

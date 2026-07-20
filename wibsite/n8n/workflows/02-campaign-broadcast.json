@@ -1,0 +1,313 @@
+{
+  "name": "02 - Campaign Broadcast WhatsApp",
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "Manual Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 500],
+      "parameters": {
+        "path": "campaign-trigger",
+        "httpMethod": "POST",
+        "options": {}
+      }
+    },
+    {
+      "id": "get-pending-campaigns",
+      "name": "Get Pending Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [250, 300],
+      "parameters": {
+        "url": "=http://helper:3100/campaigns/pending",
+        "method": "GET",
+        "authentication": "none"
+      }
+    },
+    {
+      "id": "campaign-loop",
+      "name": "Campaign Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "batchSize": 1
+      }
+    },
+    {
+      "id": "get-audience",
+      "name": "Get Audience from Twenty CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [750, 300],
+      "parameters": {
+        "url": "=http://twenty-server:3000/rest/people?filter=leadSource[contains]:WhatsApp&limit=100",
+        "method": "GET",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "audience-loop",
+      "name": "Audience Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "check-opt-out",
+      "name": "Check Opt-Out",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "check-opted-out",
+              "leftValue": "={{ $json.optedOut || false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "generate-campaign-content",
+      "name": "Generate Campaign Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1500, 200],
+      "parameters": {
+        "url": "=http://dify-api:5001/v1/workflows/run",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "inputs",
+              "value": "={{\n  {\n    \"campaign_name\": $json.campaign_name,\n    \"campaign_message\": $json.campaign_message,\n    \"contact_name\": $json.name || $json.contactName || 'Cliente',\n    \"company_name\": $json.companyName || ''\n  }\n}}"
+            },
+            {
+              "name": "response_mode",
+              "value": "blocking"
+            },
+            {
+              "name": "user",
+              "value": "={{ $json.id || 'campaign' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "bodyContentType": "json"
+        }
+      }
+    },
+    {
+      "id": "send-whatsapp-meta",
+      "name": "Send via Meta API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1750, 200],
+      "parameters": {
+        "url": "=https://graph.facebook.com/{{ $env.META_API_VERSION }}/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.META_APP_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "name": "recipient_type",
+              "value": "individual"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.phone || $json.phoneNumber }}"
+            },
+            {
+              "name": "type",
+              "value": "template"
+            },
+            {
+              "name": "template",
+              "value": "={{\n  {\n    \"name\": $json.template_name || 'campaign_generic',\n    \"language\": { \"code\": \"es\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"text\": $json.name || 'Cliente' },\n          { \"type\": \"text\", \"text\": $json.companyName || '' }\n        ]\n      }\n    ]\n  }\n}}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "track-delivery",
+      "name": "Track Delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [2000, 200],
+      "parameters": {
+        "url": "=http://helper:3100/campaigns/track",
+        "method": "POST",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "campaign_id",
+              "value": "={{ $json.campaign_id }}"
+            },
+            {
+              "name": "contact_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "sent"
+            },
+            {
+              "name": "message_id",
+              "value": "={{ $json.messages[0].id }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "log-skip",
+      "name": "Log Skip (Opted Out)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1500, 500],
+      "parameters": {}
+    },
+    {
+      "id": "update-campaign-status",
+      "name": "Update Campaign Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [750, 600],
+      "parameters": {
+        "url": "=http://helper:3100/campaigns/{{ $json.id }}/complete",
+        "method": "POST",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "completed"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Get Pending Campaigns", "type": "main", "index": 0 }]]
+    },
+    "Manual Webhook Trigger": {
+      "main": [[{ "node": "Get Pending Campaigns", "type": "main", "index": 0 }]]
+    },
+    "Get Pending Campaigns": {
+      "main": [[{ "node": "Campaign Loop", "type": "main", "index": 0 }]]
+    },
+    "Campaign Loop": {
+      "main": [[{ "node": "Get Audience from Twenty CRM", "type": "main", "index": 0 }]]
+    },
+    "Get Audience from Twenty CRM": {
+      "main": [[{ "node": "Audience Loop", "type": "main", "index": 0 }]]
+    },
+    "Audience Loop": {
+      "main": [
+        [{ "node": "Check Opt-Out", "type": "main", "index": 0 }],
+        [{ "node": "Update Campaign Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Opt-Out": {
+      "main": [
+        [{ "node": "Generate Campaign Content", "type": "main", "index": 0 }],
+        [{ "node": "Log Skip (Opted Out)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Campaign Content": {
+      "main": [[{ "node": "Send via Meta API", "type": "main", "index": 0 }]]
+    },
+    "Send via Meta API": {
+      "main": [[{ "node": "Track Delivery", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["wibsite", "campaigns", "whatsapp", "broadcast"],
+  "pinData": {}
+}

@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wibsite - Monitoreo de Campañas</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #f1f5f9; --muted: #94a3b8;
+    --green: #22c55e; --yellow: #eab308; --red: #ef4444; --blue: #3b82f6; --gray: #64748b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  h1 { font-size: 1.5rem; font-weight: 600; }
+  h1 small { font-size: 0.875rem; color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.disconnected { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .status-dot.pending { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  .status-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1.5s infinite; }
+  .status-dot.limited { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 1024px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .grid-4, .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h3 { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .card .value { font-size: 1.8rem; font-weight: 700; }
+  .card .sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+  .channels { display: flex; gap: 12px; flex-wrap: wrap; }
+  .channel-card { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; min-width: 180px; }
+  .channel-card .info { display: flex; flex-direction: column; }
+  .channel-card .name { font-weight: 600; font-size: 0.9rem; }
+  .channel-card .msg { font-size: 0.75rem; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { color: var(--text); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 500; }
+  .badge-draft { background: #334155; color: var(--muted); }
+  .badge-scheduled { background: #1e3a5f; color: var(--blue); }
+  .badge-sending { background: #1a3a2a; color: var(--green); }
+  .badge-completed { background: #1a2e1a; color: #4ade80; }
+  .badge-paused { background: #3a3a1a; color: var(--yellow); }
+  .badge-failed { background: #3a1a1a; color: var(--red); }
+  .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar-segment { transition: width 0.3s; }
+  .bar-delivered { background: var(--green); }
+  .bar-read { background: var(--blue); }
+  .bar-replied { background: #a855f7; }
+  .bar-failed { background: var(--red); }
+  .bar-pending { background: var(--border); }
+
+  .score-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 4px; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .score-high { background: var(--green); }
+  .score-mid { background: var(--yellow); }
+  .score-low { background: var(--red); }
+
+  .last-updated { text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 16px; padding: 8px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 8px 16px; border-radius: 8px; border: none; background: var(--card); color: var(--muted); cursor: pointer; font-size: 0.85rem; }
+  .tab.active { background: var(--blue); color: white; }
+  .tab:hover:not(.active) { background: var(--border); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Wibsite <small>Monitoreo de Campañas Multi-Canal</small></h1>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="dbStatus" style="font-size:0.8rem;color:var(--muted)"></span>
+      <button onclick="syncToTwenty()" title="Sincronizar leads con Twenty CRM" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--blue);cursor:pointer;font-size:0.8rem">☁ Sync CRM</button>
+      <button onclick="evaluateAll()" title="Evaluar scoring de todos los leads" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--green);cursor:pointer;font-size:0.8rem">📊 Score All</button>
+      <button onclick="seedData()" title="Generar datos mock" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--yellow);cursor:pointer;font-size:0.8rem">🌱 Seed</button>
+      <button onclick="clearData()" title="Limpiar todos los datos" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--red);cursor:pointer;font-size:0.8rem">🗑 Clear</button>
+      <button onclick="testLLM()" title="Probar conexión OpenRouter" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.8rem">🤖 Test LLM</button>
+      <button onclick="refreshAll()" title="Recargar" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer">⟳</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview',this)">Dashboard</button>
+    <button class="tab" onclick="switchTab('campaigns',this)">Campañas</button>
+    <button class="tab" onclick="switchTab('leads',this)">Leads</button>
+    <button class="tab" onclick="switchTab('templates',this)">Plantillas</button>
+    <button class="tab" onclick="switchTab('channels',this)">Canales</button>
+  </div>
+
+  <!-- Overview Tab -->
+  <div id="tab-overview" class="tab-content active">
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card"><h3>Campañas Activas</h3><div class="value" id="activeCampaigns">-</div><div class="sub" id="totalCampaigns"></div></div>
+      <div class="card"><h3>Mensajes Hoy</h3><div class="value" id="todayMessages">-</div><div class="sub" id="totalDeliveries"></div></div>
+      <div class="card"><h3>Leads Scored</h3><div class="value" id="scoredLeads">-</div><div class="sub" id="totalLeads"></div></div>
+      <div class="card"><h3>Top Lead</h3><div class="value" id="topLead" style="font-size:1.2rem">-</div><div class="sub">puntaje máximo</div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Estado de Canales</h3>
+        <div class="channels" id="channelLEDs"></div>
+      </div>
+      <div class="card">
+        <h3>Entregas vs Envíos</h3>
+        <div style="font-size:2rem;font-weight:700;color:var(--green)" id="deliveryRate">-</div>
+        <div class="bar" id="deliveryBar"></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--muted);margin-top:4px">
+          <span id="barLegend"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Campaigns Tab -->
+  <div id="tab-campaigns" class="tab-content">
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <span></span>
+      <button onclick="showImportModal()" style="padding:8px 16px;background:var(--blue);border:none;border-radius:8px;color:white;cursor:pointer;font-size:0.85rem">+ Importar Leads (Excel/CSV)</button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table id="campaignsTable">
+        <thead><tr><th>Nombre</th><th>Canal</th><th>Estado</th><th>Env</th><th>Ent</th><th>Leíd</th><th>Resp</th><th>Fall</th><th>Prog</th><th>Creada</th><th>Acción</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="importModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:600px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="font-size:1.2rem">Importar Leads</h2>
+        <button onclick="closeImportModal()" style="background:none;border:none;color:var(--muted);font-size:1.5rem;cursor:pointer">&times;</button>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:0.85rem;color:var(--muted);margin-bottom:6px">Campaña destino</label>
+        <select id="importCampaign" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem"></select>
+      </div>
+
+      <div id="dropZone" style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:16px">
+        <div style="font-size:2.5rem;color:var(--muted);margin-bottom:8px">📄</div>
+        <p style="color:var(--muted);font-size:0.9rem">Arrastra un archivo Excel (.xlsx, .xls) o CSV aquí</p>
+        <p style="color:var(--muted);font-size:0.75rem;margin-top:4px">o haz clic para seleccionar</p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      </div>
+
+      <div id="importPreview" style="display:none;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:0.85rem;color:var(--muted)">Vista previa</span>
+          <span id="fileInfo" style="font-size:0.8rem;color:var(--muted)"></span>
+        </div>
+        <div id="columnMap" style="margin-bottom:8px;font-size:0.8rem;color:var(--muted)"></div>
+        <div style="overflow-x:auto;max-height:200px;border:1px solid var(--border);border-radius:8px">
+          <table style="font-size:0.75rem" id="previewTable"><tbody></tbody></table>
+        </div>
+      </div>
+
+      <div id="importResult" style="display:none;margin-bottom:16px;padding:12px;border-radius:8px"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeImportModal()" style="padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
+        <button id="importBtn" onclick="doImport()" disabled style="padding:8px 16px;background:var(--blue);border:none;border-radius:8px;color:white;cursor:pointer;opacity:0.5">Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leads Tab -->
+  <div id="tab-leads" class="tab-content">
+    <div class="card" style="overflow-x:auto">
+      <table id="leadsTable">
+        <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Score</th><th>Estado</th><th>Campaña</th><th>Creado</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Templates Tab -->
+  <div id="tab-templates" class="tab-content">
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <select id="templateFilter" onchange="loadTemplates()" style="padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem">
+          <option value="">Todos los canales</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="messenger">Messenger</option>
+          <option value="tiktok">TikTok</option>
+          <option value="sms">SMS</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
+      <button onclick="showNewTemplateModal()" style="padding:8px 16px;background:var(--blue);border:none;border-radius:8px;color:white;cursor:pointer;font-size:0.85rem">+ Nueva Plantilla</button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table id="templatesTable">
+        <thead><tr><th>Nombre</th><th>Canal</th><th>Categoría</th><th>Preview</th><th>Variables</th><th>Acción</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- New Template Modal -->
+  <div id="newTemplateModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:600px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="font-size:1.2rem">Nueva Plantilla</h2>
+        <button onclick="closeNewTemplateModal()" style="background:none;border:none;color:var(--muted);font-size:1.5rem;cursor:pointer">&times;</button>
+      </div>
+      <div style="display:grid;gap:12px">
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Nombre</label><input id="tplName" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Canal</label>
+          <select id="tplChannel" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+            <option value="whatsapp">WhatsApp</option><option value="messenger">Messenger</option><option value="tiktok">TikTok</option><option value="sms">SMS</option><option value="email">Email</option>
+          </select>
+        </div>
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Categoría</label>
+          <select id="tplCategory" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+            <option value="welcome">Bienvenida</option><option value="promotion">Promoción</option><option value="followup">Seguimiento</option><option value="notification">Notificación</option><option value="newsletter">Newsletter</option><option value="custom">Personalizada</option>
+          </select>
+        </div>
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Asunto (solo Email)</label><input id="tplSubject" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Variables (separadas por coma: name, business, offer)</label><input id="tplVars" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)"></div>
+        <div><label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px">Cuerpo del mensaje</label><textarea id="tplBody" rows="5" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;resize:vertical"></textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button onclick="closeNewTemplateModal()" style="padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
+        <button onclick="saveTemplate()" style="padding:8px 16px;background:var(--blue);border:none;border-radius:8px;color:white;cursor:pointer">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Channels Tab -->
+  <div id="tab-channels" class="tab-content">
+    <div class="grid grid-3" id="channelDetailCards"></div>
+  </div>
+
+  <div class="last-updated">Última actualización: <span id="lastUpdated">-</span></div>
+</div>
+
+<script>
+const BASE = '/api';
+
+async function api(path) {
+  const r = await fetch(`${BASE}${path}`);
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+function statusClass(s) {
+  if (!s) return 'pending';
+  const m = { connected: 'connected', disconnected: 'disconnected', error: 'error', limited: 'limited', pending: 'pending' };
+  return m[s.toLowerCase()] || 'pending';
+}
+
+function badgeClass(s) {
+  return `badge-${(s || 'draft').toLowerCase()}`;
+}
+
+function scoreClass(s) {
+  if (s >= 70) return 'score-high';
+  if (s >= 40) return 'score-mid';
+  return 'score-low';
+}
+
+function formatDate(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('es', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function channelIcon(status) {
+  const cls = statusClass(status);
+  return `<span class="status-dot ${cls}"></span>`;
+}
+
+async function refreshAll() {
+  document.getElementById('lastUpdated').textContent = new Date().toLocaleString('es');
+  try {
+    const summary = await api('/dashboard/summary');
+    renderSummary(summary);
+  } catch (e) {
+    console.error('Failed to load dashboard:', e);
+  }
+  try {
+    const campaigns = await api('/campaigns?limit=100');
+    renderCampaigns(campaigns.data || []);
+  } catch (e) { /* ignore */ }
+  try {
+    const channels = await api('/channels');
+    renderChannels(channels);
+  } catch (e) { /* ignore */ }
+  try {
+    const top = await api('/leads/top?limit=50');
+    renderLeads(top);
+  } catch (e) { /* ignore */ }
+  try {
+    const health = await api('/llm/health');
+    document.getElementById('dbStatus').innerHTML = health.configured
+      ? '🤖 ' + health.model
+      : '(LLM no configurado)';
+  } catch (e) { /* ignore */ }
+}
+
+function renderSummary(s) {
+  document.getElementById('activeCampaigns').textContent = s.campaigns?.active || 0;
+  document.getElementById('totalCampaigns').textContent = `${s.campaigns?.total || 0} total, ${s.campaigns?.completed || 0} completadas`;
+  document.getElementById('todayMessages').textContent = s.deliveries?.today || 0;
+  document.getElementById('totalDeliveries').textContent = `${s.deliveries?.total || 0} total, ${s.deliveries?.sent || 0} enviados`;
+  document.getElementById('scoredLeads').textContent = s.leads?.scored || 0;
+  document.getElementById('totalLeads').textContent = `${s.leads?.total || 0} total`;
+  document.getElementById('topLead').textContent = s.leads?.topLead ? `${s.leads.topLead.name} (${s.leads.topLead.score})` : 'N/A';
+
+  // Channel LEDs
+  const leds = document.getElementById('channelLEDs');
+  if (s.channels && s.channels.length > 0) {
+    leds.innerHTML = s.channels.map(c => `
+      <div class="channel-card">
+        ${channelIcon(c.status)}
+        <div class="info">
+          <span class="name">${c.channel}</span>
+          <span class="msg">${c.status}</span>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    leds.innerHTML = '<span style="color:var(--muted);font-size:0.85rem">No hay canales configurados</span>';
+  }
+
+  // Delivery rate
+  const total = s.deliveries?.total || 0;
+  const sent = s.deliveries?.sent || 0;
+  const rate = total > 0 ? Math.round(sent / total * 100) : 0;
+  document.getElementById('deliveryRate').textContent = total > 0 ? `${rate}%` : '0%';
+  const remaining = total - sent;
+  const bar = document.getElementById('deliveryBar');
+  if (total > 0) {
+    bar.innerHTML = `
+      <div class="bar-segment bar-delivered" style="width:${Math.round(sent/total*100)}%"></div>
+      <div class="bar-segment bar-pending" style="width:${Math.round(remaining/total*100)}%"></div>
+    `;
+  } else {
+    bar.innerHTML = '';
+  }
+  document.getElementById('barLegend').textContent = `▬ Enviados: ${sent}  ▬ Pendientes: ${remaining}`;
+}
+
+function renderCampaigns(campaigns) {
+  const tbody = document.querySelector('#campaignsTable tbody');
+  if (campaigns.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted)">No hay campañas</td></tr>';
+    return;
+  }
+  tbody.innerHTML = campaigns.map(c => {
+    const total = c.sent_count + c.failed_count;
+    const pct = total > 0 ? Math.round(c.delivered_count / (c.sent_count || 1) * 100) : 0;
+    return `<tr>
+      <td><strong>${c.name || 'Sin nombre'}</strong></td>
+      <td><span class="badge badge-${c.channel}">${c.channel}</span></td>
+      <td><span class="badge ${badgeClass(c.status)}">${c.status}</span></td>
+      <td>${c.sent_count}</td>
+      <td>${c.delivered_count}</td>
+      <td>${c.read_count}</td>
+      <td>${c.replied_count}</td>
+      <td>${c.failed_count || 0}</td>
+      <td>
+        <div class="score-bar"><div class="score-fill ${scoreClass(pct)}" style="width:${pct}%"></div></div>
+      </td>
+      <td>${formatDate(c.created_at)}</td>
+      <td><button onclick="showImportModal('${c.id}')" style="padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.75rem">↑ Leads</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderLeads(leads) {
+  const tbody = document.querySelector('#leadsTable tbody');
+  if (leads.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No hay leads</td></tr>';
+    return;
+  }
+  tbody.innerHTML = leads.map(l => `<tr>
+    <td><strong>${l.name || 'Anónimo'}</strong></td>
+    <td>${l.phone || '-'}</td>
+    <td>${l.email || '-'}</td>
+    <td>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-weight:700;color:${l.score >= 70 ? 'var(--green)' : l.score >= 40 ? 'var(--yellow)' : 'var(--red)'}">${l.score}</span>
+        <div class="score-bar" style="flex:1"><div class="score-fill ${scoreClass(l.score)}" style="width:${l.score}%"></div></div>
+      </div>
+    </td>
+    <td><span class="badge ${badgeClass(l.status)}">${l.status}</span></td>
+    <td style="font-size:0.8rem">${l.campaign_id ? l.campaign_id.substring(0,8) + '...' : '-'}</td>
+    <td>${formatDate(l.created_at)}</td>
+  </tr>`).join('');
+}
+
+function renderChannels(channels) {
+  document.getElementById('templateFilter').value = '';
+}
+
+function loadTemplates(filter) {
+  const ch = filter || document.getElementById('templateFilter').value || '';
+  const url = ch ? `/api/templates?channel=${ch}` : '/api/templates';
+  fetch(url).then(r => r.json()).then(templates => {
+    const tbody = document.querySelector('#templatesTable tbody');
+    if (templates.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No hay plantillas</td></tr>';
+      return;
+    }
+    tbody.innerHTML = templates.map(t => {
+      const preview = t.body.length > 80 ? t.body.substring(0,80) + '...' : t.body;
+      return `<tr>
+        <td><strong>${t.name}</strong></td>
+        <td><span class="badge badge-${t.channel}">${t.channel}</span></td>
+        <td><span style="color:var(--muted);font-size:0.8rem">${t.category}</span></td>
+        <td style="font-size:0.8rem;color:var(--muted);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</td>
+        <td><span style="font-size:0.8rem;color:var(--muted)">${(t.variables||[]).join(', ') || '—'}</span></td>
+        <td><button onclick="previewTemplate('${t.id}')" style="padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.75rem">Vista</button></td>
+      </tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
+function showNewTemplateModal() {
+  document.getElementById('newTemplateModal').style.display = 'flex';
+  ['tplName','tplSubject','tplVars','tplBody'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('tplChannel').value = 'whatsapp';
+  document.getElementById('tplCategory').value = 'custom';
+}
+
+function closeNewTemplateModal() {
+  document.getElementById('newTemplateModal').style.display = 'none';
+}
+
+async function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  const channel = document.getElementById('tplChannel').value;
+  const category = document.getElementById('tplCategory').value;
+  const subject = document.getElementById('tplSubject').value.trim();
+  const body = document.getElementById('tplBody').value.trim();
+  const vars = document.getElementById('tplVars').value.split(',').map(v => v.trim()).filter(Boolean);
+  if (!name || !body) { alert('Nombre y cuerpo son requeridos'); return; }
+
+  try {
+    const r = await fetch('/api/templates', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, channel, category, subject: subject || undefined, body, variables: vars})
+    });
+    const result = await r.json();
+    if (!r.ok) { alert('Error: ' + (result.error || 'Unknown')); return; }
+    closeNewTemplateModal();
+    loadTemplates();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function previewTemplate(id) {
+  fetch('/api/templates').then(r => r.json()).then(templates => {
+    const t = templates.find(t => t.id === id);
+    if (!t) return;
+    const vars = t.variables || [];
+    // Try example values
+    const values = {};
+    vars.forEach(v => {
+      if (v === 'name') values[v] = 'María';
+      else if (v === 'business' || v === 'company') values[v] = 'Wibsite';
+      else if (v === 'offer') values[v] = '50% dscto en plan Premium';
+      else if (v === 'expiry') values[v] = '31/12/2026';
+      else if (v === 'interest') values[v] = 'marketing digital';
+      else if (v === 'message') values[v] = 'Tu pedido está listo';
+      else if (v === 'short_url') values[v] = 'wib.site/abc';
+      else if (v === 'content') values[v] = 'Nuevas funcionalidades este mes...';
+      else if (v === 'meeting_date') values[v] = 'lunes 15/07';
+      else if (v === 'attachment_links') values[v] = 'wib.site/docs';
+      else values[v] = `{{${v}}}`;
+    });
+    // Preview call
+    fetch('/api/templates/preview', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({template_id: id, values})
+    }).then(r => r.json()).then(p => {
+      const msg = p.subject ? `Asunto: ${p.subject}\n\n` : '';
+      alert(`📋 ${t.name} (${t.channel})\n\n${msg}${p.body}\n\n---\nCaracteres: ${p.character_count}${p.exceeds_limit ? ' ⚠ EXCEDE LÍMITE' : ''}`);
+    }).catch(() => {});
+  }).catch(() => {});
+}
+
+const detail = document.getElementById('channelDetailCards');
+  if (channels.length === 0) {
+    detail.innerHTML = '<div class="card"><p style="color:var(--muted)">No hay canales registrados</p></div>';
+    return;
+  }
+  detail.innerHTML = channels.map(c => `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        ${channelIcon(c.status)}
+        <h3 style="margin:0;text-transform:capitalize">${c.channel}</h3>
+      </div>
+      <div style="font-size:0.85rem">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:var(--muted)">Estado</span>
+          <span class="badge ${badgeClass(c.status)}">${c.status}</span>
+        </div>
+        ${c.status_message ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:var(--muted)">Mensaje</span>
+          <span>${c.status_message}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="color:var(--muted)">Errores</span>
+          <span>${c.error_count || 0}</span>
+        </div>
+        ${c.last_checked_at ? `<div style="display:flex;justify-content:space-between">
+          <span style="color:var(--muted)">Últ. check</span>
+          <span>${formatDate(c.last_checked_at)}</span>
+        </div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ─── Import Modal ─────────────────────────────────
+let selectedFile = null;
+let previewData = null;
+
+async function showImportModal(campaignId) {
+  document.getElementById('importModal').style.display = 'flex';
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('importBtn').disabled = true;
+  document.getElementById('importBtn').style.opacity = '0.5';
+  selectedFile = null;
+  previewData = null;
+  document.getElementById('fileInput').value = '';
+
+  // Populate campaigns dropdown
+  const sel = document.getElementById('importCampaign');
+  try {
+    const camps = await api('/campaigns?limit=200');
+    sel.innerHTML = camps.data.map(c =>
+      `<option value="${c.id}" ${c.id === campaignId ? 'selected' : ''}>${c.name || c.id.substring(0,8)}</option>`
+    ).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error loading campaigns</option>';
+  }
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+  selectedFile = null;
+  previewData = null;
+}
+
+// Drop zone handlers
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--blue)'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border)'; });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) {
+    alert('Formato no soportado. Usa .xlsx, .xls o .csv');
+    return;
+  }
+  selectedFile = file;
+
+  // Preview: send to server for parsing
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const campaignId = document.getElementById('importCampaign').value;
+    if (!campaignId) { alert('Selecciona una campaña primero'); return; }
+
+    const r = await fetch(`${BASE}/campaigns/${campaignId}/leads/upload`, { method: 'POST', body: form });
+    const result = await r.json();
+
+    if (!r.ok) {
+      document.getElementById('importResult').style.display = 'block';
+      document.getElementById('importResult').innerHTML = `<span style="color:var(--red)">Error: ${result.error}</span>`;
+      return;
+    }
+
+    // Show preview of parsed data
+    previewData = result;
+    document.getElementById('importPreview').style.display = 'block';
+    document.getElementById('fileInfo').textContent = `${result.total_rows} filas · ${result.created} creados · ${result.errors} errores · ${result.duplicates} duplicados`;
+
+    // Column mapping
+    const cm = result.column_mapping;
+    document.getElementById('columnMap').textContent = `Teléfono: ${cm.phone || 'no detectado'} · Nombre: ${cm.name || 'no detectado'} · Email: ${cm.email || 'no detectado'}`;
+
+    // Preview table (first 10)
+    const previewLeads = result.leads.slice(0, 10);
+    const tbody = document.querySelector('#previewTable tbody');
+    tbody.innerHTML = previewLeads.map(l => `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--border)">${l.name || '-'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--border)">${l.phone || '-'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--border)">${l.email || '-'}</td>
+    </tr>`).join('');
+
+    if (result.errors > 0) {
+      document.getElementById('importResult').style.display = 'block';
+      document.getElementById('importResult').innerHTML = `<span style="color:var(--yellow)">⚠ ${result.errors} filas con errores. Revisa y corrige.</span>`;
+    } else {
+      document.getElementById('importResult').style.display = 'block';
+      document.getElementById('importResult').innerHTML = `<span style="color:var(--green)">✓ ${result.created} leads importados exitosamente</span>`;
+    }
+
+    document.getElementById('importBtn').disabled = false;
+    document.getElementById('importBtn').style.opacity = '1';
+
+  } catch(e) {
+    document.getElementById('importResult').style.display = 'block';
+    document.getElementById('importResult').innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+  }
+}
+
+function doImport() {
+  closeImportModal();
+  refreshAll();
+}
+
+// ─── Seed / Clear ─────────────────────────────────
+async function syncToTwenty() {
+  if (!confirm('¿Sincronizar todos los leads con Twenty CRM?')) return;
+  try {
+    const r = await fetch('/api/twenty/sync-all', {method:'POST'});
+    const result = await r.json();
+    alert(`✅ Sincronizados: ${result.synced} leads (${result.errors} errores)`);
+    refreshAll();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function evaluateAll() {
+  if (!confirm('¿Evaluar scoring de todos los leads?')) return;
+  try {
+    const r = await fetch('/api/scoring/evaluate-all', {method:'POST'});
+    const result = await r.json();
+    alert(`✅ Evaluados: ${result.evaluated} leads (🔥 ${result.hot} hot · ${result.warm} warm · ❄ ${result.cold} cold)`);
+    refreshAll();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function seedData() {
+  if (!confirm('Generar datos de prueba?')) return;
+  try {
+    const r = await fetch('/api/seed', {method:'POST'});
+    const result = await r.json();
+    alert(`✅ Datos generados: ${result.campaigns} campañas, ${result.leads} leads, ${result.deliveries} entregas`);
+    refreshAll();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function clearData() {
+  if (!confirm('¿Eliminar TODOS los datos?')) return;
+  if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
+  try {
+    await fetch('/api/seed', {method:'DELETE'});
+    alert('✅ Todos los datos eliminados');
+    refreshAll();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function testLLM() {
+  try {
+    const health = await (await fetch('/api/llm/health')).json();
+    if (!health.configured) { alert('❌ LLM no configurado (OPENROUTER_API_KEY faltante)'); return; }
+    const r = await fetch('/api/llm/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ messages:[{role:'user', content:'Responde solo con: Hola, soy Wibsite AI. Todo funciona correctamente.'}], max_tokens: 30 })
+    });
+    const result = await r.json();
+    if (result.choices) {
+      alert('✅ LLM conectado!\nModelo: ' + result.model + '\nRespuesta: ' + result.choices[0].message.content);
+    } else {
+      alert('❌ Error: ' + JSON.stringify(result));
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Initial load
+refreshAll();
+loadTemplates();
+setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>
