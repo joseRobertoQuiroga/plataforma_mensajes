@@ -4,8 +4,12 @@ stages:
   - deploy
 
 variables:
-  # Define your variables in GitLab CI/CD settings
-  ELASTIC_URL: "http://elasticsearch.wibsite.internal:9200"
+  # URLs internas del stack (elasticsearch:9200) solo son válidas si el job
+  # comparte la red de docker compose del runner; desde GitLab settings se puede
+  # overridear ELASTIC_URL, ELASTIC_USER y ELASTIC_PASSWORD.
+  ELASTIC_URL: "http://elasticsearch:9200"
+  ELASTIC_USER: "elastic"
+  ELASTIC_PASSWORD: "wibsite_elastic_pass_2026"
 
 validate_tevs:
   stage: validate_tevs
@@ -13,11 +17,14 @@ validate_tevs:
   script:
     - echo "Running TEVS Validation (Deployment Gate)..."
     - cd scripts/tevs
-    # Execute the TEVS Runner. GitLab automatically fails the job if exit code is != 0
-    - pwsh -File ./tevs-runner.ps1 -TestFolder ./tests -ElasticUrl $ELASTIC_URL -ElasticUser $ELASTIC_USER -ElasticPass $ELASTIC_PASS
+    # Ejecuta el runner (requiere Elasticsearch + otel-collector levantados vía
+    # docker compose en el runner con red compartida). GitLab falla si exit != 0.
+    - pwsh -File ./tevs-runner.ps1 -TestFolder ./tests -ElasticUrl $ELASTIC_URL -ElasticUser $ELASTIC_USER -ElasticPassword $ELASTIC_PASSWORD
   artifacts:
     when: always
     paths:
       - scripts/tevs/tests/
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
+  needs:
+    - test

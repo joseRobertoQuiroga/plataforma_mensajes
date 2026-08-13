@@ -3,10 +3,10 @@ name: TEVS Validation Pipeline (Deployment Gate)
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
 
 jobs:
   validate-deployment:
@@ -16,25 +16,27 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Start Local Infrastructure (if needed)
+      - name: Start Local Infrastructure
         run: |
-          # If the test environment is ephemeral, start it here
-          # docker-compose up -d
-          echo "Assuming Wibsite infrastructure is reachable at the configured URLs."
+          # Sube Elasticsearch + otel-collector (lo único que TEVS consulta).
+          # Las URLs internas del stack (elasticsearch:9200, otel-collector:4318)
+          # no son alcanzables desde el runner: se publican por compose y el
+          # runner habla con localhost.
+          docker compose -f docker-compose.yml up -d --build elasticsearch otel-collector
 
       - name: Run TEVS Validation Runner
         shell: pwsh
         env:
-          ELASTIC_URL: ${{ secrets.ELASTIC_URL }}
+          ELASTIC_URL: "http://localhost:9200"
           ELASTIC_USER: ${{ secrets.ELASTIC_USER }}
-          ELASTIC_PASS: ${{ secrets.ELASTIC_PASS }}
+          ELASTIC_PASSWORD: ${{ secrets.ELASTIC_PASSWORD }}
         run: |
           cd scripts/tevs
           
           # Run the TEVS test orchestrator
           # The runner returns exit code 1 if ANY test fails.
           # GitHub Actions will automatically fail the job if exit code != 0.
-          .\tevs-runner.ps1 -TestFolder .\tests -ElasticUrl $env:ELASTIC_URL -ElasticUser $env:ELASTIC_USER -ElasticPass $env:ELASTIC_PASS
+          .\tevs-runner.ps1 -TestFolder .\tests -ElasticUrl $env:ELASTIC_URL -ElasticUser $env:ELASTIC_USER -ElasticPassword $env:ELASTIC_PASSWORD
           
       - name: TEVS Passed Successfully
         run: echo "All Deployment Gates passed. Proceeding with deployment..."
