@@ -1,6 +1,20 @@
-node_modules/
+# ===== Secretos y material sensible — nunca subir =====
+*.key
+*.pem
+*.pfx
+n8n-cookies*.txt
+n8n_login.json
+website_backup/
+authelia/oidc.key
+%{redirect_url}'
+helper-node/%{redirect_url}'
+
+# ===== Entornos locales =====
 .env
+*.env
+!*.env.example
+
+# ===== Dependencias y build =====
+node_modules/
+logs/
 *.log
-__pycache__/
-*.pyc
-dist/

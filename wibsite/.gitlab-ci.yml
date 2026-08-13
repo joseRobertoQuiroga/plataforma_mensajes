@@ -1,0 +1,23 @@
+stages:
+  - test
+  - validate_tevs
+  - deploy
+
+variables:
+  # Define your variables in GitLab CI/CD settings
+  ELASTIC_URL: "http://elasticsearch.wibsite.internal:9200"
+
+validate_tevs:
+  stage: validate_tevs
+  image: mcr.microsoft.com/powershell:lts-7.2-alpine-3.14
+  script:
+    - echo "Running TEVS Validation (Deployment Gate)..."
+    - cd scripts/tevs
+    # Execute the TEVS Runner. GitLab automatically fails the job if exit code is != 0
+    - pwsh -File ./tevs-runner.ps1 -TestFolder ./tests -ElasticUrl $ELASTIC_URL -ElasticUser $ELASTIC_USER -ElasticPass $ELASTIC_PASS
+  artifacts:
+    when: always
+    paths:
+      - scripts/tevs/tests/
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

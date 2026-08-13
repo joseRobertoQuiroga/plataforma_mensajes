@@ -1,0 +1,39 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash",
+
+  "agent": {
+    "build": {
+      "model": "opencode/deepseek-v4-flash",
+      "variant": "reasoning",
+      "description": "Escritura de codigo - DeepSeek V4 Flash con maximo razonamiento",
+      "phases": ["F-07..F-12", "F-25..F-30", "F-31..F-35"]
+    },
+    "explore": {
+      "model": "opencode/deepseek-v4-pro",
+      "variant": "reasoning",
+      "description": "Analisis de codigo y deteccion de gaps - DeepSeek V4 Pro con maximo razonamiento",
+      "phases": ["F-35", "F-48", "F-12"]
+    },
+    "plan": {
+      "model": "opencode/deepseek-v4-pro",
+      "variant": "thinking",
+      "description": "Planeacion de iteraciones y secuenciacion de fases - DeepSeek V4 Pro con alto esfuerzo de pensamiento",
+      "phases": ["planning", "TEC-03", "TEC-06"]
+    },
+    "general": {
+      "model": "opencode/kimi-k3",
+      "variant": "thinking",
+      "description": "Tareas operativas generales - Kimi K3 con alto esfuerzo de pensamiento",
+      "phases": ["F-01", "F-36..F-40", "F-43..F-46"]
+    },
+    "reviewer": {
+      "model": "opencode/deepseek-v4-pro",
+      "variant": "reasoning",
+      "mode": "subagent",
+      "description": "Verificacion post-implementacion de cada fase - DeepSeek V4 Pro con maximo razonamiento",
+      "phases": ["post-build", "F-41", "F-42"],
+      "prompt": "Eres un revisor de codigo experto. Analiza el codigo en busca de bugs, problemas de seguridad, malas practicas y sugiere mejoras. Se estricto y minucioso. Verifica que la implementacion cumple con los criterios de la fase especificada en TEC-06."
+    }
+  }
+}

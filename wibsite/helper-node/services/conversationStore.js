@@ -4,8 +4,11 @@ let redisClient = null;
 let redisAvailable = false;
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
-const CONV_TTL = 86400;
+const CONV_TTL = Number(process.env.CONVERSATION_TTL_SECONDS) || 604800;
+const MAX_MESSAGES = 100;
 const MAX_RETRY = 3;
+
+const postTransitionHooks = new Set();
 
 async function initRedis() {
   try {
@@ -76,6 +79,7 @@ async function createConversationState(tenantId, conversationId, metadata = {}) 
     state: CONVERSATION_STATES.GREETING,
     previousStates: [],
     history: [{ state: CONVERSATION_STATES.GREETING, enteredAt: new Date().toISOString() }],
+    messages: [],
     messageCount: 0,
     metadata,
     createdAt: new Date().toISOString(),
@@ -140,6 +144,11 @@ async function transitionState(tenantId, conversationId, newState, reason = '') 
   } else {
     memoryStore.set(key, conv);
   }
+
+  const previousState = conv.previousStates[conv.previousStates.length - 1] || null;
+  if (postTransitionHooks.size > 0) {
+    await Promise.allSettled([...postTransitionHooks].map(fn => fn(conv, { from: previousState, to: newState, reason })));
+  }
   return conv;
 }
 
@@ -183,8 +192,88 @@ async function listActiveConversations(tenantId) {
   return results;
 }
 
+async function appendMessage(tenantId, conversationId, { role, content, metadata = {} }) {
+  const conv = await getConversationState(tenantId, conversationId);
+  if (!conv) return { error: 'Conversation not found' };
+
+  conv.messages = conv.messages || [];
+  conv.messages.push({ role, content, metadata, at: new Date().toISOString() });
+  if (conv.messages.length > MAX_MESSAGES) {
+    conv.messages.splice(0, conv.messages.length - MAX_MESSAGES);
+  }
+  conv.messageCount = conv.messages.length;
+  conv.updatedAt = new Date().toISOString();
+
+  const key = getRedisKey(tenantId, conversationId);
+  if (redisAvailable) {
+    try { await redisClient.set(key, JSON.stringify(conv), 'EX', CONV_TTL); } catch (e) { memoryStore.set(key, conv); }
+  } else { memoryStore.set(key, conv); }
+  return conv;
+}
+
+function getCheckpointKey(tenantId, conversationId) {
+  return `ckpt:${tenantId}:${conversationId}`;
+}
+
+async function saveCheckpoint(tenantId, conversationId, checkpoint) {
+  const payload = {
+    ...checkpoint,
+    tenantId, conversationId,
+    savedAt: new Date().toISOString(),
+  };
+  const key = getCheckpointKey(tenantId, conversationId);
+  if (redisAvailable) {
+    try { await redisClient.set(key, JSON.stringify(payload), 'EX', CONV_TTL); return payload; } catch (e) { memoryStore.set(key, payload); return payload; }
+  }
+  memoryStore.set(key, payload);
+  return payload;
+}
+
+async function loadCheckpoint(tenantId, conversationId) {
+  const key = getCheckpointKey(tenantId, conversationId);
+  if (redisAvailable) {
+    try {
+      const data = await redisClient.get(key);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Redis checkpoint get error:', e.message);
+    }
+  }
+  return memoryStore.get(key) || null;
+}
+
+async function deleteCheckpoint(tenantId, conversationId) {
+  const key = getCheckpointKey(tenantId, conversationId);
+  if (redisAvailable) {
+    try { await redisClient.del(key); } catch (e) { /* ignore */ }
+  }
+  memoryStore.delete(key);
+  return { status: 'deleted' };
+}
+
+async function updateConversationMetadata(tenantId, conversationId, metadataPatch) {
+  const conv = await getConversationState(tenantId, conversationId);
+  if (!conv) return { error: 'Conversation not found' };
+  conv.metadata = { ...(conv.metadata || {}), ...metadataPatch };
+  conv.updatedAt = new Date().toISOString();
+  const key = getRedisKey(tenantId, conversationId);
+  if (redisAvailable) {
+    try { await redisClient.set(key, JSON.stringify(conv), 'EX', CONV_TTL); } catch (e) { memoryStore.set(key, conv); }
+  } else { memoryStore.set(key, conv); }
+  return conv;
+}
+
+function onTransition(fn) {
+  if (typeof fn !== 'function') throw new Error('onTransition expects a function');
+  postTransitionHooks.add(fn);
+  return () => postTransitionHooks.delete(fn);
+}
+
 module.exports = {
   initRedis, createConversationState, getConversationState, transitionState,
-  incrementMessageCount, deleteConversationState, listActiveConversations,
+  incrementMessageCount, appendMessage, deleteConversationState, listActiveConversations,
+  updateConversationMetadata,
+  saveCheckpoint, loadCheckpoint, deleteCheckpoint, onTransition,
   isValidTransition, CONVERSATION_STATES, VALID_TRANSITIONS, STATE_LABELS,
+  CONV_TTL, MAX_MESSAGES,
 };

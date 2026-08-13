@@ -1,6 +1,7 @@
 # ESTADO DE COMPONENTES — Matriz de Salud
 
-> Estado actual de cada componente del sistema — Última actualización: 2026-07-18
+> Estado actual de cada componente del sistema — Última actualización: 2026-08-12
+> Estado basado en configuración estática (`docker-compose.yml`); Docker Desktop estaba detenido al momento de la revisión → runtime no verificado en vivo.
 
 ---
 
@@ -24,16 +25,27 @@
 | Dify Web | 3003 | ✅ OK | — | ✅ UI funcional | dify |
 | Dify Worker | — | ✅ OK | — | Procesamiento asíncrono activo | dify |
 | Plugin Daemon | 5002 | ✅ OK | — | ✅ Plugin openai_api_compatible instalado | — |
-| n8n | 5679 | ✅ OK | /healthz | ✅ UI funcional, ⚠️ body parser bug, ⚠️ workflows en BD pero requiere toggle UI | n8n |
+| n8n | 5679 | ✅ OK | /healthz | ✅ UI funcional, ⚠️ body parser bug, ⚠️ 3 workflows activos en BD vía SQL (requiere toggle UI) | n8n |
 | Twenty CRM | 3001 | ✅ OK | /healthz | ✅ UI funcional, API key JWT configurada, 10 campos custom | twenty |
-| Helper Node | 3100 | ✅ OK | /health | ✅ 35+ endpoints funcionales, dashboard SPA, PostgreSQL con fallback JSON | wibsite |
+| Helper Node | 3100 | ✅ OK | /health | ✅ ~108 rutas funcionales (~35+ grupos), dashboard SPA, PostgreSQL con fallback JSON | wibsite |
+
+## Observabilidad (Elastic Stack — reemplaza Prometheus/Grafana/cAdvisor/GlitchTip)
+
+| Componente | Puerto | Estado | Health Check | Notas |
+|-----------|--------|--------|-------------|-------|
+| Elasticsearch | 9200 | ✅ Config (compose) | /_cluster/health | v9.4.2 (STACK_VERSION), credencial ELASTIC_PASSWORD desde `.env` |
+| Kibana | 5601 | ✅ Config (compose) | /api/status | UI de trazas/logs/dashboards |
+| OTel Collector | 4317/4318 | ✅ Config (compose) | /healthz | OTLP gRPC+HTTP → export a elasticsearch:9200; `otel-collector/config.yaml` |
+| MinIO | 9000/9001 | ✅ Config (compose) | /minio/health/live | Object storage + consola web |
+
+> ⚠️ Gap conocido: `otel-collector/config.yaml` usa password hardcodeada (`wibsite_elastic_pass_2026`); si `ELASTIC_PASSWORD` en `.env` difiere, la exportación a ES falla silenciosamente. Corregir en F-35/re-auditoría.
 
 ## Autenticación
 
 | Componente | Puerto | Estado | Notas |
 |-----------|--------|--------|-------|
-| Authelia | 9091 | ⚠️ Pendiente | Configuración documentada en CHECKLIST-SSO.md, no implementada como gateway |
-| Authelia DB | — | ⚠️ Pendiente | users.yml y configuration.yml preparados |
+| Authelia | 9091 | ✅ Config (compose) | Servicio en compose (imagen `authelia/authelia:4.37`) + nginx auth_request. Runtime no verificado (Docker Desktop detenido) |
+| Authelia DB | — | ✅ Config | users.yml y configuration.yml preparados |
 
 ## Servicios Auxiliares
 
@@ -41,13 +53,13 @@
 |-----------|--------|-------|
 | Dify Sandbox | ✅ OK | Puerto 8194, no utilizado (Code nodes reemplazados por LLM nodes) |
 | N8N Workflows en BD | ✅ 3 activos | Seteados vía SQL directo, requieren toggle UI |
-| Certificados SSL | ✅ OK | nginx.crt + nginx.key generados en certs/ |
+| Certificados SSL | ⚠️ Revisar | nginx.crt + nginx.key en certs/; **nginx.key (clave privada) está commiteada en git — mover fuera del repo** |
 
 ---
 
 ## APIs y Endpoints
 
-### Helper Node v2 (35+ endpoints)
+### Helper Node (~108 rutas; v2.1.1 según package.json)
 
 | Grupo | Endpoints | Estado |
 |-------|----------|--------|
@@ -58,6 +70,8 @@
 | Scoring | GET/PUT rules + evaluate + evaluate-all | ✅ |
 | Twenty CRM | health + sync + sync-all | ✅ |
 | Canales | GET list + PATCH channel + opt-outs | ✅ |
+| Twilio | send + status callback + typing (F-06/F-24) | ✅ |
+| Conversación/Agente | conversationStore, agentCore POC, chat LLM | ✅ |
 | Seed | POST seed + DELETE clear | ✅ |
 | Legacy v1 | /campaigns, /webhooks/whatsapp, /opt-outs, /chatwoot/normalize | ✅ |
 
@@ -96,7 +110,8 @@
 | Proveedor | Estado | Detalle |
 |-----------|--------|---------|
 | OpenRouter | ✅ Configurado | API key en `.env`, 7 modelos registrados, endpoint `https://openrouter.ai/api/v1` |
-| Meta WhatsApp API | ❌ No configurado | Faltan META_APP_ID, META_APP_SECRET, WHATSAPP_PHONE_NUMBER_ID |
+| Twilio | ✅ Configurado | Bridge WhatsApp/SMS activo (TEC-06 F-03…F-06): inbound webhook + status callback + typing + opt-out |
+| Meta WhatsApp API | ❌ No configurado | Faltan META_APP_ID, META_APP_SECRET, WHATSAPP_PHONE_NUMBER_ID — reemplazado por Twilio |
 | xAI (Grok) | ❌ Deprecado | Sin créditos, reemplazado por OpenRouter |
 | Plugin Marketplace Dify | ✅ Funcional | `https://marketplace.dify.ai/api` |
 

@@ -1,6 +1,6 @@
 # LOGROS — Estado de Avance del Proyecto
 
-> Documento vivo — Última actualización: 2026-07-18
+> Documento vivo — Última actualización: 2026-08-12
 
 ---
 
@@ -8,8 +8,8 @@
 
 | Métrica | Valor |
 |---------|-------|
-| Servicios en Docker Compose | 11 (PostgreSQL, Redis, Weaviate, t2v-transformers, Chatwoot + worker, Dify API/Web/Worker, Plugin Daemon, n8n, Twenty CRM, Helper Node, Nginx, Authelia) |
-| APIs implementadas (helper-node) | 50+ endpoints (v2.2.0) |
+| Servicios en Docker Compose | 20 (PostgreSQL, Redis, Weaviate, t2v-transformers, Chatwoot + worker, Dify API/Web/Worker/Plugin Daemon/Sandbox, n8n, Twenty CRM, Helper Node, Elasticsearch, Kibana, OTel Collector, MinIO, Authelia, Nginx) |
+| APIs implementadas (helper-node) | ~108 rutas (v2.1.1 según `package.json`) |
 | Módulos de seguridad implementados | 4 (Auth API Key, Rate Limiter, Sanitizer, HMAC) |
 | State machine conversacional | 9 estados con validación de transiciones |
 | Lead Profile Builder | Score history, delivery stats, tags, next action sugerido |
@@ -17,27 +17,33 @@
 | RAG Engine | Weaviate + fallback in-memory |
 | Anti-Hallucination | Detección de consultas fuera de conocimiento + boundaries |
 | SLI/SLO Monitoring | Health+ endpoint, métricas de uptime, error rate, latencia |
+| Observabilidad | Elasticsearch 9.x + Kibana + OTel Collector (config) — sustituye Prometheus/Grafana/cAdvisor/GlitchTip |
 | Workflows Dify funcionales | 1 (WhatsApp Lead Classifier — 8 nodos LLM) |
-| Workflows n8n importados | 2 (Inbound Message + Campaign Broadcast) |
+| Workflows n8n importados | 3 (Inbound Message + Campaign Broadcast + Score & Sync) |
 | Campos custom Twenty CRM | 10 en objeto `people` |
 | Plantillas de mensajes | 11 predefinidas |
 | Tests unitarios + integración | 112 tests (8 suites) — 100% passing |
-| Documentación generada | 25+ archivos en docs/, specs/, docs/context/, docs/rag/ |
+| Suite TeVS (Elastic) | 11 tests creados — **pendiente primera ejecución** |
+| Auditoría integral | 78 checks OK (2026-08-03, `scripts/logs/audit.log`) |
+| Documentación generada | 100+ archivos en docs/, specs/, Avances/, scripts/ |
 
 ---
 
 ## 1. Infraestructura y Base
 
-- [x] Docker Compose funcional con 11 servicios orquestados
-- [x] PostgreSQL 15 con pgvector y bases de datos separadas (chatwoot, dify, n8n, twenty, wibsite)
+- [x] Docker Compose funcional con **20 servicios** orquestados
+- [x] PostgreSQL 15 + pgvector y bases de datos separadas (chatwoot, dify, n8n, twenty, wibsite)
 - [x] Redis 7 Alpine como caché/queue
 - [x] Weaviate 1.26.1 + Transformers (sentence-transformers-multi-qa-MiniLM-L6-cos-v1) para búsqueda vectorial
-- [x] Nginx como proxy reverso unificado (puerto 8080)
+- [x] Nginx como proxy reverso unificado (puerto 8080→443, 80, 3003)
 - [x] Red interna Docker (`wibsite_default`) con comunicación por nombres de contenedor
 - [x] Script `init-db.sql` para creación de bases de datos al iniciar PostgreSQL
-- [x] Health checks configurados en todos los servicios críticos
+- [x] Health checks configurados en los servicios críticos
+- [x] **Elasticsearch 9.x + Kibana + OTel Collector** integrados al compose (reemplazan Prometheus/Grafana/cAdvisor/GlitchTip)
+- [x] MinIO (object storage) integrado al compose
+- [x] Authelia 4.37 en compose con nginx auth_request (config; runtime pendiente de arranque)
 
-## 2. Helper Node (Express.js v2 — ahora v2.2.0)
+## 2. Helper Node (Express.js v2 — package.json v2.1.1)
 
 - [x] Servicio funcional con Node.js 20 Alpine + Express 5.x
 - [x] PostgreSQL como almacenamiento primario con fallback automático a JSON file store
@@ -57,7 +63,7 @@
 - [x] Auto-refresh cada 15s en dashboard
 - [x] Endpoints de normalización de payloads Chatwoot
 
-### Nuevos Módulos v2.2.0 (Julio 2026)
+### Nuevos Módulos v2 (Julio 2026)
 
 - [x] **Middleware de Seguridad**: Auth API Key (`X-API-Key`), Rate Limiting (30/60 req/min), Sanitizador de Prompts (23 patrones de inyección), validación HMAC para webhooks Meta y Chatwoot
 - [x] **Conversation Store**: State machine con 9 estados (greeting → discovery → qualification → proposal → objections → closing → post_sale → support → escalated), validación de transiciones, Redis + fallback in-memory, TTL
@@ -66,7 +72,9 @@
 - [x] **RAG Engine**: Weaviate + fallback in-memory, chunking de documentos, query por tenant
 - [x] **Anti-Hallucination**: Patrones de detección, respuestas predefinidas para consultas fuera de conocimiento, enforceKnowledgeBoundaries
 - [x] **SLI/SLO Monitoring**: Endpoint /health mejorado con uptime, error rate, avg latency, delivery success rate 24h, health de dependencias
+- [x] **Twilio Bridge (F-03…F-06)**: inbound webhook + status callback + `/api/twilio/send` + typing + opt-out duro — canal real configurado en lugar de Meta
 - [x] **112 Tests Automatizados**: 8 suites (security, conversation, leadProfile, agentConfig, ragEngine, antiHallucination, rateLimiter, integration), 100% passing
+- [x] **Suite TeVS creada** en `scripts/tevs/`: runner PowerShell + 11 tests contra Elasticsearch (OBS/SEC/DEV/DATA/CORR/AGENT/DR) + setup de índice/ILM/alertas + dashboard Kibana — primera ejecución pendiente
 
 ## 3. Dify (Plataforma IA)
 
@@ -92,7 +100,8 @@
 - [x] **Workflow 01 - Inbound WhatsApp → Dify → Twenty CRM**: Importado con webhook `/webhook/chatwoot-inbound`
 - [x] **Workflow 02 - Campaign Broadcast WhatsApp**: Importado con schedule cada 30 min
 - [x] **Workflow 03 - Helper Score & Sync**: Importado
-- [x] Workflows activos en BD vía SQL directo
+- [x] 3 workflows activos en BD vía SQL directo
+- [x] **Flujo real Twilio→helper→n8n→Dify→Twenty verificado** (F-05) y broadcast con delivery tracking (F-06)
 
 ## 5. Twenty CRM
 
@@ -141,6 +150,13 @@
 - [x] `specs/COMPLETE_ARCHITECTURE.md` — Arquitectura completa (1258 líneas)
 - [x] `specs/SETUP_GUIDE.md` — Guía de configuración
 - [x] `recovery-nginx.md` — Guía de recuperación Nginx
+- [x] `Avances/` — familia de documentos vivos (ESTADO-GENERAL, COMPONENTES, PROCEDIMIENTOS, OBJETIVOS-PENDIENTES, ROADMAP)
+- [x] `docs/tecnica/TEC-01…TEC-06` — planificación por fases (56 fases; 34 ✅)
+- [x] `docs/GAPS-MINIFASES.md` — 45 gaps menores (G-01…G-45)
+- [x] `docs/04_TEST_AND_VALIDATION_STANDARD.md` — estándar TeVS (JSON Schema, códigos de salida)
+- [x] `docs/maestro/MAESTRO-FUNCIONALIDADES-CORE.md` — mapa RAG (68 entradas)
+- [x] `docs/{AUDIT-CROSSCHECK,AUDIT-TEST-MONITORING-STATUS,DIAGNOSTICO-FINAL,CIERRE-FINAL-TWILIO,ANALISIS-CRITICO-FINAL}.md` — reportes de auditoría
+- [x] `hub/control-center.html` — centro de control SPA (72 KB) servido por nginx en `/hub/`
 
 ## 7. Scripts y Automatización
 

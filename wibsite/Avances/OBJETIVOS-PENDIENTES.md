@@ -1,52 +1,77 @@
 # OBJETIVOS PENDIENTES — Por Completar
 
-> Priorizado por impacto y dependencias — Última actualización: 2026-07-18
+> Priorizado por impacto y dependencias — Última actualización: 2026-08-12
+> Fuente de verdad de fases: `docs/tecnica/TEC-06-FASES-IMPLEMENTACION.md` §5 (34/56 fases ✅ · 22 ⬜) · Gaps: `docs/GAPS-MINIFASES.md`
 
 ---
 
-## 🚨 Bloqueantes (P0 — Impiden flujo completo)
+## ✅ LO QUE YA HAY (implementado y verificado en docs/código)
 
-| # | Objetivo | Componente | Depende de | Detalle |
-|---|----------|-----------|------------|---------|
-| 1 | **Configurar Meta App** | Meta Developers | — | Crear App Business en Facebook Developers, obtener META_APP_ID, META_APP_SECRET, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_BUSINESS_ACCOUNT_ID |
-| 2 | **Configurar Inbox WhatsApp en Chatwoot** | Chatwoot | #1 | Agregar inbox WhatsApp Business en Chatwoot con credenciales Meta |
-| 3 | **Configurar Webhook Chatwoot → n8n** | Chatwoot, n8n | #2 | Crear webhook en Chatwoot apuntando a `http://n8n:5678/webhook/chatwoot-inbound` para eventos: conversation_created, message_created, conversation_status_changed |
-| 4 | **Configurar credenciales en n8n** | n8n | #2, #7 | Crear credenciales: Chatwoot API Key, Dify API Key (Bearer), Twenty API Key (Bearer), Meta Graph API (OAuth2 o Header), Meta WhatsApp Access Token |
-| 5 | **Configurar variables de entorno Meta en n8n** | n8n | #1 | Agregar a Settings > Environment en n8n: META_API_VERSION (v21.0), WHATSAPP_PHONE_NUMBER_ID, META_APP_ACCESS_TOKEN |
-| 6 | **Resolver body parser bug de n8n 2.23.4** | n8n | — | Bug en `body-parser.ts:78` lanza `"Failed to parse request body"` en endpoints REST con JSON. Workaround actual: usar UI. Requiere fix o upgrade. |
-| 7 | **Configurar webhook Meta WhatsApp → helper-node** | Helper Node, Meta | #1 | Apuntar webhook de Meta a `http://<IP>:3100/webhooks/whatsapp` con verify token. Usar ngrok para desarrollo local. |
-| 8 | **Probar flujo completo Inbound** | Todos | #1, #2, #3, #4, #5, #7 | Enviar WhatsApp real → Chatwoot → n8n → Dify → responder → Twenty CRM |
+### Infraestructura (20 servicios docker-compose)
+- Solo Docker, ningún orquestador superior · PostgreSQL 15 + pgvector (5 BD), Redis 7, Weaviate 1.26.1 + t2v-transformers
+- **Elastic Stack**: Elasticsearch 9.4.2 + Kibana + OTel Collector (sustituye Prometheus/Grafana/GlitchTip) · MinIO · Authelia 4.37 (config + nginx auth_request)
+- Nginx unificado :8080 con rutas /hub/, /chatwoot/, /dify/, /n8n/, /crm/, /kibana/, /minio-console/ + security headers
+- Backups PostgreSQL (`backup.sh`) y verificación unificada (`verify-fase.sh`, TEC-06 F-34/F-41/F-55)
 
-## 🔴 Alta Prioridad (P1 — Funcionalidad core)
+### Helper Node (~108 rutas · package.json v2.1.1)
+- CRUD campañas multi-canal + leads + Excel/CSV + tracking + scoring (rule-based + LLM) + 11 plantillas
+- Middleware seguridad: API Key, rate limit, sanitizador 23 patrones, HMAC webhooks + PII filter + auditLogger 12 event types
+- ConversationStore (9 estados), Lead Profile Builder, Agent Config (10 rubros/5 personalidades), RAG Weaviate + fallback, Anti-Hallucination, SLI/SLO, templateEngine + validador, agentCore (POC F-13), dual write JSON+PG (F-07/F-08)
+- Dashboard SPA + `hub/control-center.html` (portal shell /hub/, F-43/F-44)
 
-| # | Objetivo | Componente | Depende de | Detalle |
-|---|----------|-----------|------------|---------|
-| 9 | **Probar flujo Campaign Broadcast** | n8n, Helper, Meta | #1, #4, #5, #7 | Ejecutar workflow 02 con campaña real y contactos reales |
-| 10 | **Activar workflows n8n desde UI** | n8n | #6 | Toggle manual de workflows a `active` desde la UI (workaround hasta resolver body parser bug) |
-| 11 | **Configurar Authelia como SSO** | Authelia | — | Unificar autenticación de todos los servicios tras Authelia. Actualmente checklist SSO documentado pero no implementado. |
-| 12 | **Twenty CRM: workspace post-reset** | Twenty CRM | — | Si se resetea la BD, requiere configuración manual: crear workspace, generar API key JWT, recrear campos custom |
+### Canal real y módulos
+- **Bridge Twilio operativo** (F-03…F-06, F-24): inbound, broadcast + StatusCallback, typing, opt-out duro → reemplaza Meta
+- Dify: workflow clasificador 8 nodos LLM con OpenRouter (7 modelos) · n8n: 3 workflows activos en BD · Twenty: 10 campos custom + sync 12/12 · SPICED/MEDDIC 13 campos · plantillas comercial: objeciones 8, temperatura + decay, cadencia 8 intentos, handoff (F-19…F-23)
 
-## 🟡 Prioridad Media (P2 — Mejoras y robustez)
+### Verificación y documentación
+- 112 tests unitarios (8 suites) + 15 contract + 174 documentados · auditoría integral 78 checks OK (2026-08-03) · suite TeVS creada (11 tests + runner + ILM + alertas + dashboard)
+- 100+ docs: capa contextual (CTX-01…07), técnica (TEC-01…06), maestro RAG (68 entradas, 33✅), GAPS-MINIFASES
 
-| # | Objetivo | Componente | Detalle |
-|---|----------|-----------|---------|
-| 13 | **Implementar envío real de mensajes por canales alternativos** | Helper, n8n | Messenger, TikTok, SMS (Twilio), Email — actualmente solo soporte estructural |
-| 14 | **Sistema de reintentos con backoff para envíos fallidos** | Helper | Para campañas, con cola de reintentos y notificación de fallos |
-| 15 | **Dashboards de analytics en helper-node** | Helper | Gráficos de conversión, tendencias de scoring, efectividad de campañas |
-| 16 | **Integración Frappe ERP (Fase 2)** | Frappe, n8n | Sincronización de leads, pedidos, facturación desde Twenty CRM a Frappe |
-| 17 | **Pipeline IA Avanzado (Fase 4)** | Dify | RAG con documentos, state machine, function calling, multi-idioma, análisis de sentimiento |
-| 18 | **Endurecimiento Producción (Fase 5)** | Todos | Seguridad, monitoreo, backups automatizados, CI/CD, plan de recuperación ante desastres |
-| 19 | **Multi-tenant y escalamiento (Fase 7)** | Todos | Aislamiento de datos, white-label, billing, onboarding self-service, API pública |
+---
 
-## 🟢 Baja Prioridad (P3 — Mejoras cosméticas/calidad de vida)
+## 🚨 P0 — Bloqueantes para el siguiente hito
 
-| # | Objetivo | Componente | Detalle |
-|---|----------|-----------|---------|
-| 20 | **Internacionalización del dashboard SPA** | Helper | Soporte multi-idioma (es/en) |
-| 21 | **Exportar reportes de campañas a PDF/CSV** | Helper | Botón de exportación de estadísticas |
-| 22 | **Notificaciones push en dashboard** | Helper | Alertas en tiempo real cuando campaña se completa o falla |
-| 23 | **CRUD de usuarios/agentes** | Helper, Chatwoot | Gestión de agentes humanos desde el dashboard |
-| 24 | **Modo oscuro en dashboard** | Helper | Tema oscuro para la SPA |
+| # | Objetivo | TEC-06 | Detalle |
+|---|----------|--------|---------|
+| 1 | **Verificar stack en vivo** | — | Docker Desktop estuvo detenido el 2026-08-12: `docker compose up -d` + `docker compose ps` + checks de ESTADO-GENERAL |
+| 2 | **Rotación de secretos reales** | F-32 | HELPER_API_KEY débil/`"test"` hardcodeada en `nginx.conf:214`; ELASTIC_PASSWORD hardcodeada en `otel-collector/config.yaml`; regenerar todos los `<generar>` de `.env.example` |
+| 3 | **Ejecutar suite TeVS por primera vez** | F-36/38 | `scripts/tevs/tevs-runner.ps1` — 11 tests creados, 0 ejecuciones registradas |
+| 4 | **Limpieza de secreto/PII en git** | F-35 | `wibsite-store.json` (PII 2.4 MB), `certs/nginx.key`, `n8n-cookies*.txt`, `n8n_login.json`, `%{redirect_url}'` → .gitignore + purge histórico |
+| 5 | **Cutover PG primario + multi-tenant** | F-09, F-10, F-11 | Migración JSON→PG completa, `tenant_id`+RLS, middleware tenantContext (gated: F-09) |
+
+## 🔴 P1 — Funcionalidad core
+
+| # | Objetivo | TEC-06 | Detalle |
+|---|----------|--------|---------|
+| 6 | ~~Motor agéntico completo~~ ✅ 2026-08-12 | F-14, F-16, F-17, F-18 | Checkpointer memoria profunda (F-14), grafo 9 nodos (F-16), guardas confidencialidad/autonomía (F-17), Dify como nodo + fallback (F-18) — implementado con grafo propio (fallback permitido por F-13) |
+| 7 | ~~Sync máquinas comercial ↔ técnica~~ ✅ 2026-08-12 | F-21 | commercialState.js con MAP comercial↔técnico + hook en onTransition (dep F-16/F-20 ok) |
+| 8 | Re-auditoría de seguridad completa | F-35 | Ejecutar con los gaps cerrados (depende F-31, F-32, F-33) |
+| 9 | CI con gates | F-42 | `.github/workflows/tevs-validation.yml` y `.gitlab-ci.yml` existen pero asumen URLs internas inexistentes (depende F-41) |
+| 10 | Trazabilidad E2E sin pérdida | F-46 | e2e-trace en PRUEBAS (depende F-40/41/44) |
+| 11 | n8n: credenciales + toggle UI | F-02 | 3 workflows activos en BD; falta credenciales UI (depende F-01) |
+| 12 | Frappe ERP | F-28, F-29 | Solo ruta nginx huérfana (`/erp/`→frappe:8000); servicio no existe en compose (depende F-05) |
+
+## 🟡 P2 — Robustez y SaaS
+
+| # | Objetivo | TEC-06 | Detalle |
+|---|----------|--------|---------|
+| 13 | Suite de comportamiento del agente | F-47 | 20+ guiones con aserciones (depende F-19…F-24) |
+| 14 | Load test 50 conversaciones | F-51 | Script k6 pendiente (depende F-36/F-47) |
+| 15 | Portal: búsqueda + notificaciones | F-45 | (depende F-43) |
+| 16 | BI Metabase + KPIs | F-52 | Solo ruta nginx huérfana (`/reportes/`→metabase:3000); requiere F-09/F-10 |
+| 17 | Planes + onboarding automático | F-53 | (depende F-10/F-30) |
+| 18 | Despliegue distribuido prod + piloto | F-54, F-56 | deploy.sh + go-live (requiere I + G + F) |
+| 19 | Cierre de gaps restantes | G-13…G-45 | ~31 gaps abiertos en `docs/GAPS-MINIFASES.md` |
+
+## 🟢 P3 — Calidad de vida
+
+| # | Objetivo | Componente |
+|---|----------|------------|
+| 20 | i18n del dashboard (es/en) | Helper |
+| 21 | Exportar reportes de campañas (PDF/CSV) | Helper |
+| 22 | Notificaciones push en dashboard | Helper |
+| 23 | CRUD de usuarios/agentes | Helper, Chatwoot |
+| 24 | Modo oscuro en dashboard | Helper |
 
 ---
 
@@ -54,7 +79,10 @@
 
 | Símbolo | Significado |
 |---------|-------------|
-| 🚫 No iniciado | No se ha comenzado a trabajar |
-| 🔄 En progreso | Se está trabajando activamente |
-| ⚠️ Bloqueado | Requiere dependencia externa |
-| ✅ Completado | Finalizado y verificado |
+| ✅ | Completado y verificado |
+| 🚨 P0 | Bloqueante del siguiente hito |
+| 🔴 P1 | Funcionalidad core |
+| 🟡 P2 | Robustez / SaaS |
+| 🟢 P3 | Cosméticas / calidad de vida |
+
+> Al cerrar una fase: marcar ✅ en TEC-06 §5 + actualizar ESTADO-GENERAL.md, LOGROS.md y el estado RAG en `docs/maestro/` (regla TEC-04 §7).

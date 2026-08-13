@@ -7,7 +7,7 @@ const LLM_MAX_REQUESTS = 10;
 const ipBuckets = new Map();
 const llmBuckets = new Map();
 
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const cutoff = Date.now() - WINDOW_MS;
   for (const [key, bucket] of ipBuckets) {
     bucket.timestamps = bucket.timestamps.filter(t => t > cutoff);
@@ -18,6 +18,7 @@ setInterval(() => {
     if (bucket.timestamps.length === 0) llmBuckets.delete(key);
   }
 }, 30000);
+if (cleanupTimer.unref) cleanupTimer.unref();
 
 function getClientIP(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress || 'unknown';

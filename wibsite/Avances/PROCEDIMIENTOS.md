@@ -1,6 +1,6 @@
 # PROCEDIMIENTOS — Operación y Mantenimiento
 
-> Comandos y pasos esenciales para el día a día — Última actualización: 2026-07-18
+> Comandos y pasos esenciales para el día a día — Última actualización: 2026-08-12
 
 ---
 
@@ -41,7 +41,13 @@ docker compose logs -f <servicio>  # Ver logs en tiempo real
 | n8n | http://localhost:5679 | admin@wibsite.com / Admin@123 (campo login: `emailOrLdapLoginId`) |
 | Twenty CRM | http://localhost:3001 | (requiere setup workspace post-reset) |
 | Helper Node | http://localhost:3100 | — (API pública interna) |
-| Nginx | http://localhost:8080 | Proxy unificado (rutas: /chatwoot/, /dify/, /n8n/, /crm/, /api/helper/) |
+| Kibana | http://localhost:5601 | usuario `elastic` / ${ELASTIC_PASSWORD} (.env) |
+| Elasticsearch | http://localhost:9200 | usuario `elastic` / ${ELASTIC_PASSWORD} o rol `wibsite_otel_*` |
+| MinIO Consola | http://localhost:9001 | ${MINIO_ROOT_USER:-minioadmin} / ${MINIO_ROOT_PASSWORD:-minioadmin} |
+| OTel Collector | http://localhost:4318 (HTTP OTLP) · 4317 (gRPC) | — (receptor interno) |
+| Nginx | http://localhost:8080 | Proxy unificado (rutas: /chatwoot/, /dify/, /n8n/, /crm/, /kibana/, /minio-console/, /api/helper/, /hub/) |
+
+> ⚠️ `certs/nginx.key` (clave privada SSL) está commiteada en git — mover a secreto y purgar del historial.
 
 ---
 
@@ -49,9 +55,12 @@ docker compose logs -f <servicio>  # Ver logs en tiempo real
 
 ### 3a. Generar secretos en `.env`
 ```powershell
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"   # CHATWOOT_SECRET_KEY
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # DIFY_SECRET_KEY, N8N_ENCRYPTION_KEY, TWENTY_*_SECRET
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"   # CHATWOOT_SECRET_KEY, AUTHELIA_JWT_SECRET, AUTHELIA_SESSION_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # DIFY_SECRET_KEY, N8N_ENCRYPTION_KEY, TWENTY_*_SECRET, HELPER_API_KEY,
+                                                                           # ELASTIC_PASSWORD, KIBANA_PASSWORD, KIBANA_SERVICE_TOKEN,
+                                                                           # ELASTIC_OTEL_API_KEY, KIBANA_ENCRYPTION_KEY, AUTHELIA_STORAGE_ENCRYPTION_KEY
 ```
+> Todas las variables y sus instrucciones de generación están en `.env.example` (sincronizado con lo que consume `docker-compose.yml`).
 
 ### 3b. Inicializar servicios
 ```bash
@@ -175,7 +184,55 @@ cat backups/<archivo>.dump | docker exec -i wibsite-postgres psql -U wibsite -d 
 
 ---
 
-## 8. Troubleshooting Común
+## 8. Observabilidad (Elastic Stack + OpenTelemetry)
+
+> Reemplaza a Prometheus/Grafana/GlitchTip (servicios eliminados de `docker-compose.yml`; `monitoring/` queda como esqueleto heredado).
+
+```bash
+# Cluster health
+curl -u "elastic:${ELASTIC_PASSWORD}" http://localhost:9200/_cluster/health
+
+# Listar índices OTel (trazas/logs)
+curl -u "elastic:${ELASTIC_PASSWORD}" 'http://localhost:9200/_cat/indices/*otel*?v'
+
+# OTel Collector: estado del pipeline
+curl http://localhost:4318/healthz
+docker compose logs otel-collector          # verificar que la exportación a ES no da 401
+
+# Verificar ingestión de una traza (consulta los últimos 5 min)
+curl -u "elastic:${ELASTIC_PASSWORD}" 'http://localhost:9200/traces-*-otel-production/_search?size=1'
+```
+
+> ⚠️ **Gap conocido:** `otel-collector/config.yaml` contiene la password ES hardcodeada (`wibsite_elastic_pass_2026`). Si `ELASTIC_PASSWORD` en `.env` es distinta, el pipeline exporta en silencio. Corregir (usar `${ELASTIC_PASSWORD}` del entorno) en F-35.
+
+---
+
+## 9. Suite TeVS (Validación contra Elasticsearch)
+
+Suite de tests de integración ubicada en `scripts/tevs/` — **creada pero nunca ejecutada** (primera ejecución pendiente). Estándar y códigos de salida: `docs/04_TEST_AND_VALIDATION_STANDARD.md`.
+
+```powershell
+# Pre-requisito: stack Elástico arriba (elasticsearch + kibana + otel-collector)
+
+# Ejecutar toda la suite
+PowerShell -ExecutionPolicy Bypass -File scripts/tevs/tevs-runner.ps1 `
+  -TestFolder "scripts/tevs/tests" `
+  -ElasticUrl "http://localhost:9200" `
+  -ElasticUser "elastic" `
+  -ElasticPass "$env:ELASTIC_PASSWORD" `
+  -IndexPrefix "" `
+  -Environment "local"
+
+# Opciones: -Filter "TEST-SEC*" (filtrar por prefijo), -Debug, -ReportPath <json>
+```
+
+Scripts de soporte: `setup-tevs-index.ps1` (crea índice), `setup-ilm-policy.ps1` (retención), `setup-tevs-alerts.ps1` (alertas), `tevs-dashboard.ndjson` (dashboard Kibana). 11 tests: OBS-001, SEC-001/002, DEV-001/002/003, DATA-001, CORR-001, AGENT-001, DR-001/002.
+
+Exit codes del runner: `0` todo OK, `2` fallos de test, `3` error de conexión, `4` tests no encontrados, `5` error interno, `6+` reservados.
+
+---
+
+## 10. Troubleshooting Común
 
 | Problema | Causa | Solución |
 |----------|-------|----------|
@@ -188,3 +245,6 @@ cat backups/<archivo>.dump | docker exec -i wibsite-postgres psql -U wibsite -d 
 | Dify workflow falla | Modelo no disponible | Verificar OpenRouter API key y saldo |
 | Helper usa JSON file store | PostgreSQL no responde | Verificar conexión BD y reiniciar helper |
 | n8n workflows inactivos | Body parser bug impide activación vía API | Toggle manual desde UI |
+| OTel no ingesta en ES | Password hardcodeada ≠ ELASTIC_PASSWORD | Corregir `otel-collector/config.yaml` (F-35) |
+| Kibana no conecta a ES | Falta KIBANA_SERVICE_TOKEN / ELASTIC_PASSWORD | Sincronizar `.env` con `.env.example` y `docker compose up -d elasticsearch kibana` |
+| Docker no responde | Docker Desktop detenido | Iniciar Docker Desktop y esperar engine (`docker info`) |

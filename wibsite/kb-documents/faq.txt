@@ -1,0 +1,25 @@
+PREGUNTAS FRECUENTES
+
+1. Que servicios ofrecen?
+Ofrecemos desarrollo de software a medida, integracion de plataformas, consultoria tecnologica y auditoria de sistemas.
+
+2. Cuales son los horarios de atencion?
+Lunes a Viernes de 9:00 a 18:00. Sabados de 9:00 a 13:00.
+
+3. Como puedo solicitar una cotizacion?
+Puede solicitarla por este medio, por email a info@wibsite.com o llamando al telefono de contacto.
+
+4. Tienen garantia en sus desarrollos?
+Si, ofrecemos 6 meses de garantia en todos nuestros desarrollos.
+
+5. Que metodologia usan?
+Trabajamos con metodologias agiles (Scrum) con entregas incrementales cada 2 semanas.
+
+6. Cuanto tiempo toma un proyecto tipico?
+Depende de la complejidad. Un desarrollo simple puede tomar 2-4 semanas, un sistema complejo 2-6 meses.
+
+7. Ofrecen soporte post-entrega?
+Si, ofrecemos planes de mantenimiento mensual con soporte prioritario.
+
+8. Con que tecnologias trabajan?
+Node.js, Python, React, React Native, PostgreSQL, Docker, AWS, entre otras.

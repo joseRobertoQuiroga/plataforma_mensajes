@@ -1,10 +1,12 @@
 # API Endpoints Reference (RAG-optimized)
 
+> Actualizado: 2026-08-12 — añadidos endpoints Twilio, agentCore y observabilidad.
+
 ## Helper Node (http://helper:3100)
 ### Legacy Endpoints (v1 - backward compat)
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | /health | Health check (reports db type) |
+| GET | /health | Health check (reports db type, SLI, dependencias) |
 | POST | /campaigns | Create campaign (legacy) |
 | GET | /campaigns | List all campaigns |
 | GET | /campaigns/pending | Get campaigns pending execution |
@@ -12,8 +14,8 @@
 | POST | /campaigns/:id/complete | Mark campaign completed |
 | POST | /campaigns/track | Track delivery status |
 | GET | /campaigns/:id/stats | Campaign stats with deliveries |
-| GET | /webhooks/whatsapp | Meta webhook verification |
-| POST | /webhooks/whatsapp | Meta webhook notifications |
+| GET | /webhooks/whatsapp | Meta webhook verification (mantenido) |
+| POST | /webhooks/whatsapp | Meta/Twilio webhook notifications (inbound) |
 | POST | /opt-outs | Register opt-out |
 | GET | /opt-outs/check | Check if phone opted out |
 
@@ -46,6 +48,15 @@
 | POST | /api/twenty/sync | Sync individual lead to Twenty (upsert by phone) |
 | POST | /api/twenty/sync-all | Sync all leads to Twenty (batch) |
 | POST | /api/chatwoot/normalize | Normalize Chatwoot webhook payload |
+| POST | /api/chatwoot/push | Push inbound message into Chatwoot inbox (bridge Twilio, F-04) |
+
+### Twilio Bridge (canal real — TEC-06 F-03…F-06, F-24)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/twilio/send | Send WhatsApp/SMS via Twilio (proxy; normaliza `whatsapp:`) |
+| POST | /api/twilio/status | Twilio StatusCallback (sent/delivered/read/failed → deliveries) |
+| POST | /api/twilio/typing | Envía indicador de escritura (HSM 24h relacionado) |
+| POST | /webhooks/twilio/inbound | Webhook Twilio inbound (alterno a /webhooks/whatsapp) |
 
 ### Upload & Templates
 | Method | Path | Purpose |
@@ -109,11 +120,26 @@
 | POST | /api/llm/chat | Chat completion test (body: {messages, model?, temperature?, max_tokens?}). Supports sanitizer auto-block. |
 | POST | /api/scoring/evaluate-llm | LLM-based lead scoring via OpenRouter (body: {lead_id}) |
 
+### Agent Core (LangGraph POC — TEC-06 F-13; completo en F-16)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/agent-core/run | Ejecuta el grafo comercial POC (test endpoint) |
+| GET | /api/agent-core/health | Estado del motor de grafo |
+
 ### Seed Data
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | /api/seed | Populate: 3 campaigns, 12 leads, 12 deliveries, 12 scores, 5 channels |
 | DELETE | /api/seed | Clear all seed data |
+
+## Observabilidad (Elastic Stack)
+| Servicio | Endpoint | Propósito |
+|----------|----------|-----------|
+| Elasticsearch | `GET http://localhost:9200/_cluster/health` | Salud del cluster (user `elastic`) |
+| Elasticsearch | `GET /_cat/indices/*otel*?v` | Índices `*-doags.otel-production` |
+| Kibana | `http://localhost:5601` (o `/kibana/` vía nginx) | UI de trazas/logs/dashboards |
+| OTel Collector | `GET http://localhost:4318/healthz` | Salud del pipeline (gRPC :4317) |
+| MinIO | `GET http://localhost:9000/minio/health/live` · consola :9001 | Almacenamiento de objetos |
 
 ## Dify Console API (http://dify-api:5001/console/api/)
 Requires cookie auth (access_token + csrf_token + X-CSRF-TOKEN header)
@@ -167,7 +193,7 @@ Requires api_access_token header
 ## Twenty CRM (http://twenty-server:3000)
 GraphQL endpoint: POST /graphql (requires Bearer token)
 
-## xAI API (https://api.x.ai/v1)
+## xAI API (https://api.x.ai/v1) — DEPRECADO (sin créditos; usar OpenRouter)
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | /chat/completions | Chat completions |

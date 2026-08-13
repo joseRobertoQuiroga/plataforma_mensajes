@@ -1,0 +1,260 @@
+{
+  "template": {
+    "meta": {
+      "template_id": "consultora_software",
+      "display_name": "Servicios de desarrollo y consultoría de software",
+      "version": "1.0.0",
+      "deployment_type": "client_has_infra_api",
+      "crm_connector": "twenty",
+      "erp_connector": "frappe"
+    },
+
+    "autonomy_levels": {
+      "green": {
+        "description": "El agente decide y actúa sin confirmación humana.",
+        "requires_human": false
+      },
+      "yellow": {
+        "description": "El agente actúa dentro de un margen predefinido y deja constancia explícita de que es preliminar.",
+        "requires_human": false,
+        "requires_disclaimer": true
+      },
+      "red": {
+        "description": "El agente indaga y prepara información, pero no decide ni cierra. Siempre deriva.",
+        "requires_human": true
+      }
+    },
+
+    "fields": [
+      {
+        "id": "contact_name",
+        "label": "Nombre de contacto",
+        "type": "string",
+        "confidentiality": "public",
+        "autonomy_zone": "green",
+        "required_before": "handoff",
+        "stage": "calificacion"
+      },
+      {
+        "id": "contact_channel",
+        "label": "Medio de contacto preferido",
+        "type": "string",
+        "confidentiality": "public",
+        "autonomy_zone": "green",
+        "required_before": "handoff",
+        "stage": "calificacion"
+      },
+      {
+        "id": "service_type",
+        "label": "Tipo de servicio",
+        "type": "enum",
+        "options": ["integracion", "modulo_nuevo", "desarrollo_a_medida", "auditoria_consultoria"],
+        "confidentiality": "public",
+        "autonomy_zone": "green",
+        "required_before": "quote",
+        "stage": "calificacion"
+      },
+      {
+        "id": "has_existing_infra",
+        "label": "¿Tiene infraestructura previa?",
+        "type": "boolean",
+        "confidentiality": "public",
+        "autonomy_zone": "green",
+        "required_before": "quote",
+        "stage": "calificacion"
+      },
+      {
+        "id": "urgency",
+        "label": "Urgencia / plazo declarado",
+        "type": "string",
+        "confidentiality": "public",
+        "autonomy_zone": "green",
+        "required_before": "quote",
+        "stage": "profundizacion"
+      },
+      {
+        "id": "budget_signal",
+        "label": "Señal de presupuesto (si la menciona espontáneamente)",
+        "type": "string",
+        "confidentiality": "assisted",
+        "autonomy_zone": "yellow",
+        "required_before": "none",
+        "stage": "profundizacion",
+        "assisted_transform": "usar solo para ajustar tono de propuesta, nunca citar el monto exacto que dio el lead como si fuera nuestro precio"
+      },
+      {
+        "id": "scope_complexity_notes",
+        "label": "Notas técnicas de complejidad/alcance",
+        "type": "string",
+        "confidentiality": "assisted",
+        "autonomy_zone": "yellow",
+        "required_before": "quote",
+        "stage": "profundizacion",
+        "assisted_transform": "se usa para ubicar un rango, nunca se expone el desglose interno de horas/dificultad"
+      },
+      {
+        "id": "internal_cost_structure",
+        "label": "Estructura de costos internos (equipo, licencias, materiales)",
+        "type": "object",
+        "confidentiality": "internal",
+        "autonomy_zone": "red",
+        "required_before": "none",
+        "stage": "no_aplica_cliente",
+        "notes": "Nunca entra al contexto que arma la respuesta al cliente. Solo alimenta cálculo interno / handoff."
+      },
+      {
+        "id": "final_price",
+        "label": "Precio final acordado",
+        "type": "number",
+        "confidentiality": "internal",
+        "autonomy_zone": "red",
+        "required_before": "none",
+        "stage": "cierre",
+        "notes": "El agente nunca cierra este número. Solo humano."
+      }
+    ],
+
+    "objections": [
+      {
+        "id": "obj_price_high",
+        "trigger_patterns": ["muy caro", "no hay algo más barato", "precio alto"],
+        "hidden_reason": "no ve el valor todavía, no necesariamente es solo el número",
+        "response_pattern": "Entiendo, {{contact_name}}. Antes de hablar de números — ¿con qué lo estás comparando, con otro presupuesto o con no hacer el proyecto? Así te muestro justo lo que cubre el alcance.",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_comparing_options",
+        "trigger_patterns": ["comparar con otras opciones", "estoy viendo otras cotizaciones"],
+        "hidden_reason": "interés real, objeción positiva",
+        "response_pattern": "Me parece bien que compares. Un diferencial nuestro es {{diferenciador_configurable}} — ¿te sirve que agendemos una llamada corta para resolver dudas puntuales antes de que decidas?",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_value_doubt",
+        "trigger_patterns": ["no sé si lo necesito", "no sé si vale la pena"],
+        "hidden_reason": "escepticismo sobre el valor, no sobre el precio",
+        "response_pattern": "Contame un poco más del problema que estás teniendo hoy con esto — así te cuento cómo lo resolvimos en un caso parecido.",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_needs_to_consult",
+        "trigger_patterns": ["consultarlo con mi socio", "lo vemos en equipo"],
+        "hidden_reason": "decisión compartida, no falta de interés",
+        "response_pattern": "Totalmente entendible. ¿Les sirve que agendemos la llamada con ambos presentes, o preferís que te deje un resumen escrito fácil de reenviar?",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_timeline_silence",
+        "trigger_patterns": ["cuánto tiempo tarda"],
+        "hidden_reason": "urgencia o prioridad encubierta",
+        "response_pattern": "¿Hay alguna fecha puntual que esté empujando esto? Me ayuda a ajustar la propuesta a tu prioridad real.",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_why_us",
+        "trigger_patterns": ["por qué ustedes", "qué los diferencia"],
+        "hidden_reason": "confianza/diferenciación",
+        "response_pattern": "Nos especializamos en {{especializacion_configurable}} — te puedo mostrar 1-2 casos parecidos al tuyo si te sirve.",
+        "autonomy_zone": "green"
+      },
+      {
+        "id": "obj_send_written_disconnect",
+        "trigger_patterns": ["mándame la cotización", "ya lo vemos"],
+        "hidden_reason": "objeción silenciosa, evita seguir en vivo",
+        "response_pattern": "Te dejo el resumen por escrito para que lo revises con calma. Cualquier duda, seguimos por acá.",
+        "autonomy_zone": "green",
+        "triggers_followup": true
+      },
+      {
+        "id": "obj_budget_now",
+        "trigger_patterns": ["fuera de mi presupuesto ahora"],
+        "hidden_reason": "restricción real o salida educada",
+        "response_pattern": "¿Es tema de monto total o de forma de pago? Podemos ver si tiene sentido arrancar con una etapa más chica, como una auditoría primero.",
+        "autonomy_zone": "yellow"
+      }
+    ],
+
+    "lead_temperature": {
+      "dimensions": [
+        {
+          "name": "fit",
+          "weight_max": 30,
+          "signals": [
+            { "id": "fit_service_match", "points": 15, "condition": "service_type in offered_services" },
+            { "id": "fit_budget_compatible", "points": 10, "condition": "budget_signal is not null and budget_signal >= min_ticket" },
+            { "id": "fit_context_defined", "points": 5, "condition": "has_existing_infra is not null" }
+          ]
+        },
+        {
+          "name": "engagement",
+          "weight_max": 40,
+          "signals": [
+            { "id": "eng_fast_reply", "points": 15, "condition": "response_time_minutes < 60" },
+            { "id": "eng_medium_reply", "points": 8, "condition": "response_time_minutes >= 60 and response_time_minutes < 1440" },
+            { "id": "eng_slow_reply", "points": 2, "condition": "response_time_minutes >= 1440" },
+            { "id": "eng_fields_completed", "points": 15, "condition": "required_fields_completion_rate == 1.0" },
+            { "id": "eng_asks_followup_questions", "points": 10, "condition": "lead_initiated_questions_count > 0" }
+          ]
+        },
+        {
+          "name": "intent",
+          "weight_max": 30,
+          "signals": [
+            { "id": "int_deadline_mentioned", "points": 15, "condition": "urgency is not null and urgency != 'sin_definir'" },
+            { "id": "int_asks_price_spontaneously", "points": 10, "condition": "lead_asked_price_before_agent == true" },
+            { "id": "int_requests_meeting", "points": 5, "condition": "lead_requested_meeting == true" }
+          ]
+        }
+      ],
+      "thresholds": {
+        "hot": 70,
+        "warm": 40,
+        "cold": 0
+      },
+      "decay": {
+        "after_days_inactive": 5,
+        "percent_reduction": 20
+      }
+    },
+
+    "followup": {
+      "sequence": [
+        { "attempt_number": 1, "delay_days": 0, "channel": "same_as_contact", "message_type": "confirmacion_siguiente_paso" },
+        { "attempt_number": 2, "delay_days": 1, "channel": "same_as_contact", "message_type": "recordatorio_con_valor" },
+        { "attempt_number": 3, "delay_days": 3, "channel": "same_as_contact", "message_type": "pregunta_baja_friccion" },
+        { "attempt_number": 4, "delay_days": 6, "channel": "email_if_available_else_same", "message_type": "resumen_escrito_mas_oferta_agenda" },
+        { "attempt_number": 5, "delay_days": 10, "channel": "email_or_same", "message_type": "contenido_de_valor" },
+        { "attempt_number": 6, "delay_days": 20, "channel": "alternar", "message_type": "nurture_pasivo" },
+        { "attempt_number": 7, "delay_days": 30, "channel": "alternar", "message_type": "nurture_pasivo" },
+        { "attempt_number": 8, "delay_days": 45, "channel": "alternar", "message_type": "nurture_pasivo" }
+      ],
+      "lost_threshold": {
+        "attempts": 8,
+        "resulting_state": "nurture_pasivo",
+        "reentry_rule": "cualquier respuesta del lead reinicia el score de temperatura desde cero con la nueva interacción"
+      }
+    },
+
+    "handoff": {
+      "required_fields": [
+        "contact_name",
+        "contact_channel",
+        "service_type",
+        "has_existing_infra",
+        "urgency",
+        "budget_signal",
+        "scope_complexity_notes",
+        "temperature_score",
+        "temperature_band",
+        "objections_log",
+        "fields_completion_status",
+        "preliminary_range_communicated"
+      ],
+      "next_action_options": [
+        "agendar_llamada_esta_semana",
+        "enviar_propuesta_escrita",
+        "requiere_descubrimiento_tecnico_antes_de_cotizar"
+      ]
+    }
+  }
+}

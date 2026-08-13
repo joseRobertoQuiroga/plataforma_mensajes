@@ -1,0 +1,13 @@
+﻿CREATE USER app_user WITH PASSWORD 'app_user_pass_2026';
+GRANT CONNECT ON DATABASE wibsite TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
+ALTER TABLE campaigns FORCE ROW SECURITY;
+ALTER TABLE campaign_leads FORCE ROW SECURITY;
+ALTER TABLE lead_scores FORCE ROW SECURITY;
+ALTER TABLE opt_outs FORCE ROW SECURITY;
+ALTER TABLE workflow_logs FORCE ROW SECURITY;
+ALTER TABLE audit_logs FORCE ROW SECURITY;
+ALTER TABLE channel_status FORCE ROW SECURITY;
+SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname IN ('campaigns','campaign_leads','lead_scores','opt_outs','workflow_logs','audit_logs','channel_status') ORDER BY relname;

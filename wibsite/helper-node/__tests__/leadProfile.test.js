@@ -27,6 +27,14 @@ function createMockStore(overrides = {}) {
 }
 
 describe('Lead Profile - MVP-03: Extracción y actualización de leads', () => {
+  const fixedNow = new Date('2026-08-08T00:00:00Z').getTime();
+  beforeAll(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(fixedNow);
+  });
+  afterAll(() => {
+    Date.now.mockRestore();
+  });
+
   test('buildLeadProfile retorna perfil completo para lead existente', () => {
     const store = createMockStore();
     const profile = buildLeadProfile('lead-1', store);
@@ -42,7 +50,7 @@ describe('Lead Profile - MVP-03: Extracción y actualización de leads', () => {
     expect(profile.deliveryStats.total).toBe(2);
     expect(profile.deliveryStats.replied).toBe(1);
     expect(profile.deliveryStats.lastStatus).toBe('replied');
-    expect(profile.deliveryStats.daysSinceContact).toBeLessThan(3);
+    expect(profile.deliveryStats.daysSinceContact).toBe(21);
 
     expect(profile.scoreHistory).toHaveLength(2);
     expect(profile.scoreHistory[0].score).toBe(85);

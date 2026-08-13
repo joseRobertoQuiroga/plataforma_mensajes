@@ -1,0 +1,59 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "name": "Salon de Eventos",
+    "industry": "events",
+    "description": "Renta de salones para eventos sociales y empresariales"
+  },
+  "lead_temperature": {
+    "hot_threshold": 70,
+    "warm_threshold": 40,
+    "decay_percentage": 25,
+    "decay_days": 3
+  },
+  "followup": {
+    "sequence": [
+      { "delay_days": 0, "message_type": "confirmation", "message_template": "Gracias por tu interes {{name}}. Quedo atento a cualquier duda." },
+      { "delay_days": 1, "message_type": "value", "message_template": "{{name}}, te comparto algunos paquetes que podrian interesarte segun lo que nos comentaste." },
+      { "delay_days": 3, "message_type": "low_friction", "message_template": "{{name}}, ¿te gustaria agendar una visita para conocer el salon en persona?" },
+      { "delay_days": 5, "message_type": "summary", "message_template": "{{name}}, resumiendo los paquetes que tenemos disponibles para tu fecha." },
+      { "delay_days": 7, "message_type": "content", "message_template": "{{name}}, te envio algunas fotos de eventos recientes para que te des una idea del espacio." },
+      { "delay_days": 14, "message_type": "nurture", "message_template": "{{name}}, seguimos con disponibilidad para tu fecha. ¿Surgio alguna duda?" },
+      { "delay_days": 21, "message_type": "nurture", "message_template": "{{name}}, recuerda que tenemos opciones de personalizacion del espacio." },
+      { "delay_days": 30, "message_type": "nurture", "message_template": "{{name}}, si tu fecha esta proxima, te recomiendo asegurar tu reservacion pronto." }
+    ],
+    "lost_threshold": 60,
+    "business_hours_only": true,
+    "timezone": "America/Mexico_City"
+  },
+  "objections": [
+    { "trigger_patterns": ["muy caro", "muy costoso", "no alcanzo"], "response_pattern": "Entiendo {{name}}. Tenemos paquetes desde diferentes precios. ¿Me cuentas cuantos invitados planeas y que tipo de evento es? Asi te recomiendo la mejor opcion.", "triggers_followup": false },
+    { "trigger_patterns": ["no tengo fecha", "aun no se la fecha"], "response_pattern": "Sin problema {{name}}. Te comparto informacion general para que la tengas a mano cuando definas la fecha.", "triggers_followup": true },
+    { "trigger_patterns": ["ya tengo salon", "ya aparte otro"], "response_pattern": "¡Felicidades {{name}}! Que tengas un evento maravilloso. Si necesitas algo adicional como catering o musica, podemos referirte proveedores.", "triggers_followup": false },
+    { "trigger_patterns": ["no se si me alcanza", "muy caro para mi"], "response_pattern": "{{name}}, tenemos opciones flexibles. ¿Que tal si te comparto nuestros paquetes basicos para que los revises?", "triggers_followup": true },
+    { "trigger_patterns": ["lo voy a consultar", "lo veo con mi pareja"], "response_pattern": "Claro {{name}}, es una decision importante. ¿Te sirve que les agende una visita para que vean el espacio juntos?", "triggers_followup": true }
+  ],
+  "handoff": {
+    "required_fields": ["name", "phone", "event_type", "guest_count", "preferred_date"],
+    "next_action": "agendar_visita",
+    "notify_target": "chatwoot_note"
+  },
+  "autonomy_zones": {
+    "green": { "can_quote": true, "can_commit": false, "can_share_pricing": true, "description": "Comparte precios de paquetes, agenda visitas, responde dudas generales" },
+    "yellow": { "can_quote": true, "can_commit": false, "can_share_pricing": true, "description": "Comparte precios con margen de negociacion, requiere supervision" },
+    "red": { "can_quote": true, "can_commit": true, "can_share_pricing": true, "description": "Solo humano confirma reservaciones y cobra" }
+  },
+  "products": [
+    { "name": "Paquete Basico", "description": "Salon por 4 horas, capacidad 50 personas", "price": 5000 },
+    { "name": "Paquete Estandar", "description": "Salon por 6 horas, capacidad 100 personas, equipo de sonido", "price": 10000 },
+    { "name": "Paquete Premium", "description": "Salon por 8 horas, capacidad 200 personas, sonido, iluminacion y catering", "price": 20000 },
+    { "name": "Personalizacion", "description": "Decoracion tematica adicional", "price": 3000 }
+  ],
+  "industry_knowledge": [
+    "Tipos de eventos: bodas, cumpleanos, empresariales, graduaciones",
+    "Servicios: catering, musica, decoracion, fotografia",
+    "Capacidad maxima: 200 personas",
+    "Horarios: sabados y domingos"
+  ],
+  "forbidden_topics": ["competitors_pricing", "internal_costs", "staff_salaries"]
+}

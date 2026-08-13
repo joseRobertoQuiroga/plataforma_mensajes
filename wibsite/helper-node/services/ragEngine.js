@@ -4,12 +4,13 @@ const path = require('path');
 
 const WEAVIATE_URL = process.env.WEAVIATE_URL || 'http://weaviate:8080';
 const WEAVIATE_CLASS = 'KnowledgeBase';
+const WEAVIATE_TIMEOUT_MS = parseInt(process.env.WEAVIATE_TIMEOUT_MS || '800', 10);
 
 let weaviateAvailable = false;
 
 async function checkWeaviateHealth() {
   try {
-    const resp = await axios.get(`${WEAVIATE_URL}/v1/.well-known/ready`, { timeout: 3000 });
+    const resp = await axios.get(`${WEAVIATE_URL}/v1/.well-known/ready`, { timeout: WEAVIATE_TIMEOUT_MS });
     weaviateAvailable = resp.status === 200;
   } catch (e) {
     weaviateAvailable = false;
@@ -20,7 +21,7 @@ async function checkWeaviateHealth() {
 async function ensureWeaviateSchema() {
   if (!weaviateAvailable) return false;
   try {
-    const resp = await axios.get(`${WEAVIATE_URL}/v1/schema`, { timeout: 3000 });
+    const resp = await axios.get(`${WEAVIATE_URL}/v1/schema`, { timeout: WEAVIATE_TIMEOUT_MS });
     const exists = resp.data?.classes?.some(c => c.class === WEAVIATE_CLASS);
     if (exists) return true;
 
@@ -38,7 +39,7 @@ async function ensureWeaviateSchema() {
         { name: 'createdAt', dataType: ['date'], description: 'Creation timestamp' },
       ],
       vectorizer: 'none',
-    }, { timeout: 5000 });
+    }, { timeout: WEAVIATE_TIMEOUT_MS });
     return true;
   } catch (e) {
     console.error('Weaviate schema error:', e.message);
@@ -85,7 +86,7 @@ async function addDocument(tenantId, title, content, source, contentType, tags =
           chunkIndex: i,
           createdAt: new Date().toISOString(),
         },
-      }, { timeout: 5000 });
+      }, { timeout: WEAVIATE_TIMEOUT_MS });
       docIds.push(resp.data?.id);
     } catch (e) {
       errors.push({ chunk: i, error: e.message });
@@ -110,7 +111,7 @@ async function queryKnowledgeBase(tenantId, queryText, limit = 5) {
         limit,
         sort: JSON.stringify([{ path: ['createdAt'], order: 'desc' }]),
       },
-      timeout: 5000,
+      timeout: WEAVIATE_TIMEOUT_MS,
     });
     results = nearTextResp.data?.objects || [];
   } catch (e) {
@@ -135,7 +136,7 @@ async function deleteDocument(tenantId, documentId) {
   if (!weaviateAvailable) return { error: 'Weaviate not available' };
 
   try {
-    await axios.delete(`${WEAVIATE_URL}/v1/objects/${WEAVIATE_CLASS}/${documentId}`, { timeout: 3000 });
+    await axios.delete(`${WEAVIATE_URL}/v1/objects/${WEAVIATE_CLASS}/${documentId}`, { timeout: WEAVIATE_TIMEOUT_MS });
     return { status: 'deleted', documentId };
   } catch (e) {
     return { error: e.message };
@@ -155,7 +156,7 @@ async function listDocuments(tenantId) {
         }),
         limit: 100,
       },
-      timeout: 5000,
+      timeout: WEAVIATE_TIMEOUT_MS,
     });
     const docs = (resp.data?.objects || []).map(obj => ({
       id: obj.id,

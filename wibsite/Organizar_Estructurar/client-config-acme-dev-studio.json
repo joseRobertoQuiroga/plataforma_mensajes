@@ -1,0 +1,52 @@
+{
+  "client_config": {
+    "meta": {
+      "client_id": "acme_dev_studio",
+      "template_id": "consultora_software",
+      "template_version": "1.0.0"
+    },
+
+    "branding": {
+      "display_name": "Acme Dev Studio",
+      "tone": "cercano_profesional",
+      "greeting_message": "¡Hola! Soy el asistente de Acme Dev Studio. Contame en qué proyecto estás pensando y te ayudo a ver por dónde arrancar."
+    },
+
+    "commercial_params": {
+      "min_ticket": 800,
+      "currency": "USD",
+      "offered_services": ["integracion", "modulo_nuevo", "desarrollo_a_medida", "auditoria_consultoria"],
+      "preliminary_ranges": {
+        "integracion": { "min": 800, "max": 3000, "disclaimer": "rango preliminar sujeto a alcance final" },
+        "modulo_nuevo": { "min": 1500, "max": 6000, "disclaimer": "rango preliminar sujeto a alcance final" },
+        "desarrollo_a_medida": { "min": 3000, "max": null, "disclaimer": "requiere descubrimiento técnico, no se da rango sin reunión" },
+        "auditoria_consultoria": { "min": 400, "max": 1200, "disclaimer": "rango preliminar sujeto a alcance final" }
+      }
+    },
+
+    "objection_overrides": {
+      "obj_comparing_options": {
+        "diferenciador_configurable": "una auditoría técnica gratuita antes de cualquier compromiso"
+      },
+      "obj_why_us": {
+        "especializacion_configurable": "integraciones con Twenty CRM y automatización con Frappe/ERPNext"
+      }
+    },
+
+    "followup_overrides": {
+      "channel_priority": ["whatsapp", "email"],
+      "business_hours_only": true,
+      "timezone": "America/La_Paz"
+    },
+
+    "handoff_routing": {
+      "notify_channel": "slack",
+      "notify_target": "#leads-acme",
+      "crm_sync": {
+        "connector": "twenty",
+        "workspace": "acme_dev_studio_workspace",
+        "sync_on": ["temperature_change", "handoff"]
+      }
+    }
+  }
+}

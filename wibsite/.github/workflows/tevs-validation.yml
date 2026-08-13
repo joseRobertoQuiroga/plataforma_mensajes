@@ -1,0 +1,40 @@
+name: TEVS Validation Pipeline (Deployment Gate)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-deployment:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Start Local Infrastructure (if needed)
+        run: |
+          # If the test environment is ephemeral, start it here
+          # docker-compose up -d
+          echo "Assuming Wibsite infrastructure is reachable at the configured URLs."
+
+      - name: Run TEVS Validation Runner
+        shell: pwsh
+        env:
+          ELASTIC_URL: ${{ secrets.ELASTIC_URL }}
+          ELASTIC_USER: ${{ secrets.ELASTIC_USER }}
+          ELASTIC_PASS: ${{ secrets.ELASTIC_PASS }}
+        run: |
+          cd scripts/tevs
+          
+          # Run the TEVS test orchestrator
+          # The runner returns exit code 1 if ANY test fails.
+          # GitHub Actions will automatically fail the job if exit code != 0.
+          .\tevs-runner.ps1 -TestFolder .\tests -ElasticUrl $env:ELASTIC_URL -ElasticUser $env:ELASTIC_USER -ElasticPass $env:ELASTIC_PASS
+          
+      - name: TEVS Passed Successfully
+        run: echo "All Deployment Gates passed. Proceeding with deployment..."

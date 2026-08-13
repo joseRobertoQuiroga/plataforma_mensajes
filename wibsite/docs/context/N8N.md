@@ -6,7 +6,7 @@ n8n es el orquestador de flujos visual. Conecta Chatwoot, Dify, Twenty CRM y Met
 ## Configuración
 - **Puerto**: 5679 (mapeado a 5678 interno)
 - **Base de datos**: PostgreSQL, database `n8n`
-- **Encryption key**: 46b15d9b72bdd7353b7ddab49b8da0b0d5536a6ba8b7be3eb9f1c56e3352bed2
+- **Encryption key**: <N8N_ENCRYPTION_KEY de .env> (rotar antes de producción)
 - **Webhook URL**: http://localhost:5679
 - **Workflows montados en**: `/opt/n8n-workflows` (volumen desde `./n8n/workflows`)
 

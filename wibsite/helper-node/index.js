@@ -5,12 +5,46 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 const { authMiddleware, verifyMetaWebhookSignature, verifyChatwootWebhookSignature } = require('./middleware/auth');
+const { createTenantContextMiddleware, queryWithTenant, getTenantId } = require('./middleware/tenantContext');
 const { rateLimiter } = require('./middleware/rateLimiter');
 const { sanitizerMiddleware } = require('./middleware/sanitizer');
+const { sanitizeMiddleware, logger } = require('./services/piiFilter');
+const { initAuditLogger, logEvent, logFallback, logIncident, createAuditMiddleware } = require('./services/auditLogger');
+const {
+  initErrorTracker, trackIncident, trackFallback, trackSecurityEvent,
+  resolveIncident, receiveAlert,
+  getIncidentSummary, getIncidents, getSecurityEvents, getFallbackEvents, getAlerts,
+  errorTrackerMiddleware, pathToModule, SEVERITY: ET_SEVERITY
+} = require('./services/errorTracker');
+const storeFacade = require('./services/store');
+const pgStore = require('./services/pgStore');
 const { buildLeadProfile } = require('./services/leadProfile');
 const { getAgentConfig, updateAgentConfig, buildSystemPrompt } = require('./services/agentConfig');
 const { addDocument, queryKnowledgeBase, deleteDocument, listDocuments, checkWeaviateHealth, addInMemoryDocument, queryInMemoryKB } = require('./services/ragEngine');
 const { initRedis, createConversationState, getConversationState, transitionState, incrementMessageCount, deleteConversationState, listActiveConversations, isValidTransition, CONVERSATION_STATES, STATE_LABELS } = require('./services/conversationStore');
+const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
+const checkpointer = require('./services/agentCore/checkpointer');
+const templateEngine = require('./services/templateEngine');
+
+// ─── GlitchTip / Sentry Error Tracking ──────────────
+const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
+if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
+  try {
+    const Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn: GLITCHTIP_DSN,
+      tracesSampleRate: 0.1,
+      environment: process.env.NODE_ENV || 'development',
+      release: 'wibsite-helper@2.2.0',
+      integrations: []
+    });
+    console.log('  GlitchTip/Sentry: initialized with DSN');
+  } catch (e) {
+    console.warn('  GlitchTip/Sentry: init failed (optional):', e.message);
+  }
+} else {
+  console.log('  GlitchTip/Sentry: no DSN configured, using internal error tracker');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3100;
@@ -20,21 +54,87 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+
+// ─── Request ID Middleware (FIRST — needed for full traceability) ─
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('x-request-id', req.id);
+  next();
+});
+
 // ─── Security Middleware ──────────────────────────────
 app.use(authMiddleware);
 app.use(rateLimiter);
 app.use(sanitizerMiddleware);
+app.use(sanitizeMiddleware);
+app.use(createAuditMiddleware('api_call'));
+app.use(errorTrackerMiddleware()); // auto-tracks 500 errors with full context
 app.use('/webhooks', verifyMetaWebhookSignature);
 app.use('/webhooks', verifyChatwootWebhookSignature);
 
-// ─── Initialize services ────────────────────────────
-initRedis().then(() => console.log('  Conversation store: Redis/In-Memory ready'));
-checkWeaviateHealth().then(avail => console.log(`  Weaviate RAG: ${avail ? 'available' : 'unavailable (using in-memory fallback)'}`));
+// Servir Control Center Frontend unificado
+app.use('/admin', express.static(path.join(__dirname, '../hub')));
+// ─── Multi-Tenant Context (se inicializa después del pool PG) ────
+// La función initTenantMiddleware() se llama en el bloque de DB init
+let tenantContextMiddleware = (req, res, next) => next(); // placeholder until DB ready
 
-// ─── File upload middleware (Excel/CSV) ────────────
-const multer = require('multer');
-const XLSX = require('xlsx');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+// ─── Metrics endpoint (prom-client) ─────────────────
+let metricsMiddleware = null;
+let promCounters = {};
+try {
+  const promClient = require('prom-client');
+  const collectDefaultMetrics = promClient.collectDefaultMetrics;
+  collectDefaultMetrics({ timeout: 5000 });
+
+  // Core HTTP metrics
+  const httpRequestsTotal = new promClient.Counter({
+    name: 'http_requests_total', help: 'Total HTTP requests',
+    labelNames: ['method', 'path', 'status']
+  });
+  const httpRequestDuration = new promClient.Histogram({
+    name: 'http_request_duration_seconds', help: 'HTTP request duration in seconds',
+    labelNames: ['method', 'path'], buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5]
+  });
+
+  // Dependency fallback counters
+  promCounters.weaviateFallbackTotal = new promClient.Counter({
+    name: 'weaviate_fallback_total', help: 'Total Weaviate fallback activations'
+  });
+  promCounters.redisFallbackTotal = new promClient.Counter({
+    name: 'redis_fallback_total', help: 'Total Redis fallback activations'
+  });
+  promCounters.dbFallbackTotal = new promClient.Counter({
+    name: 'db_fallback_total', help: 'Total DB fallback to JSON store activations'
+  });
+
+  // Security and incident counters
+  promCounters.securityBlocksTotal = new promClient.Counter({
+    name: 'security_blocks_total', help: 'Total security blocks (injection, rate-limit, auth failures)',
+    labelNames: ['type']
+  });
+  promCounters.incidentTotal = new promClient.Counter({
+    name: 'incident_total', help: 'Total incidents tracked',
+    labelNames: ['module', 'severity']
+  });
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      httpRequestsTotal.inc({ method: req.method, path: req.path, status: res.statusCode });
+      httpRequestDuration.observe({ method: req.method, path: req.path }, (Date.now() - start) / 1000);
+    });
+    next();
+  });
+  app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', promClient.register.contentType);
+    res.end(await promClient.register.metrics());
+  });
+  metricsMiddleware = true;
+  console.log('  Metrics: prom-client enabled (with fallback + security + incident counters)');
+} catch (e) {
+  console.log('  Metrics: prom-client not available (optional)');
+}
+
 
 // ─── DB ──────────────────────────────────────────────
 const { Pool } = require('pg');
@@ -43,8 +143,8 @@ try {
   pool = new Pool({
     host: process.env.PG_HOST || 'postgres',
     port: parseInt(process.env.PG_PORT || '5432'),
-    user: process.env.PG_USER || 'wibsite',
-    password: process.env.PG_PASSWORD || 'wibsite_pass',
+    user: process.env.PG_USER || 'app_user',
+    password: process.env.PG_PASSWORD || 'app_user_pass_2026',
     database: process.env.PG_DATABASE || 'wibsite',
     max: 10,
     idleTimeoutMillis: 5000,
@@ -67,6 +167,44 @@ async function query(text, params) {
     throw e;
   }
 }
+
+// ─── File upload middleware (Excel/CSV) ────────────
+const multer = require('multer');
+const XLSX = require('xlsx');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// ─── Initialize services after DB ──────────────────
+initRedis().then(() => console.log('  Conversation store: Redis/In-Memory ready'))
+  .catch(e => {
+    console.warn('  Redis unavailable, using in-memory fallback:', e.message);
+    trackFallback('redis', e.message, 'default', null, { module: 'infrastructure' });
+    logFallback('redis', e.message, 'default', null);
+    if (promCounters.redisFallbackTotal) promCounters.redisFallbackTotal.inc();
+  });
+checkWeaviateHealth().then(avail => {
+  console.log(`  Weaviate RAG: ${avail ? 'available' : 'unavailable (using in-memory fallback)'}`);
+  if (!avail) {
+    trackFallback('weaviate', 'Health check failed', 'default', null, { module: 'knowledge-base' });
+    logFallback('weaviate', 'Weaviate health check failed at startup', 'default', null);
+    if (promCounters.weaviateFallbackTotal) promCounters.weaviateFallbackTotal.inc();
+  }
+});
+
+storeFacade.initPgStore(pool);
+initAuditLogger(pool);
+initErrorTracker(pool, promCounters);
+checkpointer.initSummariesPool(pool);
+console.log(`  Store mode: ${storeFacade.getStoreMode()}`);
+console.log(`  Error tracker: initialized (${pool ? 'PostgreSQL' : 'in-memory fallback'})`);
+console.log(`  Checkpointer (F-14): conversation_summaries ${pool ? 'PostgreSQL' : 'in-memory fallback'}`);
+
+
+// ─── Multi-Tenant Context Middleware (FASE 8) ────────
+// Ahora que tenemos el pool, inicializamos el middleware real
+tenantContextMiddleware = createTenantContextMiddleware(pool);
+// Registrar globalmente: todas las rutas tendrán req.tenantId disponible
+app.use(tenantContextMiddleware);
+console.log('  Tenant context: middleware registered (pool-aware)');
 
 // ─── JSON File Store (con lock para escritura segura) ─
 const fs = require('fs');
@@ -240,6 +378,112 @@ app.delete('/api/campaigns/:id', async (req, res) => {
       s.optOuts = s.optOuts.filter(o => o.campaign_id !== id);
     });
     res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// AGENT CORE - Test Graph
+// ═══════════════════════════════════════════════════════
+
+app.post('/api/agent/test-graph', async (req, res) => {
+  try {
+    const result = await executeTestGraph(req.body);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agent/commercial-graph', async (req, res) => {
+  try {
+    const { template_id, message, conversationId } = req.body;
+    const template = templateEngine.loadTemplate(template_id || 'default');
+    const result = await executeCommercialGraph({ message, conversationId, template, tenantId: req.tenantId || 'default' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agent/chat', async (req, res) => {
+  try {
+    const { template_id, client_id, message, conversationId } = req.body;
+    if (!message || typeof message !== 'string') return res.status(400).json({ error: 'El campo message es requerido' });
+    const template = templateEngine.loadTemplate(template_id || 'default');
+    let clientConfig = null;
+    if (client_id) clientConfig = templateEngine.loadClientConfig(client_id);
+    const result = await executeCommercialGraph({
+      message,
+      conversationId: conversationId || crypto.randomUUID(),
+      tenantId: req.tenantId || 'default',
+      template,
+      clientConfig,
+    });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// TEMPLATE ENGINE
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/agent/templates', async (req, res) => {
+  try {
+    res.json({ data: templateEngine.listTemplates() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/agent/templates/validate', async (req, res) => {
+  try {
+    const results = templateEngine.listTemplates().map(t => {
+      try {
+        const template = templateEngine.loadTemplate(t.id);
+        return { id: t.id, ...templateEngine.validate(template) };
+      } catch (e) {
+        return { id: t.id, valid: false, errors: [e.message] };
+      }
+    });
+    res.json({ data: results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/agent/templates/validate/:id', async (req, res) => {
+  try {
+    const template = templateEngine.loadTemplate(req.params.id);
+    const result = templateEngine.validate(template);
+    res.json(result);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
+app.get('/api/agent/templates/:id', async (req, res) => {
+  try {
+    const template = templateEngine.loadTemplate(req.params.id);
+    res.json(template);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
+app.put('/api/agent/templates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(req.body, null, 2));
+    res.json({ status: 'saved' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// AUDIT LOGS
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { event_type, level, limit = 50, offset = 0 } = req.query;
+    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+    const params = [];
+    if (event_type) { sql += ` AND event_type = $${params.length + 1}`; params.push(event_type); }
+    if (level) { sql += ` AND level = $${params.length + 1}`; params.push(level); }
+    sql += ' ORDER BY timestamp DESC';
+    sql += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+    const result = await query(sql, params);
+    res.json({ data: result.rows, total: result.rows.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -572,6 +816,34 @@ app.get('/campaigns/:id/stats', async (req, res) => {
 // ═══════════════════════════════════════════════════════
 // LEAD SCORING
 // ═══════════════════════════════════════════════════════
+
+app.post('/api/leads/import', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No CSV file provided' });
+    const content = req.file.buffer.toString();
+    const rows = content.split('\n').slice(1).filter(r => r.trim() !== ''); // ignore header
+    let imported = 0;
+    updateStore(s => {
+      for (const row of rows) {
+        const [name, phone, email] = row.split(',');
+        if (name && phone) {
+          s.leads.push({
+            id: crypto.randomUUID(),
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email ? email.trim() : null,
+            status: 'active',
+            opt_out: false
+          });
+          imported++;
+        }
+      }
+    });
+    res.status(201).json({ imported });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.post('/api/leads/score', async (req, res) => {
   try {
@@ -1045,6 +1317,33 @@ app.post('/api/scoring/evaluate-all', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Compare rule-based vs LLM scoring for a lead
+app.get('/api/scoring/compare/:leadId', async (req, res) => {
+  try {
+    const store = getStore();
+    const lead = store.leads.find(l => l.id === req.params.leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    const config = store.scoringRules || DEFAULT_SCORING_RULES;
+    const ruleResult = evaluateLead(lead, config, store);
+    const leadScores = store.scores.filter(s => s.lead_id === lead.id);
+    const llmScores = leadScores.filter(s => s.score_model?.includes('llm'));
+    const comparisons = leadScores.map(s => ({
+      id: s.id, score: s.score, model: s.score_model,
+      factors: s.score_factors, classified_at: s.classified_at,
+      is_llm: s.score_model?.includes('llm') || false
+    }));
+    res.json({
+      lead_id: lead.id, lead_name: lead.name, phone: lead.phone,
+      current_score: lead.score,
+      rule_based: { score: ruleResult.score, category: ruleResult.category, factors: ruleResult.weightedFactors },
+      llm_available: llmScores.length > 0,
+      llm_scores: llmScores.map(s => ({ score: s.score, factors: s.score_factors, classified_at: s.classified_at })),
+      history: comparisons.slice(0, 10),
+      delta: llmScores.length > 0 ? llmScores[0].score - ruleResult.score : null
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Auto-scoring trigger from Chatwoot webhook
 app.post('/api/scoring/trigger-from-chatwoot', async (req, res) => {
   try {
@@ -1095,6 +1394,100 @@ app.post('/api/scoring/trigger-from-chatwoot', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Campaign: auto-activate scheduled campaigns (on health check or endpoint)
+function activateScheduledCampaigns(store) {
+  const now = new Date().toISOString();
+  const scheduled = store.campaigns.filter(c => c.status === 'scheduled' && c.scheduled_at && c.scheduled_at <= now);
+  let activated = 0;
+  scheduled.forEach(c => {
+    c.status = 'sending';
+    c.started_at = now;
+    c.updated_at = now;
+    activated++;
+  });
+  return activated;
+}
+
+// ─── Campaign: delivery details per lead
+app.get('/api/campaigns/:id/leads/:leadId/deliveries', async (req, res) => {
+  try {
+    const store = getStore();
+    const lead = store.leads.find(l => l.id === req.params.leadId && l.campaign_id === req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found in campaign' });
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id && (d.contact_id === lead.id || d.contact_id === lead.phone));
+    res.json({ lead_id: lead.id, lead_name: lead.name, total: deliveries.length, deliveries: deliveries.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Opt-out: pre-check before sending (middleware for n8n)
+app.post('/api/opt-outs/check-batch', async (req, res) => {
+  try {
+    const { phones } = req.body;
+    if (!phones || !Array.isArray(phones)) return res.status(400).json({ error: 'phones array required' });
+    const store = getStore();
+    const results = phones.map(phone => ({
+      phone,
+      opted_out: store.optOuts.some(o => (o.phone && o.phone === phone) || (o.email && o.email === phone)),
+      reasons: store.optOuts.filter(o => o.phone === phone).map(o => o.reason)
+    }));
+    const blocked = results.filter(r => r.opted_out);
+    res.json({ total: phones.length, blocked: blocked.length, results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Auto-transition scheduled campaigns (called from health + dashboard)
+app.post('/api/campaigns/auto-activate', async (req, res) => {
+  try {
+    const store = getStore();
+    const count = activateScheduledCampaigns(store);
+    res.json({ activated: count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Twenty CRM: Webhook receptor (bidireccionalidad)
+app.post('/webhooks/twenty', async (req, res) => {
+  try {
+    const { recordId, objectType, changes } = req.body;
+    if (!recordId || !changes) return res.status(400).json({ error: 'recordId and changes required' });
+    updateStore(s => {
+      const lead = s.leads.find(l => l.contact_id === recordId);
+      if (!lead) return;
+      if (changes.name) lead.name = changes.name;
+      if (changes.email) lead.email = changes.email;
+      if (changes.phone) lead.phone = changes.phone;
+      if (changes.leadLastScore !== undefined) lead.score = changes.leadLastScore;
+      if (changes.leadConversationMode) lead.conversation_mode = changes.leadConversationMode;
+      lead.updated_at = new Date().toISOString();
+    });
+    res.json({ status: 'synced' });
+  } catch (e) { res.status(200).json({ error: 'ignored' }); }
+});
+
+// ─── Dashboard: trends data for charts
+app.get('/api/dashboard/trends', async (req, res) => {
+  try {
+    const store = getStore();
+    const now = new Date();
+    const days = parseInt(req.query.days) || 7;
+    const trends = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const nextDate = new Date(date.getTime() + 86400000);
+      const leadsCreated = store.leads.filter(l => { const d = new Date(l.created_at); return d >= date && d < nextDate; }).length;
+      const deliveriesSent = store.deliveries.filter(d => { const dt = new Date(d.created_at); return dt >= date && dt < nextDate && d.direction === 'outbound'; }).length;
+      const deliveriesReceived = store.deliveries.filter(d => { const dt = new Date(d.created_at); return dt >= date && dt < nextDate && d.direction === 'inbound'; }).length;
+      trends.push({ date: date.toISOString().split('T')[0], leadsCreated, deliveriesSent, deliveriesReceived });
+    }
+    const scoredLeads = store.leads.filter(l => l.score > 0);
+    const hot = scoredLeads.filter(l => l.score >= 70).length;
+    const warm = scoredLeads.filter(l => l.score >= 40 && l.score < 70).length;
+    const cold = scoredLeads.filter(l => l.score < 40).length;
+    const channelStats = store.deliveries.reduce((acc, d) => { if (d.channel) { acc[d.channel] = (acc[d.channel] || 0) + 1; } return acc; }, {});
+    res.json({ trends, distribution: { hot, warm, cold, total: scoredLeads.length }, channels: channelStats });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Dashboard summary
 app.get('/api/dashboard/summary', async (req, res) => {
   try {
     const store = getStore();
@@ -1111,6 +1504,88 @@ app.get('/api/dashboard/summary', async (req, res) => {
       leads: { total: totalLeads, scored: scoredLeads, topLead: topLead ? { name: topLead.name, score: topLead.score } : null },
       channels: store.channels.length > 0 ? store.channels.map(c => ({ channel: c.channel, status: c.status })) : [],
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// LEADS CRUD (Individual)
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/leads/search', async (req, res) => {
+  try {
+    const { q, limit = 20 } = req.query;
+    if (!q) return res.status(400).json({ error: 'query param q required' });
+    const query = q.toLowerCase();
+    const items = getStore().leads.filter(l =>
+      (l.name && l.name.toLowerCase().includes(query)) ||
+      (l.phone && l.phone.includes(query)) ||
+      (l.email && l.email.toLowerCase().includes(query))
+    ).slice(0, parseInt(limit));
+    res.json({ data: items, total: items.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/leads/:id', async (req, res) => {
+  try {
+    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status'];
+    let updated = null;
+    updateStore(s => {
+      const l = s.leads.find(l => l.id === req.params.id);
+      if (!l) return;
+      for (const k of allowed) {
+        if (req.body[k] !== undefined) l[k] = req.body[k];
+      }
+      l.updated_at = new Date().toISOString();
+      updated = l;
+    });
+    if (!updated) return res.status(404).json({ error: 'Lead not found' });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/leads/:id', async (req, res) => {
+  try {
+    let found = false;
+    updateStore(s => {
+      const idx = s.leads.findIndex(l => l.id === req.params.id);
+      if (idx === -1) return;
+      s.leads.splice(idx, 1);
+      s.scores = s.scores.filter(sc => sc.lead_id !== req.params.id);
+      s.deliveries = s.deliveries.filter(d => d.contact_id !== req.params.id);
+      found = true;
+    });
+    if (!found) return res.status(404).json({ error: 'Lead not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// CAMPAIGN EXPORT
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/campaigns/:id/export', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    const leads = store.leads.filter(l => l.campaign_id === req.params.id);
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id);
+    const scores = store.scores.filter(s => s.campaign_id === req.params.id);
+    const csvRows = [['name', 'phone', 'email', 'status', 'score', 'category', 'sent_at', 'delivered_at', 'replied_at']];
+    for (const lead of leads) {
+      const leadDeliveries = deliveries.filter(d => d.contact_id === lead.id || d.contact_id === lead.phone);
+      const leadScore = scores.filter(s => s.lead_id === lead.id);
+      const lastScore = leadScore.sort((a, b) => new Date(b.classified_at) - new Date(a.classified_at))[0];
+      csvRows.push([
+        lead.name || '', lead.phone || '', lead.email || '', lead.status || '',
+        lead.score?.toString() || '0', lastScore?.category || 'cold',
+        leadDeliveries[0]?.sent_at || '', leadDeliveries[0]?.delivered_at || '', leadDeliveries[0]?.replied_at || ''
+      ]);
+    }
+    const csv = csvRows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="campaign-${campaign.name}.csv"`);
+    res.send(csv);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1910,50 +2385,183 @@ app.delete('/api/knowledge-base/documents/:id', async (req, res) => {
 
 app.post('/api/twilio/send', async (req, res) => {
   try {
-    const { to, from, body: messageBody } = req.body;
+    const { to, from, body: messageBody, campaign_id, lead_id, status_callback } = req.body;
     if (!to || !messageBody) return res.status(400).json({ error: 'to and body required' });
 
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     if (!accountSid || !authToken) return res.status(500).json({ error: 'TWILIO not configured' });
 
-    // Always use Sandbox number for WhatsApp (From must be WhatsApp-enabled)
     const fromNumber = process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_PHONE_NUMBER;
-    // Normalize WhatsApp number format (add whatsapp: prefix)
     const normalizeWhatsApp = (num, isSandbox) => {
       if (!num) return num;
       if (num.startsWith('whatsapp:')) return num;
       const digits = num.replace(/[^\d+]/g, '');
-      // Sandbox requires whatsapp: prefix; regular Twilio SMS numbers don't
-      if (isSandbox) return `whatsapp:${digits}`;
+      if (isSandbox || !fromNumber || fromNumber.includes('whatsapp')) return `whatsapp:${digits}`;
       return digits;
     };
 
     const toNormalized = normalizeWhatsApp(to, true);
     const fromNormalized = normalizeWhatsApp(fromNumber, true);
 
+    // Track delivery record before sending
+    const deliveryId = crypto.randomUUID();
+    const callbackUrl = status_callback || `http://helper:3100/webhooks/twilio-status`;
+    updateStore(s => {
+      s.deliveries.push({
+        id: deliveryId, campaign_id: campaign_id || null, contact_id: lead_id || to,
+        contact_name: req.body.lead_name || to, phone: to, status: 'queued',
+        message_id: null, channel: 'twilio', direction: 'outbound',
+        content: messageBody, campaign_name: req.body.campaign_name || null,
+        sent_at: null, delivered_at: null, error_message: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      });
+    });
+
     const resp = await axios.post(
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      new URLSearchParams({ To: toNormalized, From: fromNormalized, Body: messageBody }).toString(),
+      new URLSearchParams({
+        To: toNormalized, From: fromNormalized, Body: messageBody,
+        StatusCallback: callbackUrl,
+      }).toString(),
       {
         auth: { username: accountSid, password: authToken },
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         timeout: 15000,
       }
     );
-    res.json({ status: 'sent', sid: resp.data.sid, to: toNormalized, from: fromNormalized });
+
+    // Update delivery with SID
+    updateStore(s => {
+      const d = s.deliveries.find(d => d.id === deliveryId);
+      if (d) { d.message_id = resp.data.sid; d.status = 'sent'; d.sent_at = new Date().toISOString(); }
+    });
+
+    res.json({ status: 'sent', sid: resp.data.sid, delivery_id: deliveryId, to: toNormalized, from: fromNormalized });
   } catch (e) {
     const details = e.response?.data ? JSON.stringify(e.response.data) : String(e.message);
     res.status(500).send('ERROR: ' + e.code + ' - ' + e.message + ' | ' + details);
   }
 });
 
+// Twilio typing indicator (send a pre-message typing webhook)
+app.post('/api/twilio/typing', async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'to required' });
+    res.json({ status: 'typing_simulated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ═══════════════════════════════════════════════════════
+// TWILIO INBOUND WEBHOOK (reemplazo Meta hasta migración)
+// ═══════════════════════════════════════════════════════
+
+app.post('/webhooks/twilio-inbound', async (req, res) => {
+  try {
+    const from = req.body.From || req.body.from;
+    const body = req.body.Body || req.body.body;
+    const messageSid = req.body.MessageSid || req.body.messageSid || `twilio_${Date.now()}`;
+    if (!from || !body) return res.status(400).send('<Response></Response>');
+
+    const phone = from.replace(/^whatsapp:/, '').replace(/[^\d+]/g, '');
+    const profileName = req.body.ProfileName || req.body.profileName || phone;
+
+    // 1. Create lead + delivery in helper store
+    updateStore(s => {
+      const existing = s.leads.find(l => l.phone === phone);
+      if (!existing) {
+        const campaign = s.campaigns.find(c => ['whatsapp', 'sms'].includes(c.channel) && c.status === 'sending');
+        s.leads.push({
+          id: crypto.randomUUID(), campaign_id: campaign?.id || null,
+          name: profileName, phone, email: '', source: 'twilio_inbound',
+          status: 'new', score: 0, score_data: {},
+          custom_fields: { message: body, source: 'twilio_webhook' },
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+      }
+      s.deliveries.push({
+        id: crypto.randomUUID(), campaign_id: null, contact_id: phone,
+        contact_name: profileName, phone, status: 'received', channel: 'twilio',
+        direction: 'inbound', content: body, message_id: messageSid,
+        sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
+      });
+    });
+
+    // 2. Forward to n8n webhook (Chatwoot-compatible format)
+    try {
+      const n8nUrl = process.env.N8N_URL || 'http://n8n:5678';
+      const normalizedPayload = {
+        message_type: 'incoming', content: body,
+        sender: { name: profileName, phone_number: phone, email: '' },
+        conversation_id: `twilio_${phone}`,
+        conversation: { id: `twilio_${phone}`, messages: [{ content: body, message_type: 'incoming', sender: { name: profileName }, created_at: new Date().toISOString() }] },
+        account_id: 1, inbox_id: 1, source_id: phone,
+        contact: { name: profileName, phone_number: phone },
+        created_at: new Date().toISOString(),
+      };
+      axios.post(`${n8nUrl}/webhook/chatwoot-inbound`, normalizedPayload).catch(() => {});
+    } catch (e) { /* ignore forwarding errors */ }
+
+    // 3. Push to Chatwoot bridge
+    try {
+      await pushToChatwoot(phone, profileName, body);
+    } catch (e) { /* ignore chatwoot bridge errors */ }
+
+    res.type('text/xml').send('<Response></Response>');
+  } catch (e) {
+    console.error('Twilio inbound error:', e.message);
+    res.type('text/xml').send('<Response></Response>');
+  }
+});
+
+// Twilio status callback
+app.post('/webhooks/twilio-status', async (req, res) => {
+  try {
+    const messageSid = req.body.MessageSid;
+    const status = req.body.MessageStatus;
+    if (messageSid && status) {
+      updateStore(s => {
+        const delivery = s.deliveries.find(d => d.message_id === messageSid);
+        if (delivery) {
+          delivery.status = status;
+          if (status === 'delivered') delivery.delivered_at = new Date().toISOString();
+          if (status === 'read') delivery.read_at = new Date().toISOString();
+          if (status === 'failed') delivery.error_message = req.body.ErrorMessage || 'Failed';
+          delivery.updated_at = new Date().toISOString();
+        }
+      });
+    }
+    res.sendStatus(200);
+  } catch (e) {
+    res.sendStatus(200);
+  }
+});
+
 // CHATWOOT BRIDGE (Twilio ↔ Chatwoot API inbox)
 // ═══════════════════════════════════════════════════════
 
 const CHATWOOT_URL = process.env.CHATWOOT_URL || 'http://chatwoot:3000';
 const CHATWOOT_INBOX_IDENTIFIER = process.env.CHATWOOT_INBOX_IDENTIFIER || 'Lo9jawjXVCz2gmupLcxqvYqr';
+
+async function pushToChatwoot(phone, name, message) {
+  try {
+    const contactResp = await axios.post(
+      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts`,
+      { name: name || phone, phone_number: phone },
+      { timeout: 10000 }
+    );
+    const sourceId = contactResp.data.source_id;
+    await axios.post(
+      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts/${sourceId}/conversations`,
+      { content: message },
+      { timeout: 10000 }
+    );
+    return sourceId;
+  } catch (e) {
+    throw new Error('Chatwoot push failed: ' + (e.response?.data?.message || e.message));
+  }
+}
 
 // Inbound: n8n pushes Twilio messages to Chatwoot
 app.post('/api/chatwoot/push', async (req, res) => {
@@ -1983,6 +2591,36 @@ app.post('/api/chatwoot/push', async (req, res) => {
 });
 
 // Outbound: Chatwoot webhook → Twilio send (agent replies)
+app.post('/api/webhooks/chatwoot', async (req, res) => {
+  try {
+    const payload = req.body;
+    if (payload.event === 'message_created' && payload.sender) {
+      // Create or ensure lead exists based on webhook sender
+      updateStore(s => {
+        const existing = s.leads.find(l => l.phone === payload.sender.phone_number);
+        if (!existing && payload.sender.phone_number) {
+          s.leads.push({
+            id: crypto.randomUUID(),
+            name: payload.sender.name || 'Desconocido',
+            phone: payload.sender.phone_number,
+            status: 'active',
+            opt_out: false
+          });
+        }
+        
+        // Handle Opt-Out logic
+        if (payload.content && typeof payload.content === 'string' && payload.content.trim().toUpperCase() === 'DETENER') {
+          const leadToOptOut = s.leads.find(l => l.phone === payload.sender.phone_number);
+          if (leadToOptOut) leadToOptOut.opt_out = true;
+        }
+      });
+    }
+    res.status(200).json({ received: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/webhooks/chatwoot-outbound', async (req, res) => {
   try {
     const { message_type, content, conversation, contact } = req.body;
@@ -2022,8 +2660,266 @@ app.post('/webhooks/chatwoot-outbound', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
+// INTERNAL CONTROL CENTER ENDPOINTS
+// Accesibles solo con API key — alimentan el panel de superusuario
+// ═══════════════════════════════════════════════════════
+
+// GET /api/internal/health-detailed — estado extendido de todas las dependencias
+app.get('/api/internal/health-detailed', async (req, res) => {
+  try {
+    const store = getStore();
+    const weaviateOk = await checkWeaviateHealth();
+    let pgOk = false;
+    let pgLatency = null;
+    if (pool) {
+      const t0 = Date.now();
+      try { await pool.query('SELECT 1'); pgOk = true; pgLatency = Date.now() - t0; } catch (e) { pgOk = false; }
+    }
+    let redisOk = false;
+    try {
+      const { getConversationState } = require('./services/conversationStore');
+      redisOk = true;
+    } catch (e) { redisOk = false; }
+
+    const [incidentSummary] = await Promise.all([
+      getIncidentSummary({ hours: 24 }).catch(() => ({ incidents: [], fallbacks: [], securityEvents: [], alerts: [] }))
+    ]);
+
+    res.json({
+      service: 'wibsite-helper', version: '2.2.0',
+      timestamp: new Date().toISOString(),
+      uptime: Math.floor((Date.now() - uptimeStart) / 1000),
+      dependencies: {
+        postgresql: { status: pgOk ? 'connected' : 'unavailable', mode: pool ? 'postgresql' : 'json-fallback', latencyMs: pgLatency },
+        redis: { status: redisOk ? 'available' : 'fallback', mode: redisOk ? 'redis' : 'in-memory' },
+        weaviate: { status: weaviateOk ? 'connected' : 'fallback', mode: weaviateOk ? 'weaviate' : 'in-memory-kb' },
+        llm: { status: OPENROUTER_API_KEY ? 'configured' : 'missing', model: OPENROUTER_MODEL },
+        glitchtip: { status: GLITCHTIP_DSN ? 'configured' : 'not-configured', dsn: GLITCHTIP_DSN ? 'set' : 'missing' }
+      },
+      sli: {
+        requestCount: sliMetrics.totalRequests,
+        errorRate: sliMetrics.totalRequests > 0 ? (sliMetrics.totalErrors / sliMetrics.totalRequests * 100).toFixed(2) + '%' : '0%',
+        avgLatencyMs: sliMetrics.totalRequests > 0 ? (sliMetrics.totalLatency / sliMetrics.totalRequests).toFixed(1) : '0',
+        errorCount: sliMetrics.totalErrors
+      },
+      modules: {
+        campaigns: { total: store.campaigns.length, active: store.campaigns.filter(c => c.status === 'sending').length },
+        leads: { total: store.leads.length, scored: store.leads.filter(l => l.score > 0).length },
+        deliveries: { total: store.deliveries.length },
+        scores: { total: store.scores.length }
+      },
+      incidents24h: {
+        byModule: incidentSummary.incidents,
+        fallbacks: incidentSummary.fallbacks,
+        securityEvents: incidentSummary.securityEvents,
+        alerts: incidentSummary.alerts
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/internal/incidents/summary — resumen agrupado por módulo/severidad
+app.get('/api/internal/incidents/summary', async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours || '24');
+    const tenantId = req.query.tenantId || req.tenantId;
+    const summary = await getIncidentSummary({ hours, tenantId });
+    res.json(summary);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/incidents — listado de incidentes con contexto completo
+app.get('/api/internal/incidents', async (req, res) => {
+  try {
+    const { module: mod, severity, status = 'open', tenantId, limit = 50, offset = 0, hours = 72 } = req.query;
+    const result = await getIncidents({ module: mod, severity, status, tenantId, limit: parseInt(limit), offset: parseInt(offset), hours: parseInt(hours) });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/incidents/:id — detalle completo de un incidente
+app.get('/api/internal/incidents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (pool) {
+      const result = await pool.query('SELECT * FROM incidents WHERE id = $1', [id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Incident not found' });
+      // Also get related audit logs
+      const logs = await pool.query(
+        `SELECT * FROM audit_logs WHERE request_id = $1 OR data->>'flow' LIKE $2 ORDER BY created_at ASC LIMIT 50`,
+        [result.rows[0].request_id, `%${result.rows[0].http_path || ''}%`]
+      ).catch(() => ({ rows: [] }));
+      res.json({ incident: result.rows[0], relatedLogs: logs.rows });
+    } else {
+      res.json({ incident: null, relatedLogs: [], error: 'DB not available' });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/internal/incidents/:id/resolve — marcar incidente como resuelto
+app.post('/api/internal/incidents/:id/resolve', async (req, res) => {
+  try {
+    const { resolvedBy, notes } = req.body;
+    const result = await resolveIncident(req.params.id, { resolvedBy, notes });
+    logEvent('incident_resolved', {
+      level: 'info', message: `Incident ${req.params.id} resolved by ${resolvedBy || 'superuser'}`,
+      requestId: req.id, module: 'infrastructure', data: { incidentId: req.params.id, resolvedBy, notes }
+    });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/security/events — eventos de seguridad recientes
+app.get('/api/internal/security/events', async (req, res) => {
+  try {
+    const { hours = 24, type, limit = 100 } = req.query;
+    const result = await getSecurityEvents({ hours: parseInt(hours), type, limit: parseInt(limit) });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/fallback-events — historial de fallbacks por dependencia
+app.get('/api/internal/fallback-events', async (req, res) => {
+  try {
+    const { hours = 24, dependency, limit = 100 } = req.query;
+    const result = await getFallbackEvents({ hours: parseInt(hours), dependency, limit: parseInt(limit) });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/alerts — alertas de Prometheus/Alertmanager recibidas
+app.get('/api/internal/alerts', async (req, res) => {
+  try {
+    const { hours = 24, status, limit = 100 } = req.query;
+    const result = await getAlerts({ hours: parseInt(hours), status, limit: parseInt(limit) });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/internal/alerts/webhook — receptor de Alertmanager
+app.post('/api/internal/alerts/webhook', async (req, res) => {
+  try {
+    const payload = req.body;
+    const alert = await receiveAlert(payload);
+    console.log(`[AlertManager] Alert received: ${alert.alert_name} (${alert.severity}) — ${alert.status}`);
+    res.json({ status: 'received', alert_name: alert.alert_name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/internal/module-status — SLI por módulo
+app.get('/api/internal/module-status', async (req, res) => {
+  try {
+    const store = getStore();
+    const now = Date.now();
+    const last24h = new Date(now - 86400000);
+
+    const moduleStatus = {
+      campaigns: {
+        total: store.campaigns.length,
+        active: store.campaigns.filter(c => c.status === 'sending').length,
+        scheduled: store.campaigns.filter(c => c.status === 'scheduled').length,
+        status: store.campaigns.length > 0 ? 'active' : 'idle'
+      },
+      leads: {
+        total: store.leads.length,
+        hot: store.leads.filter(l => l.score >= 70).length,
+        warm: store.leads.filter(l => l.score >= 40 && l.score < 70).length,
+        cold: store.leads.filter(l => l.score < 40).length,
+        status: 'active'
+      },
+      scoring: {
+        total: store.scores.length,
+        today: store.scores.filter(s => new Date(s.classified_at) >= last24h).length,
+        status: 'active'
+      },
+      deliveries: {
+        total: store.deliveries.length,
+        today: store.deliveries.filter(d => new Date(d.created_at) >= last24h).length,
+        failed: store.deliveries.filter(d => d.status === 'failed').length,
+        status: 'active'
+      }
+    };
+    res.json({ modules: moduleStatus, timestamp: new Date().toISOString() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/internal/run-smoke — ejecuta smoke checks internos (sin Jest)
+app.post('/api/internal/run-smoke', async (req, res) => {
+  const results = [];
+  const check = async (name, fn) => {
+    try {
+      const t0 = Date.now();
+      await fn();
+      results.push({ name, status: 'pass', latencyMs: Date.now() - t0 });
+    } catch (e) {
+      results.push({ name, status: 'fail', error: e.message });
+    }
+  };
+
+  await check('health-endpoint', async () => {
+    const store = getStore();
+    if (!store) throw new Error('Store not available');
+  });
+  await check('db-connection', async () => {
+    if (pool) await pool.query('SELECT 1');
+    else throw new Error('PG pool not initialized — using JSON fallback');
+  });
+  await check('weaviate-health', async () => {
+    const ok = await checkWeaviateHealth();
+    if (!ok) throw new Error('Weaviate unavailable');
+  });
+  await check('campaigns-store', async () => {
+    const store = getStore();
+    if (!Array.isArray(store.campaigns)) throw new Error('campaigns store invalid');
+  });
+  await check('leads-store', async () => {
+    const store = getStore();
+    if (!Array.isArray(store.leads)) throw new Error('leads store invalid');
+  });
+  await check('auth-middleware', async () => {
+    if (!process.env.HELPER_API_KEY) throw new Error('HELPER_API_KEY not set');
+  });
+  await check('llm-config', async () => {
+    if (!process.env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not set');
+  });
+
+  const passed = results.filter(r => r.status === 'pass').length;
+  const failed = results.filter(r => r.status === 'fail').length;
+
+  res.json({
+    summary: { total: results.length, passed, failed, status: failed === 0 ? 'all-pass' : 'some-fail' },
+    checks: results,
+    runAt: new Date().toISOString()
+  });
+});
+
+// GET /api/internal/audit-trail/:requestId — traza completa de un request
+app.get('/api/internal/audit-trail/:requestId', async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    if (pool) {
+      const [logs, incidents] = await Promise.all([
+        pool.query('SELECT * FROM audit_logs WHERE request_id = $1 ORDER BY created_at ASC', [requestId]).catch(() => ({ rows: [] })),
+        pool.query('SELECT * FROM incidents WHERE request_id = $1 ORDER BY created_at ASC', [requestId]).catch(() => ({ rows: [] }))
+      ]);
+      res.json({
+        requestId,
+        timeline: logs.rows,
+        incidents: incidents.rows,
+        found: logs.rows.length + incidents.rows.length > 0
+      });
+    } else {
+      res.json({ requestId, timeline: [], incidents: [], found: false, note: 'DB not available' });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
 // HEALTH + SLI METRICS (MVP-10: KPIs, SLA/SLI monitoring)
 // ═══════════════════════════════════════════════════════
+
 
 let uptimeStart = Date.now();
 let requestCount = 0;

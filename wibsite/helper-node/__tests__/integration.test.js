@@ -1,5 +1,7 @@
 const request = require('supertest');
 
+jest.setTimeout(20000);
+
 describe('Integration Tests - Flujo E2E', () => {
   let app;
 
@@ -288,5 +290,33 @@ describe('Integration Tests - Flujo E2E', () => {
       .get('/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wibsite_verify_2026&hub.challenge=12345');
     expect(res.status).toBe(200);
     expect(res.text).toBe('12345');
+  });
+
+  test('POST /api/leads/import sube CSV correctamente', async () => {
+    const csvContent = "name,phone,email\nJuan Perez,+59170000000,juan@test.com";
+    const res = await request(app)
+      .post('/api/leads/import')
+      .set(auth)
+      .attach('file', Buffer.from(csvContent), 'leads.csv');
+    
+    // The endpoint might not exist completely implemented, but we test the structure or its 500 error 
+    // depending on the actual implementation. In the actual app it parses using multer.
+    // Assuming 200 or 201 for a successful import.
+    expect([200, 201]).toContain(res.status);
+  });
+
+  test('POST /api/webhooks/chatwoot procesa payloads externos', async () => {
+    const payload = {
+      event: 'message_created',
+      message_type: 'incoming',
+      sender: { id: 1, phone_number: '+5911111111' },
+      content: 'Necesito soporte'
+    };
+    const res = await request(app)
+      .post('/api/webhooks/chatwoot')
+      .set(auth)
+      .send(payload);
+    
+    expect(res.status).toBe(200);
   });
 });

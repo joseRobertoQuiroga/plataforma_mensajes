@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "name": "Consultoria de Software",
+    "industry": "software_consulting",
+    "description": "Servicios de desarrollo y consultoria de software B2B"
+  },
+  "lead_temperature": {
+    "hot_threshold": 70,
+    "warm_threshold": 40,
+    "decay_percentage": 20,
+    "decay_days": 5
+  },
+  "followup": {
+    "sequence": [
+      { "delay_days": 0, "message_type": "confirmation", "message_template": "Gracias por tu interes {{name}}. Quedo atento a tus comentarios." },
+      { "delay_days": 1, "message_type": "value", "message_template": "{{name}}, como te comentaba, nuestro diferencial es la integracion sin friccion con tu infraestructura actual." },
+      { "delay_days": 3, "message_type": "low_friction", "message_template": "{{name}}, ¿que tal si agendamos una llamada de 15 min para conocer tu proyecto?" },
+      { "delay_days": 6, "message_type": "summary", "message_template": "{{name}}, te comparto un resumen de lo que hemos conversado por si quieres revisarlo con calma." },
+      { "delay_days": 10, "message_type": "content", "message_template": "{{name}}, encontre este caso de exito similar a tu proyecto que podria interesarte." },
+      { "delay_days": 20, "message_type": "nurture", "message_template": "{{name}}, seguimos disponibles para cuando necesites ayuda con tu proyecto." },
+      { "delay_days": 30, "message_type": "nurture", "message_template": "{{name}}, ¿como van tus proyectos? Recuerda que estamos a tu disposicion." },
+      { "delay_days": 45, "message_type": "nurture", "message_template": "{{name}}, ha pasado un tiempo. Si surge algo nuevo, aqui estamos." }
+    ],
+    "lost_threshold": 50,
+    "business_hours_only": true,
+    "timezone": "America/Mexico_City"
+  },
+  "objections": [
+    { "trigger_patterns": ["muy caro", "no hay algo mas barato", "precio alto"], "response_pattern": "Entiendo {{name}}. Antes de hablar de numeros, ¿con que lo estas comparando? Asi te muestro justo lo que cubre el alcance.", "triggers_followup": false },
+    { "trigger_patterns": ["comparar", "viendo otras opciones", "otras cotizaciones"], "response_pattern": "Me parece bien que compares. Un diferencial nuestro es la integracion con tu infraestructura actual. ¿Te sirve una llamada corta para resolver dudas?", "triggers_followup": false },
+    { "trigger_patterns": ["no se si lo necesito", "no se si vale la pena"], "response_pattern": "Cuentame un poco mas del problema que estas teniendo hoy. Asi te cuento como lo resolvimos en un caso parecido.", "triggers_followup": false },
+    { "trigger_patterns": ["consulte con mi socio", "lo vemos en equipo"], "response_pattern": "Totalmente entendible. ¿Les sirve una llamada con ambos presentes o prefieres un resumen escrito facil de reenviar?", "triggers_followup": true },
+    { "trigger_patterns": ["cuanto tiempo tarda", "cuanto tiempo toma"], "response_pattern": "¿Hay alguna fecha puntual que este empujando esto? Me ayuda a ajustar la propuesta a tu prioridad.", "triggers_followup": false },
+    { "trigger_patterns": ["por que ustedes", "que los diferencia"], "response_pattern": "Nos especializamos en integracion de plataformas. Te puedo mostrar 1-2 casos parecidos al tuyo si te sirve.", "triggers_followup": false },
+    { "trigger_patterns": ["manda la cotizacion", "envia la cotizacion", "ya lo vemos"], "response_pattern": "Te dejo el resumen por escrito para que lo revises con calma. Cualquier duda, seguimos por aca.", "triggers_followup": true },
+    { "trigger_patterns": ["fuera de mi presupuesto", "no tengo presupuesto ahora"], "response_pattern": "¿Es tema de monto total o de forma de pago? Podemos arrancar con una etapa mas chica, como una auditoria primero.", "triggers_followup": true }
+  ],
+  "handoff": {
+    "required_fields": ["name", "phone", "score", "intent", "service_type", "urgency", "objections_log", "summary"],
+    "next_action": "agendar_llamada",
+    "notify_target": "chatwoot_note"
+  },
+  "autonomy_zones": {
+    "green": { "can_quote": false, "can_commit": false, "can_share_pricing": false, "description": "Califica, responde preguntas, agenda reuniones" },
+    "yellow": { "can_quote": false, "can_commit": false, "can_share_pricing": true, "description": "Comparte rangos de precio, requiere supervision" },
+    "red": { "can_quote": true, "can_commit": true, "can_share_pricing": true, "description": "Solo humano puede cotizar y cerrar" }
+  },
+  "products": [
+    { "name": "Integracion de plataformas", "description": "Conexion de sistemas via API", "min_price": 5000, "max_price": 15000 },
+    { "name": "Modulo nuevo", "description": "Desarrollo de modulo especifico", "min_price": 8000, "max_price": 25000 },
+    { "name": "Desarrollo a medida", "description": "Soluciones personalizadas", "min_price": 15000, "max_price": 50000 },
+    { "name": "Auditoria y consultoria", "description": "Revision de arquitectura y procesos", "min_price": 3000, "max_price": 10000 }
+  ],
+  "industry_knowledge": [
+    "Integracion de CRMs y ERPs",
+    "Automatizacion de procesos",
+    "APIs y microservicios",
+    "Migracion a la nube"
+  ],
+  "forbidden_topics": ["competitors_pricing", "internal_cost_structure", "profit_margins", "source_code"]
+}

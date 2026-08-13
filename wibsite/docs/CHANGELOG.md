@@ -1,5 +1,28 @@
 # Wibsite Business — Historial de Cambios
 
+## [3.1.0] — 2026-08-12 (Oleada C: Motor Agéntico Ejecutable)
+### Added
+- **F-14 Checkpointer de memoria profunda**: `conversationStore.js` con `saveCheckpoint/loadCheckpoint/deleteCheckpoint`, `appendMessage`, `updateConversationMetadata`, `onTransition` hooks (TTL 7d, MAX_MESSAGES 100). Nuevo `agentCore/checkpointer.js` (rollup topics/objeciones, persistencia opcional PG) + `scripts/conversation-summaries-schema.sql` (tabla `conversation_summaries` con UNIQUE tenant+conv y versión incremental).
+- **F-16 Grafo 8 etapas ejecutable**: `agentCore/index.js` con 9 nodos (apertura, analyze, calificacion, propuesta, profundizacion, objeciones, cierre, handoff, seguimiento), aristas condicionales (`when` predicates), `slotFilling.js` (extracción nombre/teléfono/email/servicio/interés/urgencia + `fitComplete`/`missingFields`), `stageMap.js` (8 etapas ↔ estados conversationStore), `walkMachine` (BFS sobre `VALID_TRANSITIONS`). Calificación delega a propuesta en el mismo turno cuando el fit se completa. Nodos lineales antiguos eliminados.
+- **F-17 Guardas de confidencialidad + autonomía**: `guards/confidentiality.js` (filtro de campos internal/forbidden_topics/privados, transformación PII assisted: teléfono `*********5678`, email `an***@correo.com`, `sanitizeOutput` con bloqueo + alerta) y `guards/autonomy.js` (zonas green/yellow/red; pricing → yellow con disclaimer; compromiso → red → handoff).
+- **F-18 Dify como nodo + fallback**: nuevo `agentCore/llmClient.js` — Dify `workflows/run` (blocking) con fallback OpenRouter `chat/completions` (JSON classifier), circuit breaker (3 fallos → cooldown 60s), `parseFinalResult` para `final_result` anidado.
+- **F-21 Sync máquina comercial↔técnica**: nuevo `agentCore/commercialState.js` (MAP técnico→comercial según CTX-07 §3: calificando, propuesta_enviada, en_objeción, agendado/cerrado, reactivado, derivado_a_humano, perdido, enfriándose) + `registerHook` en `onTransition`/`updateConversationMetadata` (metadata + log `state_transition`).
+- **Nuevo endpoint `POST /api/agent/chat`** (message/template_id/client_id, genera conversationId UUID). `/api/agent/commercial-graph` ahora recibe `tenantId`.
+- **26 tests nuevos** (checkpointer, agentGraph 7-turnos hasta handoff, guards, difyFallback, commercialState) + `contract-integrations.test.js` reescrito sobre contratos reales (llmClient + ragEngine).
+
+### Changed
+- `agentCore/index.js`: `executeCommercialGraph` — `restoreGraphState` → grafo → `ensureCommercialHook()` → `walkMachine` → `sanitizeOutput` → `saveTurn` (mensajes + checkpoint + PG) → logs por etapa; respuesta con `stage/intent/score/autonomyZone/commercialState/nextAction/path/completeness/briefing`.
+- `agentCore/graph.js`: aristas condicionales `addEdge(from, to, when?)` (primera que pasa) + `_summarize` con history completo.
+- `agentCore/handoffNode.js` / `followupNode.js` / `entryNode.js`: reescritos para el nuevo grafo.
+- `helper-node/index.js`: boot con `checkpointer.initSummariesPool(pool)`.
+
+### Fixed
+- **Contract tests**: `contract-integrations.test.js` ya no depende de wrappers inexistentes; testea `llmClient.classify` y `queryKnowledgeBase`/`checkWeaviateHealth` reales (4/4 pasan).
+
+### Verified
+- ✅ 149/149 tests en 17 suites Jest. Única suite rota: `flow.test.js` (deuda estructural pre-existente: referencias a módulos/rutas que nunca existieron — P2, no causada por esta versión).
+- ✅ Trazabilidad: F-14/16/17/18/21 marcadas ✅ en TEC-06 §5.
+
 ## [3.0.0] — 2026-07-18 (Documentación Viva + Hub Visual)
 ### Added
 - **Carpeta `Avances/`** — Documentación viva de estado del proyecto con 6 archivos:

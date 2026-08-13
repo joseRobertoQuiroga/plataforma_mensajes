@@ -1,0 +1,99 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "name": "Default Template",
+    "industry": "general",
+    "description": "Plantilla base para cualquier rubro"
+  },
+  "lead_temperature": {
+    "hot_threshold": 70,
+    "warm_threshold": 40,
+    "decay_percentage": 20,
+    "decay_days": 5
+  },
+  "followup": {
+    "sequence": [
+      { "delay_days": 1, "message_type": "confirmation", "message_template": "Hola {{name}}, ¿has tenido oportunidad de revisar la información que te compartí?" },
+      { "delay_days": 3, "message_type": "value", "message_template": "{{name}}, quería compartirte un caso de éxito similar al tuyo..." },
+      { "delay_days": 5, "message_type": "low_friction", "message_template": "{{name}}, ¿qué tal si agendamos una llamada de 10 minutos?" },
+      { "delay_days": 7, "message_type": "summary", "message_template": "{{name}}, resumiendo lo que hemos conversado..." },
+      { "delay_days": 10, "message_type": "content", "message_template": "{{name}}, encontré este artículo que podría interesarte..." },
+      { "delay_days": 14, "message_type": "nurture", "message_template": "{{name}}, seguimos disponibles para cuando necesites ayuda." },
+      { "delay_days": 21, "message_type": "nurture", "message_template": "{{name}}, ¿cómo van tus proyectos?" },
+      { "delay_days": 30, "message_type": "nurture", "message_template": "{{name}}, ha pasado un tiempo. ¿Te gustaría retomar la conversación?" }
+    ],
+    "lost_threshold": 50,
+    "business_hours_only": true,
+    "timezone": "America/Mexico_City"
+  },
+  "objections": [
+    {
+      "trigger_patterns": ["muy caro", "demasiado", "no tengo presupuesto", "es muy costoso"],
+      "response_pattern": "Entiendo tu preocupación por el precio, {{name}}. Muchos de nuestros clientes pensaban igual hasta que vieron el retorno. ¿Te parece si te muestro cómo se amortiza en los primeros 3 meses?",
+      "triggers_followup": false
+    },
+    {
+      "trigger_patterns": ["no me interesa", "no estoy interesado", "ahora no"],
+      "response_pattern": "¡Claro, {{name}}! Lo entiendo perfectamente. ¿Te parece bien si te envío información por si más adelante cambian las cosas?",
+      "triggers_followup": true
+    },
+    {
+      "trigger_patterns": ["ya tengo proveedor", "ya trabajo con otro", "tengo quien me lo haga"],
+      "response_pattern": "Qué bien que ya cuentas con un proveedor, {{name}}. ¿Qué tal si te comparto una comparativa para que tengas una alternativa de respaldo?",
+      "triggers_followup": true
+    },
+    {
+      "trigger_patterns": ["no tengo tiempo", "estoy muy ocupado", "ahora no puedo"],
+      "response_pattern": "Sin problema, {{name}}. Precisamente lo que hacemos es ahorrarte tiempo. ¿Te parece si en 2 minutos te explico cómo?",
+      "triggers_followup": false
+    },
+    {
+      "trigger_patterns": ["mandame informacion", "enviame un correo", "mandame detalles"],
+      "response_pattern": "¡Por supuesto, {{name}}! Te comparto la información. ¿Hay algo en particular que te gustaría saber?",
+      "triggers_followup": true
+    },
+    {
+      "trigger_patterns": ["lo voy a pensar", "lo voy a consultar", "lo voy a revisar"],
+      "response_pattern": "Perfecto, {{name}}. Tómate el tiempo que necesites. ¿Te parece bien si te escribo la próxima semana para saber qué opinas?",
+      "triggers_followup": true
+    },
+    {
+      "trigger_patterns": ["no me sirve", "no es para mi", "no es lo que busco"],
+      "response_pattern": "Gracias por tu honestidad, {{name}}. ¿Podrías contarme más sobre lo que estás buscando? Tal vez tengamos algo que se ajuste mejor.",
+      "triggers_followup": false
+    },
+    {
+      "trigger_patterns": ["quiero hablar con un humano", "habla con un agente", "quiero con una persona"],
+      "response_pattern": "¡Por supuesto! Te conecto con un asesor humano que podrá atenderte personalmente.",
+      "triggers_followup": false
+    }
+  ],
+  "handoff": {
+    "required_fields": ["name", "phone", "score", "intent", "objections_log", "summary"],
+    "next_action": "contact_inmediate",
+    "notify_target": "chatwoot_note"
+  },
+  "autonomy_zones": {
+    "green": {
+      "can_quote": false,
+      "can_commit": false,
+      "can_share_pricing": false,
+      "description": "Puede calificar, responder preguntas generales, agendar reuniones"
+    },
+    "yellow": {
+      "can_quote": false,
+      "can_commit": false,
+      "can_share_pricing": true,
+      "description": "Puede compartir rangos de precio, requiere supervisión para cotizar"
+    },
+    "red": {
+      "can_quote": true,
+      "can_commit": true,
+      "can_share_pricing": true,
+      "description": "Puede cotizar y cerrar, supervisión humana requerida post-cierre"
+    }
+  },
+  "products": [],
+  "industry_knowledge": [],
+  "forbidden_topics": ["competitors_pricing", "internal_costs", "profit_margins", "unreleased_features"]
+}

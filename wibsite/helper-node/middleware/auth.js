@@ -6,6 +6,7 @@ const CHATWOOT_SECRET_KEY = process.env.CHATWOOT_SECRET_KEY;
 
 const PUBLIC_ROUTES = [
   { path: '/health', method: 'GET' },
+  { path: '/metrics', method: 'GET' },
   { path: '/api/sli/metrics', method: 'GET' },
   { path: '/webhooks/whatsapp', method: 'GET' },
   { path: '/api/llm/health', method: 'GET' },

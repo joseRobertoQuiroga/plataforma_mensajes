@@ -365,7 +365,7 @@ Integración con WhatsApp Business API para envío y recepción de mensajes.
 | Campo | Valor |
 |-------|-------|
 | App ID | 1694506861827055 |
-| App Secret | 6ebda55a83013c7ef49ef4ef5a8341c5 |
+| App Secret | <META_APP_SECRET de .env> |
 | Phone Number ID | 1287367854450926 |
 | WABA ID | 1024953670257131 |
 | Page ID (Messenger) | 1344793823853080 |

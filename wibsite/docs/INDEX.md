@@ -5,6 +5,18 @@
 
 ---
 
+## ⭐ Estructura Consolidada Principal (3 capas — punto de entrada recomendado)
+
+> Organización maestra de la documentación: **contexto** (QUÉ/POR QUÉ), **técnica** (CÓMO/ESTADO) y **mapa RAG** (seguimiento rápido de funcionalidades core).
+
+| Capa | Carpeta | Contenido | Empieza por |
+|---|---|---|---|
+| 📘 **Documentación Contextual** | `docs/contextual/` | 7 bloques: infraestructura, objetivos de módulos, abstracción CRM Twenty+Frappe/ERPNext, lógica de vendedor, plantillas para negocios, lógica de negocio e información, consolidación negocio↔infra | [`contextual/00-INDICE-CONTEXTUAL.md`](contextual/00-INDICE-CONTEXTUAL.md) |
+| 🔧 **Documentación Técnica** | `docs/tecnica/` | 6 bloques: arquitectura/infraestructura, funciones e implementación, objetivos técnicos y fases (OT-01…12), seguimiento de cambios, guía de contexto RAG, **plan de fases de implementación (F-01…F-56)** | [`tecnica/00-INDICE-TECNICO.md`](tecnica/00-INDICE-TECNICO.md) → fase actual: [`tecnica/TEC-06-FASES-IMPLEMENTACION.md`](tecnica/TEC-06-FASES-IMPLEMENTACION.md) |
+| 🗂️ **Archivo Maestro RAG** | `docs/maestro/` | Todas las funcionalidades core (G1-G18, 68 entradas) con path, funciones, estado y referencias — numeración RAG-GX-YY | [`maestro/MAESTRO-FUNCIONALIDADES-CORE.md`](maestro/MAESTRO-FUNCIONALIDADES-CORE.md) |
+
+---
+
 ## 0. Estado Vivo del Proyecto
 - `Avances/ESTADO-GENERAL.md` — Visión general con progreso, barras por área y próximos pasos
 - `Avances/LOGROS.md` — Todos los logros completados por dominio
@@ -46,8 +58,15 @@
 
 ## 6. Pruebas y Verificaciones
 - `docs/PRUEBAS-Y-VERIFICACIONES.md` — Checklist de verificación (infra, servicios, flujos e2e)
+- `docs/TESTING-INDEX.md` — Estrategia de testing por capas, comandos y seguimiento
+- `docs/ESTANDAR-TESTING-MONITOREO.md` — Estándar operativo de pruebas, alertas, monitoreo y control
+- `docs/04_TEST_AND_VALIDATION_STANDARD.md` — 🆕 Estándar de la suite **TeVS** (JSON Schema, exit codes 0-5)
+- `docs/DIAGRAMA-MONITOREO-CONTROL.md` — Diagrama integral de pruebas, monitoreo, seguimiento y gestión
 - `docs/TAREAS-FUNCIONALES.md` — Objetivos funcionales del sistema con estado
 - `docs/TAREAS-INTERFAZ.md` — Validación de flujos por pantalla
+- `docs/AUDIT-CROSSCHECK.md` · `docs/AUDIT-TEST-MONITORING-STATUS.md` — Auditoría cruzada código↔docs↔infra
+- `docs/DIAGNOSTICO-FINAL.md` · `docs/ANALISIS-CRITICO-FINAL.md` · `docs/GAPS-MINIFASES.md` — Diagnósticos finales y 45 micro-gaps
+- `docs/CIERRE-FINAL-TWILIO.md` — Cierre del puente Twilio (F-03…F-06)
 
 ## 7. Manuales
 - `docs/MANUAL-TECNICO.md` — Manual técnico por plataforma (endpoints, pruebas, flujos)

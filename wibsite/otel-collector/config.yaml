@@ -1,0 +1,62 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: "production"
+        action: upsert
+      - key: platform.name
+        value: "wibsite"
+        action: upsert
+
+exporters:
+  debug:
+    verbosity: basic
+
+  # Elasticsearch exporter (native - for self-managed ES 9.x)
+  elasticsearch:
+    endpoints:
+      - http://elasticsearch:9200
+    user: elastic
+    password: wibsite_elastic_pass_2026
+    logs_index: logs-doags.otel-production
+    traces_index: traces-doags.otel-production
+    metrics_index: metrics-doags.otel-production
+    flush:
+      interval: 5s
+    retry:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_retries: 3
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, elasticsearch]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, elasticsearch]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [debug, elasticsearch]

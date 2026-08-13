@@ -55,7 +55,7 @@ graph TD
 ```
 
 ## Stack
-- **Orquestación**: Docker Compose (11 servicios)
+- **Orquestación**: Docker Compose (20 servicios, incl. Elasticsearch/Kibana/OTel Collector/MinIO)
 - **Base de datos**: PostgreSQL 15 con pgvector
 - **Cache/Queue**: Redis 7 Alpine
 - **Vector Store**: Weaviate 1.26.1 + Transformers (sentence-transformers-multi-qa-MiniLM-L6-cos-v1)

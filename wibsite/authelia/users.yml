@@ -1,7 +1,8 @@
 users:
   admin@wibsite.com:
     displayname: "Admin Wibsite"
-    password: "$argon2id$v=19$m=65536,t=3,p=4$ylepcXL8EiBxXrK6N1DsMQ$k4Fw7a9/JnkCrKiGEwhK5y/zBYulmzPMFq+dz8sNW9Q"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$/AxYPoW9hCz6dzIDQfXMmg$ujOCDbZAkmy6vZ+SefdUfJEHbfsPm00O/BlT/GljVB0"
     email: admin@wibsite.com
     groups:
-      - admins
+      - admin
+      - wibsite
