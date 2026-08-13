@@ -17,6 +17,7 @@ const { conversationStateFor } = require('./stageMap');
 const { sanitizeOutput } = require('./guards/confidentiality');
 const autonomy = require('./guards/autonomy');
 const { logEvent } = require('../auditLogger');
+const { startSpan, endSpan } = require('../otelBridge');
 const { projectCommercial } = commercialState;
 
 const OBJECTION_READY_STAGES = ['propuesta', 'profundizacion', 'objeciones', 'cierre'];
@@ -125,6 +126,15 @@ async function executeCommercialGraph(input) {
   const conversationId = input.conversationId || 'default';
   const template = input.template || {};
   const clientConfig = input.clientConfig || {};
+  const span = startSpan({
+    name: 'agent.graph.run',
+    kind: 1,
+    attributes: {
+      'wibsite.tenant_id': tenantId,
+      'wibsite.conversation_id': conversationId,
+      'wibsite.template': template.meta?.name || null,
+    },
+  });
 
   const restored = await checkpointer.restoreGraphState({ tenantId, conversationId });
   const startState = {
@@ -203,6 +213,17 @@ async function executeCommercialGraph(input) {
     });
     previousStage = step.node;
   }
+
+  endSpan(span, {
+    status: 'OK',
+    attributes: {
+      'wibsite.final_stage': stage,
+      'wibsite.commercial_state': commercial.state,
+      'wibsite.autonomy_zone': stateSnapshot._autonomyZone || 'green',
+      'wibsite.score': stateSnapshot._score ?? null,
+      'wibsite.next_action': final.next_action || null,
+    },
+  });
 
   return {
     response: responseText,

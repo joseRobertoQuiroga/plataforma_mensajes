@@ -569,6 +569,8 @@ services:
       service: otel-collector
     command:
       - "--config=/etc/otelcol-contrib/config.yaml"
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-wibsite_elastic_pass_2026}
     volumes:
       - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:

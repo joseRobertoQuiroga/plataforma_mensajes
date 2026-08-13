@@ -25,6 +25,7 @@ const { initRedis, createConversationState, getConversationState, transitionStat
 const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
 const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
+const { tracingMiddleware } = require('./services/otelBridge');
 
 // ─── GlitchTip / Sentry Error Tracking ──────────────
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
@@ -61,6 +62,9 @@ app.use((req, res, next) => {
   res.setHeader('x-request-id', req.id);
   next();
 });
+
+// ─── OpenTelemetry tracing (span raíz por request, traza E2E en Elastic) ─
+app.use(tracingMiddleware);
 
 // ─── Security Middleware ──────────────────────────────
 app.use(authMiddleware);
@@ -2914,6 +2918,58 @@ app.get('/api/internal/audit-trail/:requestId', async (req, res) => {
       res.json({ requestId, timeline: [], incidents: [], found: false, note: 'DB not available' });
     }
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/logs/trace/:conversationId — traza E2E por conversación (G-24/F-46)
+// Devuelve quién → qué → cómo → módulo → proceso de cada evento de la conversación.
+app.get('/api/logs/trace/:conversationId', async (req, res) => {
+  const { conversationId } = req.params;
+  try {
+    let rows = [];
+    if (pool) {
+      rows = (await pool.query(
+        `SELECT level, tenant_id, request_id, conversation_id, trace_id, span_id,
+                event_type, message, timestamp AS created_at, data
+         FROM audit_logs WHERE conversation_id = $1 ORDER BY timestamp ASC`,
+        [conversationId]
+      ).catch(() => ({ rows: [] }))).rows;
+    }
+    if (rows.length === 0) {
+      res.status(404).json({ conversationId, trace: [], found: false, note: 'No audit events yet for this conversation' });
+      return;
+    }
+    await logEvent('e2e_trace', {
+      level: 'info',
+      message: `Traza E2E consultada (${rows.length} eventos)`,
+      tenantId: req.tenantId,
+      conversationId,
+      module: 'observability',
+      flow: 'logs.trace',
+      action: 'trace.byConversation',
+      data: { event_count: rows.length, trace_ids: [...new Set(rows.map(r => r.trace_id).filter(Boolean))] },
+    }, req);
+    res.json({
+      conversationId,
+      trace: rows.map(r => ({
+        at: r.created_at,
+        quien: r.tenant_id || r.request_id,
+        queso: r.event_type,
+        como: r.span_id,
+        modulo: r.module,
+        proceso: r.flow,
+        message: r.message,
+        request_id: r.request_id,
+        trace_id: r.trace_id,
+        span_id: r.span_id,
+        event_type: r.event_type,
+        level: r.level,
+        data: r.data,
+      })),
+      found: true,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════

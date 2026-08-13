@@ -1,6 +1,7 @@
 'use strict';
 const axios = require('axios');
 const { logEvent } = require('../auditLogger');
+const { startSpan, endSpan } = require('../otelBridge');
 
 const DIFY_API_URL = process.env.DIFY_API_URL || 'http://dify-api:5001/v1/workflows/run';
 const DIFY_API_KEY = process.env.DIFY_API_KEY || '';
@@ -55,6 +56,11 @@ function parseFinalResult(raw) {
 
 async function callDify(message, context) {
   const started = Date.now();
+  const span = startSpan({
+    name: 'llm.completion',
+    kind: 3,
+    attributes: { 'gen_ai.provider': 'dify', 'gen_ai.request.model': 'dify-workflow-lead-classifier' },
+  });
   const body = {
     inputs: {
       message,
@@ -73,6 +79,23 @@ async function callDify(message, context) {
   const result = parseFinalResult(payload?.outputs?.final_result);
   const latencyMs = Date.now() - started;
 
+  const usage = payload?.usage || null;
+  const tokens = usage && {
+    total: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
+    input: usage.prompt_tokens ?? usage.input_tokens ?? null,
+    output: usage.completion_tokens ?? usage.output_tokens ?? null,
+  };
+  endSpan(span, {
+    status: 'OK',
+    attributes: {
+      'gen_ai.usage.input_tokens': tokens?.input ?? null,
+      'gen_ai.usage.output_tokens': tokens?.output ?? null,
+      'llm.usage.total_tokens': tokens?.total ?? null,
+      'wibsite.intent': result?.intent || null,
+      'wibsite.score': typeof result?.score === 'number' ? result.score : null,
+    },
+  });
+
   await logEvent('api_call', {
     level: 'info',
     message: `Dify classify ok (${latencyMs}ms)`,
@@ -83,7 +106,7 @@ async function callDify(message, context) {
     action: 'dify.workflows.run',
     dependency: 'dify-llm',
     latencyMs,
-    data: { mode: 'primary', provider: 'dify', tokens: payload?.usage || null, intent: result?.intent || null, score: result?.score ?? null },
+    data: { mode: 'primary', provider: 'dify', tokens: usage, intent: result?.intent || null, score: result?.score ?? null },
   });
   registerSuccess();
   return { result, mode: 'primary', latencyMs };
@@ -105,6 +128,11 @@ function normalizeClassification(result, message) {
 
 async function callOpenRouter(message, context) {
   const started = Date.now();
+  const span = startSpan({
+    name: 'llm.completion',
+    kind: 3,
+    attributes: { 'gen_ai.provider': 'openrouter', 'gen_ai.request.model': OPENROUTER_MODEL },
+  });
   const systemPrompt =
     'Eres un clasificador de intencion de ventas B2B. Responde SOLO con JSON valido: ' +
     '{"intent": "venta"|"soporte", "score": <numero 0-100>, "confidence": <numero 0-1>}. ' +
@@ -124,6 +152,17 @@ async function callOpenRouter(message, context) {
   const latencyMs = Date.now() - started;
   const content = resp.data?.choices?.[0]?.message?.content || '';
   const parsed = parseFinalResult(content);
+  const usage = resp.data?.usage || null;
+  endSpan(span, {
+    status: 'OK',
+    attributes: {
+      'gen_ai.usage.input_tokens': usage?.prompt_tokens ?? null,
+      'gen_ai.usage.output_tokens': usage?.completion_tokens ?? null,
+      'llm.usage.total_tokens': usage?.total_tokens ?? null,
+      'wibsite.intent': parsed?.intent || null,
+      'wibsite.score': typeof parsed?.score === 'number' ? parsed.score : null,
+    },
+  });
   await logEvent('api_call', {
     level: 'info',
     message: `OpenRouter classify fallback ok (${latencyMs}ms)`,

@@ -17,18 +17,9 @@ try {
     }
     
     # Query traces looking for confidence scores lower than the threshold
-    $query = @{
-        query = @{
-            bool = @{
-                must = @(
-                    @{ range = @{ "@timestamp" = @{ gte = "now-24h"; lte = "now" } } },
-                    @{ range = @{ "llm.metrics.confidence_score" = @{ lt = $minAllowedConfidence } } }
-                )
-            }
-        }
-    }
+    # Payload literal: ConvertTo-Json de PS 5.1 rompe hashtables con claves '@...'
+    $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"range":{"attributes.llm.metrics.confidence_score":{"lt":0.3}}}]}}}'
     
-    $payload = $query | ConvertTo-Json -Depth 5 -Compress
     $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_count" -Headers $esHeaders -Body $payload
     
     $badScoresFound = $esResponse.count

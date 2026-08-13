@@ -1,5 +1,24 @@
 # Wibsite Business — Historial de Cambios
 
+## [3.2.0] — 2026-08-12 (Oleada H: Trazabilidad E2E + Re-auditoría F-35)
+### Added
+- **Gate de trazabilidad E2E (F-46)**: `scripts/verify/e2e-trace.js` — inyecta mensaje con marker único, verifica 10 aserciones en `audit_logs` (PG) y en Elastic (OTel): cadena `HTTP POST /api/agent/chat → agent.graph.run → llm.completion`, tokens de uso (`gen_ai.usage.input_tokens/output_tokens`, `llm.usage.total_tokens`) e `wibsite.intent/score` sin pérdida entre saltos. 10/10 en 3 corridas consecutivas (exit 0). Consulta ES con polling (hasta 8 intentos) porque el elasticsearchexporter reintenta batches mezclados con spans ajenos (redis `PUBLISH` de otros servicios del stack).
+- **`helper-node/services/otelBridge.js`** (emisor OTLP/HTTP mínimo sin dependencias, spans por request/LLM/grafo correlacionados con auditLogger, flush 2s, buffer 200, degradación silenciosa sin collector).
+- **`scripts/audit-logs-trace-columns.sql`** (diagnóstico de columnas/RLS de `audit_logs`).
+
+### Changed
+- `helper-node/index.js`: `GET /api/logs/trace/:conversationId` — SQL corregido (`created_at` inexistente → `timestamp AS created_at`; el catch silencioso producía 404 falso) y timeline ahora incluye `request_id` + `span_id`.
+- `helper-node/services/auditLogger.js`: `createAuditMiddleware` registra `conversationId` (`req.body?.conversationId || req.params?.conversationId`).
+- **F-35 Re-auditoría seguridad**: `helper-node/middleware/auth.js` con comparación timing-safe (`crypto.timingSafeEqual` + length check); `nginx.conf` sin `x-api-key "test"` hardcodeada (autenticación del gateway por SSO Authelia); `otel-collector/config.yaml` con `${ELASTIC_PASSWORD}` (env var con fallback compose `wibsite_elastic_pass_2026`).
+- `helper-node/wibsite-store.json` excluido del repo en el commit de trazabilidad (PII — ver P0 purga histórica).
+
+### Verified
+- ✅ `e2e-trace.js`: 10/10 × 3 corridas consecutivas (01:50-01:52 UTC 13/08) — traza `HTTP → agent.graph.run → llm.completion` con tokens (95/20/115, 97/21/118) e intent/score intactos.
+- ✅ TeVS completo: 11/11 PASSED contra el helper final (post F-35/e2e fixes).
+- ✅ Auth: sin key 401, key mala 403, key real 200; gateway `/api/health` 200; `/api/campaigns` 403 sin sesión SSO Authelia (por diseño).
+- ✅ RLS `audit_logs` confirmado: política `tenant_isolation_audit_logs` forzada; `app_user` ve filas de su tenant; solo tenant `default` presente.
+- ⚠️ `flow.test.js` sigue roto (deuda P2) y el helper emite warning benigno "Invalid Sentry Dsn".
+
 ## [3.1.0] — 2026-08-12 (Oleada C: Motor Agéntico Ejecutable)
 ### Added
 - **F-14 Checkpointer de memoria profunda**: `conversationStore.js` con `saveCheckpoint/loadCheckpoint/deleteCheckpoint`, `appendMessage`, `updateConversationMetadata`, `onTransition` hooks (TTL 7d, MAX_MESSAGES 100). Nuevo `agentCore/checkpointer.js` (rollup topics/objeciones, persistencia opcional PG) + `scripts/conversation-summaries-schema.sql` (tabla `conversation_summaries` con UNIQUE tenant+conv y versión incremental).

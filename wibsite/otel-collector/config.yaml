@@ -34,7 +34,7 @@ exporters:
     endpoints:
       - http://elasticsearch:9200
     user: elastic
-    password: wibsite_elastic_pass_2026
+    password: ${ELASTIC_PASSWORD}
     logs_index: logs-doags.otel-production
     traces_index: traces-doags.otel-production
     metrics_index: metrics-doags.otel-production

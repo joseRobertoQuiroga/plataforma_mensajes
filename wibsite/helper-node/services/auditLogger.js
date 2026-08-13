@@ -6,6 +6,7 @@
  */
 
 const { sanitizeForLog, logger } = require('./piiFilter');
+const { getTraceContext } = require('./otelBridge');
 
 const EVENT_TYPES = [
   'security_alert', 'state_transition', 'api_call', 'error',
@@ -34,9 +35,12 @@ async function logEvent(eventType, data, req = null) {
     console.warn(`[AuditLogger] Unknown event type: ${eventType}`);
   }
 
+  const traceCtx = getTraceContext();
   const entry = {
     timestamp: new Date().toISOString(),
     level: data.level || LEVELS.info,
+    traceId: traceCtx?.traceId || data.traceId || null,
+    spanId: traceCtx?.spanId || data.spanId || null,
     tenantId: data.tenantId || req?.tenantId || req?.headers?.['x-tenant-id'] || 'default',
     requestId: data.requestId || req?.id || null,
     conversationId: data.conversationId || null,
@@ -66,11 +70,12 @@ async function logEvent(eventType, data, req = null) {
     try {
       await pool.query(
         `INSERT INTO audit_logs
-          (level, tenant_id, request_id, conversation_id, event_type, message, data)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          (level, tenant_id, request_id, conversation_id, trace_id, span_id, event_type, message, data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           entry.level, entry.tenantId, entry.requestId,
-          entry.conversationId, eventType, entry.message,
+          entry.conversationId, entry.traceId, entry.spanId,
+          eventType, entry.message,
           JSON.stringify(entry.data)
         ]
       );
@@ -145,6 +150,7 @@ function createAuditMiddleware(eventType) {
           latencyMs,
           requestId: req.id,
           tenantId: req.tenantId,
+          conversationId: req.body?.conversationId || req.params?.conversationId || null,
           module: null,
           flow: `${req.method} ${req.path}`,
           data: {

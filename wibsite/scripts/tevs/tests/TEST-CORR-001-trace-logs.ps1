@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $startedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $startTime = Get-Date
 
-$expectedField = "traceId"
+$expectedField = "trace_id"
 $actualFieldFound = $false
 $exitCode = 1
 $errorCode = $null
@@ -16,20 +16,11 @@ try {
         "Content-Type" = "application/json"
     }
     
-    # Check if recent traces have a traceId
-    $query = @{
-        query = @{
-            bool = @{
-                must = @(
-                    @{ range = @{ "@timestamp" = @{ gte = "now-1h"; lte = "now" } } },
-                    @{ exists = @{ field = "traceId" } }
-                )
-            }
-        }
-        size = 1
-    }
+    # Check if recent traces have a trace_id (formato OTel del ES exporter)
+    # Nota: payload literal — ConvertTo-Json de PS 5.1 serializa mal hashtables
+    # anidados bajo claves '@...' (bug conocido: "System.Collections.Hashtable").
+    $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"exists":{"field":"trace_id"}}]}},"size":1}'
     
-    $payload = $query | ConvertTo-Json -Depth 5 -Compress
     $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
     
     if ($esResponse.hits.total.value -gt 0) {
@@ -38,7 +29,7 @@ try {
     } else {
         $exitCode = 1
         $errorCode = "CORRELATION_MISSING"
-        $errorMessage = "No traces found with a valid '$expectedField' in the last hour."
+        $errorMessage = "No traces found with a valid '$expectedField' in the last 24h."
     }
 } catch {
     # If index is missing or query fails, handle gracefully

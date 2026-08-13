@@ -17,25 +17,10 @@ try {
     }
     
     # Query for any errors or exceptions in traces or logs in the last 30 minutes
-    # Using traces-doags.otel-* for now, looking for error status
-    $query = @{
-        query = @{
-            bool = @{
-                must = @(
-                    @{ range = @{ "@timestamp" = @{ gte = "now-30m"; lte = "now" } } }
-                )
-                should = @(
-                    @{ match = @{ "status.code" = "STATUS_CODE_ERROR" } },
-                    @{ match = @{ "log.level" = "error" } },
-                    @{ match = @{ "log.level" = "fatal" } }
-                )
-                minimum_should_match = 1
-            }
-        }
-    }
+    # Payload literal: ConvertTo-Json de PS 5.1 rompe hashtables con claves '@...'
+    $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-30m","lte":"now"}}}],"should":[{"match":{"status.code":"STATUS_CODE_ERROR"}},{"match":{"log.level":"error"}},{"match":{"log.level":"fatal"}}],"minimum_should_match":1}}}'
     
-    $payload = $query | ConvertTo-Json -Depth 5 -Compress
-    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-production-*,logs-doags.otel-production-*/_count" -Headers $esHeaders -Body $payload
+    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-production-*,logs-doags.otel-production-*/_count?ignore_unavailable=true" -Headers $esHeaders -Body $payload
     
     $actualErrors = $esResponse.count
     

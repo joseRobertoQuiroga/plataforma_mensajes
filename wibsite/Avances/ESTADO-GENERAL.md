@@ -12,7 +12,7 @@
 | **Propósito** | Plataforma de mensajería omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email) |
 | **Stack** | Chatwoot + Dify + n8n + Twenty CRM + Helper Node + PostgreSQL + Redis + Weaviate + Elastic Stack (Elasticsearch + Kibana + OTel Collector) + MinIO |
 | **Orquestación** | Docker Compose (20 servicios) |
-| **Estado General** | 🟡 **Fase 1 en progreso — 38/56 fases TEC-06 ✅** — Pendientes: cutover PG/tenant RLS, Frappe/ERP, F-35 re-auditoría, F-42 CI gates, F-46 e2e-trace, load test, SaaS/piloto |
+| **Estado General** | 🟡 **Fase 1 en progreso — 40/56 fases TEC-06 ✅** — Pendientes: cutover PG/tenant RLS, Frappe/ERP, F-42 CI gates, load test, SaaS/piloto |
 | **Última actualización** | 2026-08-12 |
 | **Helper Node** | v2.1.1 según `package.json` (docs previas citaban v2.2.0) — ~108 rutas, 149 tests |
 
@@ -36,7 +36,7 @@ Audit Logging           ██████████████████�
 Portal Shell            ████████████████████ 100%  ✅  9 módulos, SSO, postMessage
 CRM Metodológico        ████████████████████ 100%  ✅  Script SPICED/MEDDIC 13 campos
 Verificación            ████████████████████ 100%  ✅  verify-fase.sh + contract-tests.js + TeVS (11 tests) + 149 tests Jest (17 suites)
-Observabilidad          ████████████████████ 100%  ✅  Elasticsearch + Kibana + otel-collector (═ config; runtime pendiente de arranque)
+Observabilidad          ████████████████████ 100%  ✅  Elasticsearch + Kibana + otel-collector activo (spans OTel → ES, trazas helper verificadas)
 Dify (IA)               ████████████████████ 100%  ✅
 Twenty CRM              ████████████████████ 100%  ✅
 n8n Workflows           ██████████████████░░  90%  ⚠️  3 workflows activos en BD; falta toggle UI y credenciales
@@ -50,7 +50,7 @@ Flujo Campaign Real     ██████████████████�
 Tests Unitarios         ████████████████████ 100%  ✅  149 tests (17 suites)
 Tests Contract          ████████████████████ 100%  ✅  15 tests entre módulos
 Pruebas Completas       ████████████████████ 100%  ✅  174 tests documentados; auditoría 78 checks (03/08)
-TeVS (Elastic)          ████████░░░░░░░░░░░░  40%  ⚠️  Suite creada (11 tests + runner), nunca ejecutada
+TeVS (Elastic)          ████████████████████ 100%  ✅  Suite 11 tests + runner — 11/11 PASSED (12/08; re-corrida 13/08 con helper final)
 ```
 
 ---

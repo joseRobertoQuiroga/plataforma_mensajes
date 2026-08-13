@@ -21,7 +21,12 @@ function authMiddleware(req, res, next) {
 
   const apiKey = req.headers['x-api-key'];
   if (!apiKey) return res.status(401).json({ error: 'API key required. Use X-API-Key header.' });
-  if (HELPER_API_KEY && apiKey !== HELPER_API_KEY) return res.status(403).json({ error: 'Invalid API key' });
+  if (HELPER_API_KEY) {
+    const a = Buffer.from(String(apiKey));
+    const b = Buffer.from(HELPER_API_KEY);
+    const valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!valid) return res.status(403).json({ error: 'Invalid API key' });
+  }
   next();
 }
 

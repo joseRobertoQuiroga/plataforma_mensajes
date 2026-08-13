@@ -16,25 +16,10 @@ try {
         "Content-Type" = "application/json"
     }
     
-    # Query to sum tokens used in the last hour
-    $query = @{
-        query = @{
-            bool = @{
-                must = @(
-                    @{ range = @{ "@timestamp" = @{ gte = "now-1h"; lte = "now" } } },
-                    @{ exists = @{ field = "llm.usage.total_tokens" } }
-                )
-            }
-        }
-        aggs = @{
-            total_tokens = @{
-                sum = @{ field = "llm.usage.total_tokens" }
-            }
-        }
-        size = 0
-    }
+    # Query to sum tokens used in the last 24h (campo real: attributes.llm.usage.total_tokens)
+    # Payload literal: ConvertTo-Json de PS 5.1 rompe hashtables con claves '@...'
+    $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"exists":{"field":"attributes.llm.usage.total_tokens"}}]}},"aggs":{"total_tokens":{"sum":{"field":"attributes.llm.usage.total_tokens"}}},"size":0}'
     
-    $payload = $query | ConvertTo-Json -Depth 5 -Compress
     $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
     
     $actualTokens = $esResponse.aggregations.total_tokens.value

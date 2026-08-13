@@ -726,6 +726,8 @@ J. SaaS y despliegue (F-52…56)          ← requiere I + G + F
 | Logs | `e2e_trace` con saltos y veredicto |
 | Gate | Pre-prod: gate de Oleada H. Prod: ejecución diaria programada |
 
+**Estado (2026-08-12):** gate `scripts/verify/e2e-trace.js` implementado y en verde (10/10 en 3 corridas consecutivas, exit 0; usa marker único, tenant `default` + `x-tenant-id`, verificación en PG `audit_logs` y ES OTel con polling por el reintento del elasticsearchexporter cuando un batch mezclado con spans ajenos —redis `PUBLISH` de otros servicios— se rechaza temporalmente). Traza verificada en vivo: `HTTP POST /api/agent/chat → agent.graph.run → llm.completion` con tokens (`gen_ai.usage.input_tokens/output_tokens`, `llm.usage.total_tokens`) e `wibsite.intent/score` sin pérdida. TeVS completo 11/11 con el helper final.
+
 ---
 
 ## 11. Oleada I — Validación de agente, datos y plantillas (F-47…F-51)
@@ -920,18 +922,18 @@ J. SaaS y despliegue (F-52…56)          ← requiere I + G + F
 | F-32 | Rotación keys + roles PG | F | F-09 | ⬜ Documented | — |
 | F-33 | PII filter + audit logger | F | — | ✅ piiFilter + auditLogger | 2026-07-26 |
 | F-34 | Backups + restore + archivo | F | F-09 | ✅ backup.sh created | 2026-07-26 |
-| F-35 | Re-auditoría seguridad | F | F-31,32,33 | ⬜ Pending execution | — |
+| F-35 | Re-auditoría seguridad | F | F-31,32,33 | ✅ Timing-safe API key (crypto.timingSafeEqual), nginx sin `x-api-key` hardcodeada, password ES vía `${ELASTIC_PASSWORD}` | 2026-08-12 |
 | F-36 | Elastic Stack + OTel (reemplaza P+G) | G | F-01 | ✅ Elasticsearch 9.4.2 + Kibana + otel-collector en compose (Prometheus/Grafana retirados) | 2026-08-12 |
 | F-37 | Métricas negocio + alertas | G | F-36 | ✅ prom-client middleware | 2026-07-26 |
-| F-38 | OTel export a ES (sustituye GlitchTip) | G | F-01 | ✅ otel-collector/config.yaml (⚠️ password hardcodeada — gap F-35) | 2026-08-12 |
+| F-38 | OTel export a ES (sustituye GlitchTip) | G | F-01 | ✅ otel-collector/config.yaml (password vía env `${ELASTIC_PASSWORD}`) | 2026-08-12 |
 | F-39 | MinIO | G | F-01 | ✅ docker-compose + nginx | 2026-07-26 |
 | F-40 | Logs JSON unificados | G | F-33 | ✅ auditLogger + pino | 2026-07-26 |
 | F-41 | Verificación unificada módulos | H | F-05,36 | ✅ verify-fase.sh | 2026-07-26 |
-| F-42 | CI con gates | H | F-41 | ⬜ contract-tests.js ready | — |
+| F-42 | CI con gates | H | F-41 | ⬜ contract-tests.js ready — URLs internas por corregir (tevs-validation.yml, .gitlab-ci.yml) | — |
 | F-43 | Portal shell UX-1 | H | F-01 | ✅ Portal SPA (`hub/control-center.html`, 72 KB servido en `/hub/`) + nginx route | 2026-07-26 |
 | F-44 | postMessage + lead panel | H | F-43 | ✅ postMessage in portal | 2026-07-26 |
 | F-45 | Búsqueda + notificaciones | H | F-43 | ⬜ Design ready | — |
-| F-46 | Trazabilidad E2E sin pérdida | H | F-40,41,44 | ⬜ e2e-trace in PRUEBAS | — |
+| F-46 | Trazabilidad E2E sin pérdida | H | F-40,41,44 | ✅ `scripts/verify/e2e-trace.js` gate 10/10 (3 corridas consecutivas) + TeVS 11/11 | 2026-08-12 |
 | F-47 | Suite comportamiento agente | I | F-19…24 | ⬜ Templates behavior defined | — |
 | F-48 | Validación datos/contexto | I | F-46 | ✅ data-integrity script | 2026-07-26 |
 | F-49 | Plantillas contexto cerrado | I | F-15,17 | ✅ forbidden_topics config | 2026-07-26 |

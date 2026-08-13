@@ -17,26 +17,11 @@ try {
     }
     
     # Query for any Dify or LLM traces that contain token usage metadata
-    # We simulate this by checking if ANY trace in the last 24h has some llm token field.
-    # In a real environment, you'd filter specifically by service.name = dify or llm-analyst
-    $query = @{
-        query = @{
-            bool = @{
-                must = @(
-                    @{ range = @{ "@timestamp" = @{ gte = "now-24h"; lte = "now" } } }
-                )
-                should = @(
-                    @{ exists = @{ field = "llm.usage.total_tokens" } },
-                    @{ exists = @{ field = "attributes.llm.token_count" } },
-                    @{ exists = @{ field = "metadata.tokens" } }
-                )
-                minimum_should_match = 1
-            }
-        }
-        size = 1
-    }
+    # Campos reales del ES exporter (atributos OTel bajo attributes.*):
+    #   attributes.llm.usage.total_tokens, attributes.gen_ai.usage.input_tokens
+    # Payload literal: ConvertTo-Json de PS 5.1 rompe hashtables con claves '@...'
+    $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}}],"should":[{"exists":{"field":"attributes.llm.usage.total_tokens"}},{"exists":{"field":"attributes.gen_ai.usage.input_tokens"}},{"exists":{"field":"llm.usage.total_tokens"}}],"minimum_should_match":1}},"size":1}'
     
-    $payload = $query | ConvertTo-Json -Depth 10 -Compress
     $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_search?ignore_unavailable=true" -Headers $esHeaders -Body $payload
     
     if ($esResponse.hits.total.value -gt 0) {
@@ -45,7 +30,7 @@ try {
     } else {
         $exitCode = 1
         $errorCode = "MISSING_AGENT_TELEMETRY"
-        $errorMessage = "No LLM trace found with token usage metadata (e.g. '$expectedField') in the last 24h. Agents might be operating without financial/performance observability."
+        $errorMessage = "No LLM trace found with token usage metadata (e.g. 'attributes.llm.usage.total_tokens') in the last 24h. Agents might be operating without financial/performance observability."
     }
 } catch {
     $exitCode = 1
