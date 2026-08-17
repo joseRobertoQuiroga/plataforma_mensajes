@@ -1,4 +1,4 @@
-# TEC-02 — Funciones e Implementación (Estado Real por Grupo Funcional)
+﻿# TEC-02 — Funciones e Implementación (Estado Real por Grupo Funcional)
 
 > **Versión:** 1.0 | **Fecha:** Julio 2026 | **Tipo:** Técnica (CÓMO/ESTADO)
 > **Fuentes:** `helper-node/index.js` (2138 líneas, v2.2.0), `helper-node/public/index.html`, `n8n/workflows/*.json`, `dify/workflows/*.yml`, `Avances/LOGROS.md`, `docs/TAREAS-FUNCIONALES.md`, `docs/MEMORY.md` (ADRs).

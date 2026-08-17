@@ -1,4 +1,4 @@
-# Wibsite Business — Batería Completa de Pruebas y Verificación
+﻿# Wibsite Business — Batería Completa de Pruebas y Verificación
 
 > **Versión:** 1.0 | **Fecha:** Julio 2026 | **Propósito:** Suite unificada de pruebas de código, tensión y funcionamiento para validar la plataforma completa antes de producción.
 > **Estado:** ✅ Implementado · ⬜ Pendiente de ejecución (requiere contenedores activos)
@@ -7,7 +7,7 @@
 
 ## Índice
 
-1. [Pruebas Unitarias (112 tests)](#1-pruebas-unitarias)
+1. [Pruebas Unitarias (176 tests)](#1-pruebas-unitarias)
 2. [Pruebas de Contratos entre Módulos](#2-pruebas-de-contratos)
 3. [Pruebas de API Endpoints](#3-pruebas-de-api)
 4. [Pruebas de Integración Helper → Servicios](#4-pruebas-de-integración)
@@ -412,7 +412,7 @@ echo "✅ Contract tests"
 ### 10.2 Gate Pre-Producción
 | # | Check | Script | Obligatorio |
 |---|-------|--------|-------------|
-| 167 | Tests unitarios | `npm test` (112 tests) | ✅ Sí |
+| 167 | Tests unitarios | `npm test` (176 tests · 22 suites) | ✅ Sí |
 | 168 | Contract tests | `node scripts/verify/contract-tests.js` | ✅ Sí |
 | 169 | Orphan check | `scripts/db/orphan-check.sql` | ✅ Sí |
 | 170 | Data integrity | `node scripts/verify/data-integrity.js` | ✅ Sí |
@@ -455,7 +455,7 @@ echo "✅ Contract tests"
 ## Instrucciones de Ejecución
 
 ```bash
-# 1. Tests unitarios (112 tests automatizados)
+# 1. Tests unitarios (176 tests automatizados · 22 suites)
 cd helper-node && npm test
 
 # 2. Contract tests

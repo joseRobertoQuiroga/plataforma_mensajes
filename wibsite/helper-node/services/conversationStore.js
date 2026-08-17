@@ -11,6 +11,7 @@ const MAX_RETRY = 3;
 const postTransitionHooks = new Set();
 
 async function initRedis() {
+  if (redisClient) return;
   try {
     const Redis = require('ioredis');
     redisClient = new Redis(REDIS_URL, {
@@ -22,6 +23,24 @@ async function initRedis() {
   } catch (e) {
     redisAvailable = false;
     console.warn('Redis unavailable, using in-memory store:', e.message);
+  }
+}
+
+async function closeRedis() {
+  if (redisClient) {
+    try { await redisClient.disconnect(); } catch (e) { /* ignore */ }
+    redisClient = null;
+  }
+  redisAvailable = false;
+}
+
+async function checkRedisHealth() {
+  if (!redisClient || !redisAvailable) return { status: 'fallback', mode: 'in-memory' };
+  try {
+    await redisClient.ping();
+    return { status: 'available', mode: 'redis' };
+  } catch (e) {
+    return { status: 'fallback', mode: 'in-memory' };
   }
 }
 
@@ -270,7 +289,7 @@ function onTransition(fn) {
 }
 
 module.exports = {
-  initRedis, createConversationState, getConversationState, transitionState,
+  initRedis, closeRedis, checkRedisHealth, createConversationState, getConversationState, transitionState,
   incrementMessageCount, appendMessage, deleteConversationState, listActiveConversations,
   updateConversationMetadata,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint, onTransition,

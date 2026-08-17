@@ -47,10 +47,43 @@
     "red": { "can_quote": true, "can_commit": true, "can_share_pricing": true, "description": "Solo humano puede cotizar y cerrar" }
   },
   "products": [
-    { "name": "Integracion de plataformas", "description": "Conexion de sistemas via API", "min_price": 5000, "max_price": 15000 },
-    { "name": "Modulo nuevo", "description": "Desarrollo de modulo especifico", "min_price": 8000, "max_price": 25000 },
-    { "name": "Desarrollo a medida", "description": "Soluciones personalizadas", "min_price": 15000, "max_price": 50000 },
-    { "name": "Auditoria y consultoria", "description": "Revision de arquitectura y procesos", "min_price": 3000, "max_price": 10000 }
+    { "name": "Integracion de plataformas", "description": "Conexion de sistemas via API", "min_price": 5000, "max_price": 15000, "typical_time": "2-6 semanas",
+      "questionnaire": [
+        { "field": "systems", "question": "¿Qué sistemas o plataformas necesitas conectar?", "options": { "crm": { "f": 1.1, "label": "CRM" }, "erp": { "f": 1.2, "label": "ERP" }, "whatsapp": { "f": 1.0, "label": "WhatsApp" }, "pagos": { "f": 1.2, "label": "Pasarela de pagos" } } },
+        { "field": "volume", "question": "¿Cuántas operaciones/transacciones diarias aproximadas manejaría la integración?", "options": { "pocas": { "f": 0.9, "label": "Menos de 100" }, "medias": { "f": 1.1, "label": "Cientos" }, "muchas": { "f": 1.4, "label": "Miles" } } }
+      ] },
+    { "name": "Modulo nuevo", "description": "Desarrollo de modulo especifico", "min_price": 8000, "max_price": 25000, "typical_time": "3-8 semanas",
+      "questionnaire": [
+        { "field": "module_type", "question": "¿Qué tipo de módulo necesitas desarrollar?", "options": { "reportes": { "f": 0.8, "label": "Reportes/analítica" }, "gestion": { "f": 1.0, "label": "Gestión interna" }, "clientes": { "f": 1.2, "label": "Portal de clientes" } } },
+        { "field": "users", "question": "¿Cuántos usuarios usarán el módulo?", "options": { "pocos": { "f": 0.9, "label": "Menos de 10" }, "equipo": { "f": 1.0, "label": "10-50" }, "muchos": { "f": 1.3, "label": "Más de 50" } } }
+      ] },
+    { "name": "Desarrollo a medida", "description": "Soluciones personalizadas", "min_price": 15000, "max_price": 50000, "typical_time": "2-4 meses",
+      "questionnaire": [
+        { "field": "scope", "question": "¿Qué tan amplio es el alcance del proyecto?", "options": { "mvp": { "f": 0.7, "label": "MVP para validar" }, "producto": { "f": 1.0, "label": "Producto completo" }, "enterprise": { "f": 1.6, "label": "Nivel enterprise" } } },
+        { "field": "integrations", "question": "¿Necesita conectarse con sistemas externos (pagos, CRM, ERPs)?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.3, "label": "Sí" } } }
+      ] },
+    { "name": "Auditoria y consultoria", "description": "Revision de arquitectura y procesos", "min_price": 3000, "max_price": 10000, "typical_time": "1-3 semanas",
+      "questionnaire": [
+        { "field": "audit_type", "question": "¿Qué necesitas auditar?", "options": { "codigo": { "f": 1.0, "label": "Código/arquitectura" }, "seguridad": { "f": 1.3, "label": "Seguridad" }, "procesos": { "f": 0.9, "label": "Procesos" } } }
+      ] },
+    { "name": "Desarrollo web", "description": "Landings, tiendas en linea y paneles de gestion", "min_price": 800, "max_price": 6000, "typical_time": "2-6 semanas",
+      "questionnaire": [
+        { "field": "web_type", "question": "¿Buscas una landing, una tienda en línea o un panel de gestión?", "options": { "landing": { "f": 0.5, "label": "Landing" }, "tienda": { "f": 1.4, "label": "Tienda en línea" }, "panel": { "f": 1.0, "label": "Panel de gestión" } } },
+        { "field": "payments", "question": "¿Necesitas pasarela de pagos integrada?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.3, "label": "Sí" } } }
+      ] },
+    { "name": "Desarrollo movil", "description": "Aplicaciones iOS/Android", "min_price": 5000, "max_price": 20000, "typical_time": "1-3 meses",
+      "questionnaire": [
+        { "field": "platform", "question": "¿Para qué plataformas necesitas la app?", "options": { "android": { "f": 0.8, "label": "Solo Android" }, "ios": { "f": 0.8, "label": "Solo iOS" }, "ambas": { "f": 1.5, "label": "Android + iOS" } } },
+        { "field": "backend", "question": "¿La app necesita backend propio (usuarios, datos, notificaciones)?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.4, "label": "Sí" } } }
+      ] },
+    { "name": "Full stack", "description": "Desarrollo web + movil + backend completo", "min_price": 10000, "max_price": 40000, "typical_time": "2-5 meses",
+      "questionnaire": [
+        { "field": "stack", "question": "¿Qué capas necesita el proyecto?", "options": { "web": { "f": 0.7, "label": "Solo web+backend" }, "movil": { "f": 0.9, "label": "Móvil+backend" }, "todo": { "f": 1.5, "label": "Web + móvil + backend" } } }
+      ] },
+    { "name": "Plataformas", "description": "Sistemas multi-usuario con panel y APIs", "min_price": 20000, "max_price": 60000, "typical_time": "3-6 meses",
+      "questionnaire": [
+        { "field": "users", "question": "¿Cuántos usuarios concurrentes esperas?", "options": { "pocos": { "f": 0.8, "label": "Menos de 100" }, "cientos": { "f": 1.0, "label": "Cientos" }, "miles": { "f": 1.4, "label": "Miles" } } }
+      ] }
   ],
   "industry_knowledge": [
     "Integracion de CRMs y ERPs",

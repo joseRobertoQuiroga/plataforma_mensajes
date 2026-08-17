@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 
@@ -21,7 +22,7 @@ const pgStore = require('./services/pgStore');
 const { buildLeadProfile } = require('./services/leadProfile');
 const { getAgentConfig, updateAgentConfig, buildSystemPrompt } = require('./services/agentConfig');
 const { addDocument, queryKnowledgeBase, deleteDocument, listDocuments, checkWeaviateHealth, addInMemoryDocument, queryInMemoryKB } = require('./services/ragEngine');
-const { initRedis, createConversationState, getConversationState, transitionState, incrementMessageCount, deleteConversationState, listActiveConversations, isValidTransition, CONVERSATION_STATES, STATE_LABELS } = require('./services/conversationStore');
+const { initRedis, closeRedis, checkRedisHealth, createConversationState, getConversationState, transitionState, incrementMessageCount, deleteConversationState, listActiveConversations, isValidTransition, CONVERSATION_STATES, STATE_LABELS } = require('./services/conversationStore');
 const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
 const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
@@ -177,9 +178,25 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
+// ─── KB documents: carga de la base de conocimiento en el arranque (RAG R2) ─
+function loadKbFromDisk() {
+  const kbDir = path.join(__dirname, 'kb-documents');
+  try {
+    if (!fs.existsSync(kbDir)) return;
+    const files = fs.readdirSync(kbDir).filter(f => f.endsWith('.txt') || f.endsWith('.md'));
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(kbDir, file), 'utf-8').trim();
+        if (content) addInMemoryDocument('default', file.replace(/\.(txt|md)$/i, ''), content, file);
+      } catch (e) { console.warn(`  KB file ${file} error:`, e.message); }
+    }
+    console.log(`  RAG KB: ${files.length} documento(s) cargado(s) en memoria`);
+  } catch (e) { /* KB opcional */ }
+}
+loadKbFromDisk();
+
 // ─── Initialize services after DB ──────────────────
-initRedis().then(() => console.log('  Conversation store: Redis/In-Memory ready'))
-  .catch(e => {
+initRedis().then(() => console.log('  Conversation store: Redis/In-Memory ready'))  .catch(e => {
     console.warn('  Redis unavailable, using in-memory fallback:', e.message);
     trackFallback('redis', e.message, 'default', null, { module: 'infrastructure' });
     logFallback('redis', e.message, 'default', null);
@@ -210,45 +227,10 @@ tenantContextMiddleware = createTenantContextMiddleware(pool);
 app.use(tenantContextMiddleware);
 console.log('  Tenant context: middleware registered (pool-aware)');
 
-// ─── JSON File Store (con lock para escritura segura) ─
-const fs = require('fs');
-const DB_PATH = path.join(__dirname, 'wibsite-store.json');
-let storeCache = null;
-let storeCacheTime = 0;
-const CACHE_TTL = 200;
-
-function loadStore() {
-  const now = Date.now();
-  if (storeCache && (now - storeCacheTime) < CACHE_TTL) return storeCache;
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      storeCache = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-      storeCacheTime = now;
-      return storeCache;
-    }
-  } catch (e) { /* ignore */ }
-  storeCache = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], channels: [] };
-  storeCacheTime = now;
-  return storeCache;
-}
-function saveStore(store) {
-  storeCache = store;
-  storeCacheTime = Date.now();
-  fs.writeFileSync(DB_PATH, JSON.stringify(store, null, 2), 'utf-8');
-}
-function getStore() { return loadStore(); }
-
-let storeLock = Promise.resolve();
-function updateStore(mutator) {
-  const resultHolder = {};
-  storeLock = storeLock.then(() => {
-    const s = loadStore();
-    mutator(s);
-    saveStore(s);
-    return s;
-  }).catch(e => { console.error('Store lock error:', e); throw e; });
-  return storeLock;
-}
+// ─── JSON File Store (vía facade unificado services/store.js) ─
+// Las funciones locales delegan al facade para evitar caches duplicados
+function getStore() { return storeFacade.getStore(); }
+function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
 // ═══════════════════════════════════════════════════════
 // CAMPAIGNS
@@ -271,7 +253,8 @@ app.post('/api/campaigns', async (req, res) => {
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
-    updateStore(s => s.campaigns.push(c));
+await updateStore(s => s.campaigns.push(c));
+    await storeFacade.writeCampaignToPg(c);
     res.status(201).json(c);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -501,7 +484,7 @@ app.post('/api/campaigns/:id/leads', async (req, res) => {
     if (!campaignExists) return res.status(404).json({ error: 'Campaign not found' });
     const leads = Array.isArray(req.body) ? req.body : [req.body];
     const created = [];
-    updateStore(s => {
+    await updateStore(s => {
       for (const l of leads) {
         const lead = {
           id: crypto.randomUUID(),
@@ -521,6 +504,9 @@ app.post('/api/campaigns/:id/leads', async (req, res) => {
         created.push(lead);
       }
     });
+    for (const lead of created) {
+      await storeFacade.writeLeadToPg(req.params.id, lead);
+    }
     res.status(201).json(created);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -573,7 +559,7 @@ app.post('/api/campaigns/:id/leads/upload', upload.single('file'), async (req, r
     const errors = [];
     const duplicates = [];
 
-    updateStore(s => {
+    await updateStore(s => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const phone = colMap.phone ? String(row[colMap.phone]).trim() : '';
@@ -620,6 +606,10 @@ app.post('/api/campaigns/:id/leads/upload', upload.single('file'), async (req, r
         created.push(lead);
       }
     });
+
+    for (const lead of created) {
+      await storeFacade.writeLeadToPg(campaignId, lead);
+    }
 
     res.status(201).json({
       campaign_id: campaignId,
@@ -716,7 +706,8 @@ app.post('/campaigns', async (req, res) => {
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
-    await updateStore(s => s.campaigns.push(c));
+await updateStore(s => s.campaigns.push(c));
+    await storeFacade.writeCampaignToPg(c);
     res.status(201).json(c);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -861,15 +852,18 @@ app.post('/api/leads/score', async (req, res) => {
       classified_at: new Date().toISOString(),
       notes: notes || null,
     };
-    updateStore(s => {
+    await updateStore(s => {
       s.scores.push(scoreEntry);
       // Update lead score
       const lead = s.leads.find(l => l.id === lead_id);
-      if (lead) { lead.score = score || 0; lead.score_data = score_factors || {}; }
+      if (lead) {
+        lead.score = score || 0; lead.score_data = score_factors || {};
+      }
       // Update delivery score
       const delivery = s.deliveries.find(d => d.contact_id === lead_id);
       if (delivery) delivery.score = score || 0;
     });
+    await storeFacade.writeScoreToPg(scoreEntry);
     res.status(201).json(scoreEntry);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -949,13 +943,14 @@ app.patch('/api/channels/:channel', async (req, res) => {
 app.post('/api/opt-outs', async (req, res) => {
   try {
     const { phone, email, channel, reason, source } = req.body;
-    updateStore(s => {
+    let createdEntry = null;
+    await updateStore(s => {
       const existing = s.optOuts.findIndex(o => o.phone === phone || o.email === email);
       if (existing >= 0) {
         s.optOuts[existing].reason = reason || s.optOuts[existing].reason;
         s.optOuts[existing].updated_at = new Date().toISOString();
       } else {
-        s.optOuts.push({
+        createdEntry = {
           id: s.optOuts.length + 1,
           phone: phone || null,
           email: email || null,
@@ -963,13 +958,15 @@ app.post('/api/opt-outs', async (req, res) => {
           reason: reason || null,
           source: source || 'user_reply',
           created_at: new Date().toISOString(),
-        });
+        };
+        s.optOuts.push(createdEntry);
       }
       // Mark campaign leads as opted_out
       if (phone) {
         s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_out'; });
       }
     });
+    if (createdEntry) await storeFacade.writeOptOutToPg(createdEntry);
     res.json({ status: 'opted_out' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1369,7 +1366,7 @@ app.post('/api/scoring/trigger-from-chatwoot', async (req, res) => {
           rules_applied: ['agent_reply_boost'], rule_score: 15,
           classified_at: new Date().toISOString(),
         };
-        await updateStore(s => {
+        updateStore(s => {
           s.scores.push(scoreEntry);
           const l = s.leads.find(l => l.id === lead.id);
           if (l) { l.score = newScore; l.score_data = { agent_boost: true, category, classified_at: scoreEntry.classified_at }; }
@@ -1606,7 +1603,7 @@ app.get('/webhooks/whatsapp', (req, res) => {
   res.status(403).send('Verification failed');
 });
 
-app.post('/webhooks/whatsapp', (req, res) => {
+app.post('/webhooks/whatsapp', async (req, res) => {
   try {
     const entry = req.body?.entry?.[0];
     const change = entry?.changes?.[0];
@@ -1628,19 +1625,22 @@ app.post('/webhooks/whatsapp', (req, res) => {
     if (value?.messages) {
       for (const msg of value.messages) {
         if (msg.type === 'text' && msg.text?.body?.toLowerCase().includes('stop')) {
-          updateStore(s => {
-            s.optOuts.push({ phone: msg.from, channel: 'whatsapp', reason: 'User replied STOP', source: 'user_reply', created_at: new Date().toISOString() });
+          const optEntry = { phone: msg.from, channel: 'whatsapp', reason: 'User replied STOP', source: 'user_reply', created_at: new Date().toISOString() };
+          await updateStore(s => {
+            s.optOuts.push(optEntry);
           });
+          await storeFacade.writeOptOutToPg(optEntry);
         } else if (msg.type === 'text') {
           const contact = value.contacts?.[0];
           const profileName = contact?.profile?.name || 'Desconocido';
           const waId = msg.from;
           const textBody = msg.text?.body || '';
-          updateStore(s => {
+          let inboundLead = null;
+          await updateStore(s => {
             const existing = s.leads.find(l => l.phone === waId);
             if (!existing) {
               const campaign = s.campaigns.find(c => c.channel === 'whatsapp' && c.status === 'sending');
-              const newLead = {
+              inboundLead = {
                 id: crypto.randomUUID(),
                 campaign_id: campaign?.id || null,
                 name: profileName,
@@ -1654,7 +1654,7 @@ app.post('/webhooks/whatsapp', (req, res) => {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               };
-              s.leads.push(newLead);
+              s.leads.push(inboundLead);
             }
             s.deliveries.push({
               id: crypto.randomUUID(),
@@ -1671,6 +1671,7 @@ app.post('/webhooks/whatsapp', (req, res) => {
               created_at: new Date().toISOString(),
             });
           });
+          if (inboundLead) await storeFacade.writeLeadToPg(inboundLead.campaign_id, inboundLead);
           // Forward to n8n webhook (Chatwoot-compatible format)
           try {
             const n8nUrl = process.env.N8N_URL || 'http://n8n:5678';
@@ -2003,9 +2004,11 @@ app.get('/api/agent/config', async (req, res) => {
 app.put('/api/agent/config', async (req, res) => {
   try {
     const tenantId = req.headers['x-tenant-id'] || 'default';
+    await updateStore(s => {
+      updateAgentConfig(tenantId, req.body, s);
+    });
     const store = getStore();
-    const updated = updateAgentConfig(tenantId, req.body, store);
-    saveStore(store);
+    const updated = getAgentConfig(tenantId, store);
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2472,17 +2475,19 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const profileName = req.body.ProfileName || req.body.profileName || phone;
 
     // 1. Create lead + delivery in helper store
-    updateStore(s => {
+    let inboundLead = null;
+    await updateStore(s => {
       const existing = s.leads.find(l => l.phone === phone);
       if (!existing) {
         const campaign = s.campaigns.find(c => ['whatsapp', 'sms'].includes(c.channel) && c.status === 'sending');
-        s.leads.push({
+        inboundLead = {
           id: crypto.randomUUID(), campaign_id: campaign?.id || null,
           name: profileName, phone, email: '', source: 'twilio_inbound',
           status: 'new', score: 0, score_data: {},
           custom_fields: { message: body, source: 'twilio_webhook' },
           created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        });
+        };
+        s.leads.push(inboundLead);
       }
       s.deliveries.push({
         id: crypto.randomUUID(), campaign_id: null, contact_id: phone,
@@ -2491,6 +2496,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
         sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
       });
     });
+    if (inboundLead) await storeFacade.writeLeadToPg(inboundLead.campaign_id, inboundLead);
 
     // 2. Forward to n8n webhook (Chatwoot-compatible format)
     try {
@@ -2539,6 +2545,404 @@ app.post('/webhooks/twilio-status', async (req, res) => {
     res.sendStatus(200);
   } catch (e) {
     res.sendStatus(200);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// MULTICANAL WEBHOOKS (Email · Telegram · WhatsApp · TikTok · Messenger)
+// Pipeline unificado: normalizar → lead+delivery → media (STT/vision) → agente → responder por el canal
+// ═══════════════════════════════════════════════════════
+
+const { getChannel, listChannels, sendToChannel } = require('./services/channels');
+const mediaProcessor = require('./services/mediaProcessor');
+const { processMedia } = mediaProcessor;
+
+async function handleInboundMessage(channel, normalized) {
+  const adapter = getChannel(channel);
+  if (!adapter || !normalized) return null;
+
+  const { senderId, senderName, text, conversationId, media } = normalized;
+
+  await logEvent('webhook_received', {
+    level: 'info',
+    message: `Mensaje entrante ${channel} de ${senderId}`,
+    tenantId: 'default',
+    conversationId,
+    module: 'channels',
+    flow: 'multicanal.inbound',
+    action: 'webhook.received',
+    data: { channel, senderId, hasMedia: (media || []).length > 0 },
+  });
+
+  let inboundLead = null;
+  await updateStore(s => {
+    const existing = s.leads.find(l => l.phone === senderId || l.email === senderId);
+    if (!existing) {
+      inboundLead = {
+        id: crypto.randomUUID(),
+        campaign_id: null,
+        name: senderName || senderId,
+        phone: channel === 'email' ? null : senderId,
+        email: channel === 'email' ? senderId : null,
+        source: `${channel}_inbound`,
+        status: 'new',
+        score: 0,
+        score_data: {},
+        custom_fields: { channel, media_count: (media || []).length },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      s.leads.push(inboundLead);
+    }
+    s.deliveries.push({
+      id: crypto.randomUUID(),
+      campaign_id: null,
+      contact_id: senderId,
+      contact_name: senderName || senderId,
+      phone: channel === 'email' ? null : senderId,
+      status: 'received',
+      channel,
+      direction: 'inbound',
+      content: text,
+      sent_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+  });
+  if (inboundLead) await storeFacade.writeLeadToPg(null, inboundLead);
+
+  // Bases multimodales: transcribir audio / describir imagen y añadir al contexto
+  let agentInput = text || '';
+  try {
+    const mediaPieces = await processMedia(media || [], {
+      resolveMediaUrl: typeof adapter.resolveMediaUrl === 'function' ? adapter.resolveMediaUrl : null,
+      conversationId,
+    });
+    if (mediaPieces.length) {
+      agentInput = `${agentInput}\n${mediaPieces.join('\n')}`;
+      await logEvent('webhook_received', {
+        level: 'info',
+        message: `Media procesado (${channel}): ${mediaPieces.length} pieza(s)`,
+        tenantId: 'default',
+        conversationId,
+        module: 'channels',
+        flow: 'multicanal.media',
+        action: 'media.processed',
+        data: { channel, pieces: mediaPieces.length },
+      });
+    } else if ((media || []).length) {
+      await logEvent('fallback_activated', {
+        level: 'warn',
+        message: `Media recibido (${channel}) sin procesar — STT/visión no configurados o fallaron`,
+        tenantId: 'default',
+        conversationId,
+        module: 'channels',
+        flow: 'multicanal.media',
+        action: 'media.degraded',
+        severity: 'medium',
+        dependency: 'mediaProcessor',
+        data: { channel, media_count: media.length },
+      });
+    }
+  } catch (e) { /* media best-effort */ }
+
+  // Agente comercial (grafo 8 etapas) — responde por el mismo canal
+  try {
+    let template = null;
+    try { template = templateEngine.loadTemplate(process.env.AGENT_TEMPLATE_ID || 'consultora-software'); }
+    catch (e) { template = templateEngine.loadTemplate('default'); }
+    const result = await executeCommercialGraph({
+      message: agentInput,
+      conversationId,
+      tenantId: 'default',
+      template,
+      clientConfig: null,
+    });
+    const reply = result?.response || '¡Gracias por tu mensaje! Te contactaremos a la brevedad.';
+    const sent = await sendToChannel(channel, normalized.chatId || senderId, reply);
+
+    // Respuesta por voz (G-37): si el mensaje entrante fue de voz y el modo lo permite,
+    // sintetizar la respuesta y enviarla como nota de voz (Telegram)
+    let voiceSent = { ok: false, skipped: true };
+    const replyAudioMode = (process.env.REPLY_AUDIO_MODE || 'on_demand').toLowerCase();
+    const hasInboundAudio = (media || []).some(m => ['voice', 'audio', 'video_note'].includes(m.type));
+    try {
+      if (hasInboundAudio && replyAudioMode !== 'off' && channel === 'telegram' && typeof adapter.sendVoice === 'function') {
+        const speech = await mediaProcessor.synthesizeSpeech({ text: reply, conversationId });
+        if (speech) {
+          voiceSent = await (async () => {
+            try {
+              const r = await adapter.sendVoice({ to: normalized.chatId || senderId, audioBuffer: speech.buffer, filename: `reply.${speech.format || 'mp3'}`, caption: '' });
+              return { ok: true, result: r, skipped: false };
+            } catch (e) {
+              return { ok: false, error: e.message, skipped: false };
+            }
+          })();
+        }
+      }
+    } catch (e) { voiceSent = { ok: false, error: e.message, skipped: false }; }
+
+    if (voiceSent && !voiceSent.skipped) {
+      await logEvent(voiceSent.ok ? 'api_call' : 'error', {
+        level: voiceSent.ok ? 'info' : 'warn',
+        message: voiceSent.ok ? `Respuesta de voz enviada a ${senderId}` : `Respuesta de voz falló: ${voiceSent.error}`,
+        tenantId: 'default',
+        conversationId,
+        module: 'channels',
+        flow: 'multicanal.outbound',
+        action: 'channel.voice_reply',
+        severity: voiceSent.ok ? null : 'medium',
+        dependency: `${channel}-tts`,
+        data: { channel, ok: voiceSent.ok, error: voiceSent.ok ? null : voiceSent.error },
+      });
+    }
+
+    await logEvent('api_call', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Respuesta ${channel} a ${senderId} → ${sent.ok ? 'enviada' : sent.error}`,
+      tenantId: 'default',
+      conversationId,
+      module: 'channels',
+      flow: 'multicanal.outbound',
+      action: 'channel.reply',
+      severity: sent.ok ? null : 'medium',
+      dependency: `${channel}-api`,
+      data: { channel, ok: sent.ok, stage: result?.stage || null, error: sent.ok ? null : sent.error },
+    });
+    return { sent, agent: result };
+  } catch (e) {
+    await logEvent('webhook_failed', {
+      level: 'error',
+      message: `Pipeline multicanal falló (${channel}): ${e.message}`,
+      tenantId: 'default',
+      conversationId,
+      module: 'channels',
+      flow: 'multicanal.inbound',
+      action: 'pipeline.error',
+      severity: 'high',
+      dependency: 'agentCore',
+      data: { channel, error: e.message },
+    });
+    return null;
+  }
+}
+
+// ─── Telegram ───────────────────────────────────────────
+app.get('/webhooks/telegram', async (req, res) => {
+  const adapter = getChannel('telegram');
+  const token = adapter?.WEBHOOK_SECRET || '';
+  if (token && req.query.secret !== token) return res.status(403).json({ error: 'Secret inválido' });
+  res.json({ ok: true, channel: 'telegram', configured: adapter?.isConfigured() || false });
+});
+
+app.post('/webhooks/telegram', async (req, res) => {
+  try {
+    const adapter = getChannel('telegram');
+    if (!adapter) return res.status(500).json({ error: 'Adapter telegram no disponible' });
+    const secret = adapter.WEBHOOK_SECRET;
+    if (secret && req.headers['x-telegram-bot-api-secret-token'] !== secret) {
+      await logEvent('security_alert', {
+        level: 'security',
+        message: 'Webhook telegram con secret_token inválido rechazado',
+        tenantId: 'default',
+        module: 'channels',
+        flow: 'multicanal.inbound',
+        action: 'webhook.rejected',
+        severity: 'high',
+        data: { channel: 'telegram' },
+      });
+      return res.status(403).json({ error: 'Secret inválido' });
+    }
+    if (!adapter.isConfigured()) {
+      console.warn('[telegram] TELEGRAM_BOT_TOKEN no configurado — pipeline degradado (sin reply)');
+    }
+    const normalized = await adapter.normalizeUpdate(req.body);
+    if (!normalized) return res.status(200).json({ ok: true, skipped: true });
+    await handleInboundMessage('telegram', normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[telegram] webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Messenger (Meta) ───────────────────────────────────
+app.get('/webhooks/messenger', (req, res) => {
+  const adapter = getChannel('messenger');
+  const token = adapter?.VERIFY_TOKEN || '';
+  if (!token) return res.status(503).json({ error: 'MESSENGER_VERIFY_TOKEN no configurado' });
+  if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === token) {
+    return res.status(200).send(req.query['hub.challenge'] || '');
+  }
+  res.status(403).send('Verification failed');
+});
+
+app.post('/webhooks/messenger', async (req, res) => {
+  try {
+    const adapter = getChannel('messenger');
+    if (!adapter) return res.status(500).json({ error: 'Adapter messenger no disponible' });
+    if (!adapter.isConfigured()) {
+      console.warn('[messenger] MESSENGER_PAGE_TOKEN no configurado — pipeline degradado (sin reply)');
+    }
+    const normalized = await adapter.normalizeUpdate(req.body);
+    if (!normalized) return res.status(200).json({ ok: true, skipped: true });
+    await handleInboundMessage('messenger', normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[messenger] webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Email (inbound provider-agnóstico) ─────────────────
+app.post('/webhooks/email-inbound', async (req, res) => {
+  try {
+    const adapter = getChannel('email');
+    const normalized = await adapter.normalizeUpdate(req.body);
+    if (!normalized) return res.status(400).json({ error: 'Payload de email no reconocido' });
+    await handleInboundMessage('email', normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[email] webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── TikTok (comentarios, vía agregador/API aprobada) ───
+app.post('/webhooks/tiktok-comments', async (req, res) => {
+  try {
+    const adapter = getChannel('tiktok');
+    const normalized = await adapter.normalizeUpdate(req.body);
+    if (!normalized) return res.status(400).json({ error: 'Payload de TikTok no reconocido' });
+    await handleInboundMessage('tiktok', normalized);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[tiktok] webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Estado + prueba manual de canales ──────────────────
+app.get('/api/channels/status', async (req, res) => {
+  res.json({ data: listChannels() });
+});
+
+// ─── Búsqueda global (portal Ctrl+K) ─────────────────────
+app.get('/api/search', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').toLowerCase().trim();
+    const store = getStore();
+    const limit = parseInt(req.query.limit || '10', 10);
+
+    const leads = q
+      ? store.leads
+          .filter(l => [l.name, l.phone, l.email, l.source].filter(Boolean).some(f => String(f).toLowerCase().includes(q)))
+          .slice(0, limit)
+          .map(l => ({ type: 'lead', id: l.id, title: l.name || l.phone || l.id, subtitle: `${l.phone || l.email || ''} · score ${l.score ?? 0}`, score: l.score ?? 0 }))
+      : [];
+
+    const campaigns = q
+      ? store.campaigns
+          .filter(c => String(c.name || '').toLowerCase().includes(q))
+          .slice(0, limit)
+          .map(c => ({ type: 'campaign', id: c.id, title: c.name, subtitle: `${c.status} · ${c.channel}` }))
+      : [];
+
+    res.json({ query: q, total: leads.length + campaigns.length, leads, campaigns });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Notificaciones unificadas (portal) ──────────────────
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const summary = await getIncidentSummary({ hours: 24 }).catch(() => ({ incidents: [], fallbacks: [], securityEvents: [], alerts: [] }));
+    const notifications = [
+      ...(summary.incidents || []).map(i => ({ type: 'incident', severity: 'high', text: `${i.type || 'incidente'} ×${i.count}`, ts: null })),
+      ...(summary.securityEvents || []).map(s => ({ type: 'security', severity: 'medium', text: `${s.type || 'evento de seguridad'} ×${s.count}`, ts: null })),
+      ...(summary.fallbacks || []).map(f => ({ type: 'fallback', severity: 'medium', text: `Fallback activo: ${f.dependency || 'dependencia'}`, ts: null })),
+    ].slice(0, 15);
+    res.json({ data: notifications, total: notifications.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/channels/broadcast', async (req, res) => {
+  try {
+    const { channel, message_template, audience = {}, subject } = req.body;
+    if (!channel || !message_template) return res.status(400).json({ error: 'channel y message_template requeridos' });
+    const adapter = getChannel(channel);
+    if (!adapter) return res.status(400).json({ error: `Canal no soportado: ${channel}` });
+
+    const store = getStore();
+    let targets = audience.phones || [];
+    if (!targets.length) {
+      targets = store.leads
+        .filter(l => !l.opt_out && l.status !== 'opted_out')
+        .filter(l => {
+          if (audience.all) return true;
+          if (audience.channel) return l.custom_fields?.channel === audience.channel || l.source?.includes(audience.channel);
+          return true;
+        })
+        .map(l => (channel === 'email' ? l.email : l.phone))
+        .filter(Boolean)
+        .slice(0, audience.limit || 100);
+    }
+
+    const results = [];
+    for (const to of targets) {
+      const text = String(message_template).replace(/\{\{name\}\}/g, (store.leads.find(l => l.phone === to || l.email === to)?.name) || '');
+      const started = Date.now();
+      const sent = await sendToChannel(channel, to, text, { subject: subject || 'Wibsite Business' });
+      results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error });
+      await logEvent(sent.ok ? 'campaign_sent' : 'error', {
+        level: sent.ok ? 'info' : 'warn',
+        message: `Broadcast ${channel} → ${to}: ${sent.ok ? 'enviado' : sent.error}`,
+        tenantId: req.tenantId || 'default',
+        module: 'channels',
+        flow: 'multicanal.broadcast',
+        action: 'broadcast.send',
+        severity: sent.ok ? null : 'medium',
+        dependency: `${channel}-api`,
+        latencyMs: Date.now() - started,
+        data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error },
+      });
+    }
+
+    const okCount = results.filter(r => r.ok).length;
+    res.json({
+      channel,
+      total: results.length,
+      sent: okCount,
+      failed: results.length - okCount,
+      results,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/channels/test', async (req, res) => {
+  try {
+    const { channel, to, text } = req.body;
+    if (!channel || !to || !text) return res.status(400).json({ error: 'channel, to y text requeridos' });
+    const started = Date.now();
+    const sent = await sendToChannel(channel, to, text);
+    await logEvent(sent.ok ? 'api_call' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Envío de prueba ${channel} → ${sent.ok ? 'ok' : sent.error}`,
+      tenantId: req.tenantId || 'default',
+      module: 'channels',
+      flow: 'multicanal.outbound',
+      action: 'channel.test_send',
+      severity: sent.ok ? null : 'medium',
+      dependency: `${channel}-api`,
+      latencyMs: Date.now() - started,
+      data: { channel, ok: sent.ok, error: sent.ok ? null : sent.error },
+    });
+    res.status(sent.ok ? 200 : 502).json(sent);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -2600,24 +3004,40 @@ app.post('/api/webhooks/chatwoot', async (req, res) => {
     const payload = req.body;
     if (payload.event === 'message_created' && payload.sender) {
       // Create or ensure lead exists based on webhook sender
-      updateStore(s => {
+      let newLead = null;
+      let optedOutLead = null;
+      await updateStore(s => {
         const existing = s.leads.find(l => l.phone === payload.sender.phone_number);
         if (!existing && payload.sender.phone_number) {
-          s.leads.push({
+          newLead = {
             id: crypto.randomUUID(),
             name: payload.sender.name || 'Desconocido',
             phone: payload.sender.phone_number,
             status: 'active',
             opt_out: false
-          });
+          };
+          s.leads.push(newLead);
         }
-        
+
         // Handle Opt-Out logic
         if (payload.content && typeof payload.content === 'string' && payload.content.trim().toUpperCase() === 'DETENER') {
           const leadToOptOut = s.leads.find(l => l.phone === payload.sender.phone_number);
-          if (leadToOptOut) leadToOptOut.opt_out = true;
+          if (leadToOptOut) {
+            leadToOptOut.opt_out = true;
+            optedOutLead = leadToOptOut;
+          }
         }
       });
+      if (newLead) await storeFacade.writeLeadToPg(null, newLead);
+      if (optedOutLead) {
+        await storeFacade.writeOptOutToPg({
+          phone: optedOutLead.phone,
+          channel: 'chatwoot',
+          reason: 'User replied DETENER',
+          source: 'user_reply',
+          created_at: new Date().toISOString(),
+        });
+      }
     }
     res.status(200).json({ received: true });
   } catch (e) {
@@ -2679,11 +3099,23 @@ app.get('/api/internal/health-detailed', async (req, res) => {
       const t0 = Date.now();
       try { await pool.query('SELECT 1'); pgOk = true; pgLatency = Date.now() - t0; } catch (e) { pgOk = false; }
     }
-    let redisOk = false;
-    try {
-      const { getConversationState } = require('./services/conversationStore');
-      redisOk = true;
-    } catch (e) { redisOk = false; }
+    const redisHealth = await checkRedisHealth();
+
+    // Elasticsearch (SOAC): _cluster/health con timeout corto
+    let elastic = { status: 'not-configured', cluster: null };
+    const ES_URL = process.env.ELASTICSEARCH_URL || 'http://elasticsearch:9200';
+    const ES_PASSWORD = process.env.ELASTIC_PASSWORD || '';
+    if (ES_PASSWORD) {
+      try {
+        const esResp = await axios.get(`${ES_URL}/_cluster/health`, {
+          auth: { username: 'elastic', password: ES_PASSWORD },
+          timeout: 3000,
+        });
+        elastic = { status: esResp.data?.status === 'green' ? 'connected' : 'connected-yellow', cluster: esResp.data?.status || 'unknown' };
+      } catch (e) {
+        elastic = { status: 'unreachable', cluster: null };
+      }
+    }
 
     const [incidentSummary] = await Promise.all([
       getIncidentSummary({ hours: 24 }).catch(() => ({ incidents: [], fallbacks: [], securityEvents: [], alerts: [] }))
@@ -2695,10 +3127,10 @@ app.get('/api/internal/health-detailed', async (req, res) => {
       uptime: Math.floor((Date.now() - uptimeStart) / 1000),
       dependencies: {
         postgresql: { status: pgOk ? 'connected' : 'unavailable', mode: pool ? 'postgresql' : 'json-fallback', latencyMs: pgLatency },
-        redis: { status: redisOk ? 'available' : 'fallback', mode: redisOk ? 'redis' : 'in-memory' },
+        redis: redisHealth,
         weaviate: { status: weaviateOk ? 'connected' : 'fallback', mode: weaviateOk ? 'weaviate' : 'in-memory-kb' },
         llm: { status: OPENROUTER_API_KEY ? 'configured' : 'missing', model: OPENROUTER_MODEL },
-        glitchtip: { status: GLITCHTIP_DSN ? 'configured' : 'not-configured', dsn: GLITCHTIP_DSN ? 'set' : 'missing' }
+        elastic: { status: elastic.status, cluster: elastic.cluster, url: ES_URL }
       },
       sli: {
         requestCount: sliMetrics.totalRequests,
@@ -2710,7 +3142,12 @@ app.get('/api/internal/health-detailed', async (req, res) => {
         campaigns: { total: store.campaigns.length, active: store.campaigns.filter(c => c.status === 'sending').length },
         leads: { total: store.leads.length, scored: store.leads.filter(l => l.score > 0).length },
         deliveries: { total: store.deliveries.length },
-        scores: { total: store.scores.length }
+        scores: { total: store.scores.length },
+        channels: listChannels().map(c => ({ channel: c.channel, configured: c.configured })),
+        multimodal: {
+          sttConfigured: mediaProcessor.isSttConfigured(),
+          visionConfigured: mediaProcessor.isVisionConfigured(),
+        },
       },
       incidents24h: {
         byModule: incidentSummary.incidents,
@@ -3020,6 +3457,11 @@ app.get('/health', async (req, res) => {
       scores: { total: store.scores.length, llmBased: store.scores.filter(s => s.score_model?.includes('llm')).length },
       conversations: { active: activeConvs },
       knowledgeBase: { weaviateAvailable: weaviateOk, documents: 0 },
+      channels: listChannels().map(c => ({ channel: c.channel, configured: c.configured })),
+      multimodal: {
+        sttConfigured: mediaProcessor.isSttConfigured(),
+        visionConfigured: mediaProcessor.isVisionConfigured(),
+      },
     },
     sli: {
       uptime: uptimeSeconds > 0 ? ((uptimeSeconds - 0) / uptimeSeconds * 100).toFixed(2) + '%' : '100%',
@@ -3081,10 +3523,30 @@ app.use((req, res) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Wibsite Helper v2 running on port ${PORT}`);
     if (pool) console.log('  DB: PostgreSQL connected');
     else console.log('  DB: JSON file store (fallback)');
   });
+  let shuttingDown = false;
+  const shutdown = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal} recibido — cerrando conexiones...`);
+    try {
+      await closeRedis();
+      if (pool) await pool.end();
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 3000).unref();
+    } catch (e) {
+      process.exit(1);
+    }
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 module.exports = app;
+app.closeAll = async () => {
+  await closeRedis();
+  if (pool) { try { await pool.end(); } catch (e) { /* ignore */ } }
+};

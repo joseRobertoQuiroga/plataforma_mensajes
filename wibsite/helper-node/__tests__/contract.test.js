@@ -1,4 +1,7 @@
 const request = require('supertest');
+const { loadApp, closeApp } = require('./helpers/testApp');
+
+jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
 jest.setTimeout(25000);
 
@@ -7,7 +10,11 @@ describe('Contract Tests - helper API surface', () => {
 
   beforeAll(async () => {
     process.env.HELPER_API_KEY = 'test-api-key-123';
-    app = require('../index.js');
+    app = loadApp();
+  });
+
+  afterAll(async () => {
+    await closeApp(app);
   });
 
   const API_KEY = 'test-api-key-123';

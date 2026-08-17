@@ -1,7 +1,7 @@
 'use strict';
 const STAGES = [
   'apertura', 'calificacion', 'propuesta', 'profundizacion',
-  'objeciones', 'cierre', 'handoff', 'seguimiento',
+  'objeciones', 'cierre', 'handoff', 'seguimiento', 'kb', 'cotizacion',
 ];
 
 const STAGE_TO_CONVERSATION_STATE = {
@@ -13,6 +13,8 @@ const STAGE_TO_CONVERSATION_STATE = {
   cierre: 'closing',
   handoff: 'escalated',
   seguimiento: 'post_sale',
+  kb: 'discovery',
+  cotizacion: 'proposal',
 };
 
 const STAGE_LABELS = {
@@ -24,6 +26,8 @@ const STAGE_LABELS = {
   cierre: 'Cierre preliminar o derivacion',
   handoff: 'Consolidacion (handoff)',
   seguimiento: 'Seguimiento',
+  kb: 'Respuesta desde conocimiento de negocio',
+  cotizacion: 'Mini-cotizacion estimada',
 };
 
 function conversationStateFor(stage) {

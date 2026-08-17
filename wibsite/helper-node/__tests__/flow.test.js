@@ -1,21 +1,32 @@
-const request = require('supertest');
-const { app } = require('../index');
-const storeFacade = require('../services/storeFacade');
-const { initRedis } = require('../services/conversationStore');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-// Mocks
-jest.mock('../services/ragEngine', () => ({
-  queryRAG: jest.fn().mockResolvedValue([{ text: 'Contexto de KB', certainty: 0.9 }])
-}));
+process.env.STORE_PATH = path.join(os.tmpdir(), `wibsite-store-test-${process.pid}.json`);
+process.env.REDIS_URL = 'redis://127.0.0.1:6379';
+process.env.PG_HOST = '127.0.0.1';
+process.env.PG_PORT = '5433';
+
+const request = require('supertest');
+const app = require('../index');
+const storeFacade = require('../services/store');
+
+jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
 describe('Flujos de Negocio (Business Flows)', () => {
   beforeAll(async () => {
-    storeFacade.initPgStore(null); // Force in-memory for testing
-    await initRedis();
-  });
+    storeFacade.initPgStore(null);
+  }, 30000);
+
+  afterAll(async () => {
+    if (fs.existsSync(process.env.STORE_PATH)) {
+      fs.unlinkSync(process.env.STORE_PATH);
+    }
+    await app.closeAll();
+  }, 30000);
 
   afterEach(() => {
-    // Reset in-memory store
+    if (fs.existsSync(process.env.STORE_PATH)) fs.unlinkSync(process.env.STORE_PATH);
     storeFacade.getStore().leads = [];
     storeFacade.getStore().campaigns = [];
     storeFacade.getStore().scores = [];
@@ -23,7 +34,6 @@ describe('Flujos de Negocio (Business Flows)', () => {
   });
 
   test('Flujo Completo: Creación de Lead -> Scoring -> Campaign', async () => {
-    // 1. Crear un lead simulando un webhook de Chatwoot
     const webhookPayload = {
       event: 'message_created',
       id: 101,
@@ -42,40 +52,38 @@ describe('Flujos de Negocio (Business Flows)', () => {
 
     expect(resWebhook.status).toBe(200);
 
-    // 2. Verificar que el lead se guardó
     const store = storeFacade.getStore();
     expect(store.leads.length).toBeGreaterThan(0);
-    const leadId = store.leads[0].id;
-    
-    // 3. Forzar el scoring de los leads
+    const lead = store.leads.find(l => l.phone === '+59170000001');
+    expect(lead).toBeDefined();
+    const leadId = lead.id;
+
     const resScore = await request(app)
-      .post('/api/leads/score-all')
+      .post('/api/leads/score')
       .set('x-api-key', 'test-key')
-      .send({});
-      
-    expect(resScore.status).toBe(200);
-    expect(resScore.body.processed).toBe(1);
-    
-    // 4. Crear una campaña para enviar un mensaje a los leads
+      .send({ lead_id: leadId, score: 85, score_factors: { budget: 0.8, authority: 0.9 } });
+
+    expect(resScore.status).toBe(201);
+    expect(resScore.body.score).toBe(85);
+    expect(storeFacade.getStore().leads.find(l => l.id === leadId).score).toBe(85);
+
     const resCampaign = await request(app)
       .post('/api/campaigns')
       .set('x-api-key', 'test-key')
       .send({
         name: 'Promo Seguimiento',
-        messageTemplate: 'Hola {{name}}, tenemos una promo para ti.',
-        sendTo: 'all',
-        scheduleTime: null // Send immediately
+        message_template: 'Hola {{name}}, tenemos una promo para ti.',
+        audience_filter: { all: true },
+        scheduled_at: null
       });
-      
-    expect(resCampaign.status).toBe(200);
-    expect(resCampaign.body.status).toBe('sending');
+
+    expect(resCampaign.status).toBe(201);
+    expect(resCampaign.body.status).toBe('draft');
   });
 
   test('Flujo de Opt-Out (Unsubscribe)', async () => {
-    // Crear un lead
-    storeFacade.getStore().leads.push({ id: 'L-123', name: 'Ana', phone: 'whatsapp:+59160000002', status: 'active', opt_out: false });
-    
-    // Simular un mensaje de opt-out ("DETENER")
+    storeFacade.getStore().leads.push({ id: 'L-123', name: 'Ana', phone: '+59160000002', status: 'active', opt_out: false });
+
     const webhookPayload = {
       event: 'message_created',
       id: 102,
@@ -93,9 +101,8 @@ describe('Flujos de Negocio (Business Flows)', () => {
       .send(webhookPayload);
 
     expect(resWebhook.status).toBe(200);
-    
-    // Verificar que el estado del lead cambió a opt-out
-    const lead = storeFacade.getStore().leads.find(l => l.phone === 'whatsapp:+59160000002');
+
+    const lead = storeFacade.getStore().leads.find(l => l.phone === '+59160000002');
     expect(lead).toBeDefined();
     expect(lead.opt_out).toBe(true);
   });

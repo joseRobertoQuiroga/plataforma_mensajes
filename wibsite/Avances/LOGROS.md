@@ -1,6 +1,6 @@
-# LOGROS — Estado de Avance del Proyecto
+﻿# LOGROS — Estado de Avance del Proyecto
 
-> Documento vivo — Última actualización: 2026-08-12
+> Documento vivo — última actualización: **2026-08-15** (verificado en vivo: 20 contenedores, 169 tests, TeVS 11/11, multicanal implementado)
 
 ---
 
@@ -9,22 +9,26 @@
 | Métrica | Valor |
 |---------|-------|
 | Servicios en Docker Compose | 20 (PostgreSQL, Redis, Weaviate, t2v-transformers, Chatwoot + worker, Dify API/Web/Worker/Plugin Daemon/Sandbox, n8n, Twenty CRM, Helper Node, Elasticsearch, Kibana, OTel Collector, MinIO, Authelia, Nginx) |
-| APIs implementadas (helper-node) | ~108 rutas (v2.1.1 según `package.json`) |
-| Módulos de seguridad implementados | 4 (Auth API Key, Rate Limiter, Sanitizer, HMAC) |
+| APIs implementadas (helper-node) | ~120 rutas (v2.2.0 según `package.json`) |
+| Módulos de seguridad implementados | 4 (Auth API Key, Rate Limiter, Sanitizer, HMAC) + RLS tenant 7 políticas + PII filter |
 | State machine conversacional | 9 estados con validación de transiciones |
 | Lead Profile Builder | Score history, delivery stats, tags, next action sugerido |
 | Agent Config Editor | 10 tipos de negocio, 5 personalidades, system prompt builder |
 | RAG Engine | Weaviate + fallback in-memory |
 | Anti-Hallucination | Detección de consultas fuera de conocimiento + boundaries |
 | SLI/SLO Monitoring | Health+ endpoint, métricas de uptime, error rate, latencia |
-| Observabilidad | Elasticsearch 9.x + Kibana + OTel Collector (config) — sustituye Prometheus/Grafana/cAdvisor/GlitchTip |
+| Observabilidad | Elasticsearch 9.4.2 + Kibana + OTel Collector **operativos**: traces (1363 docs) + metrics (1573) + **logs (109+, puente OTLP 15/08)** — ILM rollover 1d/30d |
+| Canal multicanal | 5 adapters (Email · Telegram · WhatsApp · Messenger · TikTok) + pipeline inbound unificado + webhooks (15/08) |
+| Multimodal | Bases: STT audio (OpenRouter transcripciones) + visión imágenes (gpt-4o-mini) con degradación elegante (15/08) |
 | Workflows Dify funcionales | 1 (WhatsApp Lead Classifier — 8 nodos LLM) |
 | Workflows n8n importados | 3 (Inbound Message + Campaign Broadcast + Score & Sync) |
 | Campos custom Twenty CRM | 10 en objeto `people` |
 | Plantillas de mensajes | 11 predefinidas |
-| Tests unitarios + integración | 112 tests (8 suites) — 100% passing |
-| Suite TeVS (Elastic) | 11 tests creados — **pendiente primera ejecución** |
-| Auditoría integral | 78 checks OK (2026-08-03, `scripts/logs/audit.log`) |
+| Tests unitarios + integración | **169 tests (19 suites) — 100% passing** (15/08; incluye 18 tests multicanal/multimodal) |
+| Suite TeVS (Elastic) | 11 tests — **11/11 PASSED ejecutado** (índices `tevs-results-*` desde 11/08; última corrida 15/08) |
+| Gate e2e-trace (F-46) | **10/10 estable** (×3 corridas) |
+| Dual-write PG (F-08) | **Conectado a rutas y verificado en vivo** (campañas/leads/scores/opt-outs → PG) |
+| Auditoría integral | 78 checks OK (2026-08-03) + auditoría 13/08 + análisis cruzado 15/08 (`docs/ANALISIS-CRUZADO-2026-08-15.md`) |
 | Documentación generada | 100+ archivos en docs/, specs/, Avances/, scripts/ |
 
 ---

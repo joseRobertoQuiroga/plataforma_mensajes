@@ -3,9 +3,13 @@ const axios = require('axios');
 const { logEvent } = require('../auditLogger');
 const { startSpan, endSpan } = require('../otelBridge');
 
-const DIFY_API_URL = process.env.DIFY_API_URL || 'http://dify-api:5001/v1/workflows/run';
+const DIFY_API_URL = (() => {
+  const base = process.env.DIFY_API_URL || 'http://dify-api:5001/v1/workflows/run';
+  return base.includes('/workflows/run') ? base : `${base.replace(/\/+$/, '')}/v1/workflows/run`;
+})();
 const DIFY_API_KEY = process.env.DIFY_API_KEY || '';
 const DIFY_TIMEOUT_MS = 30000;
+const DIFY_BUDGET_MS = parseInt(process.env.DIFY_BUDGET_MS || '6000', 10);
 const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
@@ -54,6 +58,43 @@ function parseFinalResult(raw) {
   return { text: trimmed };
 }
 
+/**
+ * Parsea el output real del workflow Dify (outputs.llm = JSON en fenced markdown)
+ * con campos intent_label/intent_score/confidence/captured_data/suggested_response.
+ */
+function parseDifyWorkflowOutput(payload) {
+  const outputs = payload?.outputs || {};
+  let raw = outputs.llm ?? outputs.final_result ?? null;
+  if (!raw) return {};
+  let obj = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const jsonStr = fenced ? fenced[1].trim() : trimmed;
+    try { obj = JSON.parse(jsonStr); } catch (e) { return {}; }
+  }
+  if (obj && typeof obj === 'object' && obj.final_result) {
+    let inner = obj.final_result;
+    if (typeof inner === 'string') {
+      try { inner = JSON.parse(inner); } catch (e) { inner = null; }
+    }
+    if (inner && typeof inner === 'object') obj = { ...obj, ...inner };
+  }
+  const label = String(obj.intent_label || '').toLowerCase();
+  const intent = ['compra', 'venta', 'lead', 'interes'].includes(label) ? 'venta'
+    : (label === 'soporte' || label === 'support' ? 'soporte'
+      : (obj.intent || null));
+  return {
+    intent,
+    score: typeof obj.intent_score === 'number' ? obj.intent_score : (typeof obj.score === 'number' ? obj.score : null),
+    confidence: typeof obj.confidence === 'number' ? obj.confidence : null,
+    suggestedResponse: obj.suggested_response || obj.response_text || null,
+    capturedData: obj.captured_data || null,
+    needsHuman: !!obj.needs_human,
+    shouldAutoReply: !!obj.should_auto_reply,
+  };
+}
+
 async function callDify(message, context) {
   const started = Date.now();
   const span = startSpan({
@@ -67,6 +108,8 @@ async function callDify(message, context) {
       conversation_id: context.conversationId,
       tenant_id: context.tenantId,
       history: (context.history || []).slice(-8),
+      contact_name: context.contactName || context.name || 'Lead',
+      phone: context.phone || '',
     },
     response_mode: 'blocking',
     user: context.tenantId || 'default',
@@ -74,25 +117,37 @@ async function callDify(message, context) {
   const headers = { 'Content-Type': 'application/json' };
   if (DIFY_API_KEY) headers.Authorization = `Bearer ${DIFY_API_KEY}`;
 
-  const resp = await axios.post(DIFY_API_URL, body, { timeout: DIFY_TIMEOUT_MS, headers });
-  const payload = resp.data?.data || resp.data;
-  const result = parseFinalResult(payload?.outputs?.final_result);
+  // Presupuesto de latencia: si Dify excede el budget, se aborta y cae al fallback
+  // OpenRouter (~1.5-2.5s) para mantener fluidez de conversación.
+  const controller = new AbortController();
+  const budgetTimer = setTimeout(() => controller.abort(), DIFY_BUDGET_MS);
+  let payload;
+  try {
+    const resp = await axios.post(DIFY_API_URL, body, { timeout: DIFY_TIMEOUT_MS, headers, signal: controller.signal });
+    payload = resp.data?.data || resp.data;
+  } finally {
+    clearTimeout(budgetTimer);
+  }
+
+  const difyParsed = parseDifyWorkflowOutput(payload);
+  const normalized = normalizeClassification(
+    { intent: difyParsed.intent, score: difyParsed.score, confidence: difyParsed.confidence, text: difyParsed.suggestedResponse || '' },
+    message
+  );
   const latencyMs = Date.now() - started;
 
   const usage = payload?.usage || null;
-  const tokens = usage && {
-    total: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
-    input: usage.prompt_tokens ?? usage.input_tokens ?? null,
-    output: usage.completion_tokens ?? usage.output_tokens ?? null,
-  };
+  const tokens = usage
+    ? { total: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0), input: usage.prompt_tokens ?? null, output: usage.completion_tokens ?? null }
+    : (typeof payload?.total_tokens === 'number' ? { total: payload.total_tokens, input: null, output: null } : null);
   endSpan(span, {
     status: 'OK',
     attributes: {
       'gen_ai.usage.input_tokens': tokens?.input ?? null,
       'gen_ai.usage.output_tokens': tokens?.output ?? null,
       'llm.usage.total_tokens': tokens?.total ?? null,
-      'wibsite.intent': result?.intent || null,
-      'wibsite.score': typeof result?.score === 'number' ? result.score : null,
+      'wibsite.intent': normalized.intent,
+      'wibsite.score': typeof normalized.score === 'number' ? normalized.score : null,
     },
   });
 
@@ -106,10 +161,10 @@ async function callDify(message, context) {
     action: 'dify.workflows.run',
     dependency: 'dify-llm',
     latencyMs,
-    data: { mode: 'primary', provider: 'dify', tokens: usage, intent: result?.intent || null, score: result?.score ?? null },
+    data: { mode: 'primary', provider: 'dify', tokens, intent: normalized.intent, score: normalized.score },
   });
   registerSuccess();
-  return { result, mode: 'primary', latencyMs };
+  return { result: normalized, mode: 'primary', latencyMs };
 }
 
 function normalizeClassification(result, message) {
@@ -241,7 +296,7 @@ async function classify(message, context = {}) {
 }
 
 module.exports = {
-  classify, callDify, callOpenRouter, normalizeClassification, parseFinalResult,
+  classify, callDify, callOpenRouter, normalizeClassification, parseFinalResult, parseDifyWorkflowOutput,
   isCircuitOpen, registerFailure, registerSuccess,
   FAIL_THRESHOLD, COOLDOWN_MS,
 };

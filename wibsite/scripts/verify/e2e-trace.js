@@ -94,7 +94,10 @@ async function main() {
   check('Spans en Elastic con trace_id', spans.length >= 2, `spans=${spans.length}: ${names.join(' → ')}`);
   check('Cadena HTTP → graph → LLM', names.includes('agent.graph.run') && names.some((n) => n.startsWith('HTTP')), names.join(' → '));
 
-  const llmSpan = spans.find((s) => s.name === 'llm.completion');
+  // El span LLM que produjo la respuesta final es el último llm.completion de la traza
+  // (en modo primario+fallback pueden existir dos: el fallido de Dify y el efectivo de OpenRouter)
+  const llmSpans = spans.filter((s) => s.name === 'llm.completion');
+  const llmSpan = llmSpans[llmSpans.length - 1] || null;
   const rawAttrs = (llmSpan && llmSpan.attributes) || {};
   const attrs = Array.isArray(rawAttrs)
     ? rawAttrs.reduce((acc, x) => {
@@ -105,9 +108,10 @@ async function main() {
     : rawAttrs;
   const attr = (k) => attrs[k];
   const totalKey = (attr('llm.usage.total_tokens') !== undefined) ? 'llm.usage.total_tokens' : 'gen_ai.usage.total_tokens';
-  const hasTokens = attr('gen_ai.usage.input_tokens') !== undefined && attr(totalKey) !== undefined;
+  // Provider-agnóstico: basta con el total de tokens (Dify reporta solo total; OpenRouter reporta in/out/total)
+  const hasTokens = attr(totalKey) !== undefined;
   check('LLM span con usage tokens', hasTokens,
-    hasTokens ? `in=${attr('gen_ai.usage.input_tokens')} out=${attr('gen_ai.usage.output_tokens')} total=${attr(totalKey)}` : 'sin atributos de usage');
+    hasTokens ? `in=${attr('gen_ai.usage.input_tokens') ?? 'n/d'} out=${attr('gen_ai.usage.output_tokens') ?? 'n/d'} total=${attr(totalKey)}` : 'sin atributos de usage');
 
   // 4. Pérdida de campos entre saltos (respuesta agente vs atributos OTel)
   const spanIntent = attr('wibsite.intent');

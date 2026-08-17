@@ -1,4 +1,4 @@
-# ESTADO DE COMPONENTES — Matriz de Salud
+﻿# ESTADO DE COMPONENTES — Matriz de Salud
 
 > Estado actual de cada componente del sistema — Última actualización: 2026-08-12
 > Estado basado en configuración estática (`docker-compose.yml`); Docker Desktop estaba detenido al momento de la revisión → runtime no verificado en vivo.

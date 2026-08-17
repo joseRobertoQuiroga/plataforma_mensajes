@@ -1,5 +1,65 @@
 # Wibsite Business — Historial de Cambios
 
+## [3.4.0] — 2026-08-15 (Oleada J: Pendientes implementados — RAG, cotizaciones, TTS, portal, cutover, carga)
+
+### Added
+- **R2 — RAG conectado al grafo**: nodo `kb` (respuestas desde base de conocimiento) + consulta en `analyzeNode` con prioridad comercial (la intención de compra no deriva a KB); stemming básico en `queryInMemoryKB`; `kb-documents/` movida al contexto del build y **cargada en el arranque del helper** (`loadKbFromDisk`).
+- **C1-C4 — Cuestionarios por servicio + estimación + mini-cotización**: `quoteEngine.js` (match de servicios por nombre/descripción, cuestionarios `questionnaire[]` con opciones y factores, estimación por alcance) + nodo `cotizacion` (mini-cotización con rango USD, tiempos, garantía y validez; evento `campaign_sent` con `cotizacion.generar`). Plantilla `consultora-software` ampliada a 8 servicios (integración, módulo, a medida, auditoría, web, móvil, full stack, plataformas).
+- **G-37 — TTS**: `mediaProcessor.synthesizeSpeech` (OpenRouter `/audio/speech`) + `telegramAdapter.sendVoice` + modo `REPLY_AUDIO_MODE=on_demand` en el pipeline (respuesta de voz a mensajes de voz).
+- **MC5 — Broadcast multicanal**: `POST /api/channels/broadcast` (audiencia por lead/canal, placeholders {{name}}, auditoría por envío).
+- **Portal (Fase 2 parcial)**: Lead Context Panel (perfil de lead vía `/api/leads/:id/profile`), búsqueda global Ctrl+K (`GET /api/search`), notificaciones unificadas (`GET /api/notifications`, badge en topbar).
+- **B1 — Lectura PG con `STORE_MODE=pg`**: snapshot de PG con refresco por TTL en el facade + `findAll` en LeadStore/ScoreStore/OptOutStore.
+- **F-47 — Suite de comportamiento del vendedor**: `behavior.test.js` (venta completa con cotización, soporte/derivación, KB sin pérdida de contexto).
+- **F-51 — Load tests**: `scripts/load/k6-scenario.js` (50 conversaciones, umbrales p95<2000ms) + `scripts/load/load-test-node.js` (simulador local con métricas p50/p95/throughput).
+- **B2 — n8n activado**: 2/3 workflows activos en runtime verificado por logs (01-Inbound + 02-Broadcast; el tercero es variante experimental con credenciales pendientes).
+
+### Changed
+- `llmClient.callDify`: **presupuesto de latencia** (`DIFY_BUDGET_MS=6000`, AbortController) → bajo carga cae al fallback OpenRouter y mantiene fluidez.
+- `autonomy.wantsPricing`: regex afinado (ya no dispara con "pasarela de pagos").
+- Grafo: aristas `analyze→kb`, `propuesta→cotizacion`, `analyze→cotizacion` con guardas de cuestionario; `stageMap` con `kb` y `cotizacion`; `calificacionNode` integra cuestionario antes que datos genéricos.
+- `hub/control-center.html`: dependencia Elasticsearch (SOAC) real, tools Kibana/MinIO, alertas Kibana/ES; `health-detailed` con `elastic` (cluster health real), `redis` (ping), `modules.channels/multimodal`.
+- Docker: helper recibe `ELASTICSEARCH_URL`/`ELASTIC_PASSWORD`; Dockerfile copia `kb-documents/`.
+
+### Verified
+- ✅ Jest: **22 suites, 176/176 PASS**.
+- ✅ TeVS **13/13** · e2e-trace **10/10**.
+- ✅ RAG en runtime: turno `analyze → kb` ("Respuesta desde base de conocimiento (faq)") en webhook Telegram real.
+- ✅ Cuestionario+cotización E2E (test + node): tienda en línea → web_type → payments → propuesta → cotización con rango USD/garantía/validez.
+- ✅ Load test 8 conversaciones × 2 concurrencia: **8/8 ok, p50=434ms, p95=1177ms, 3.29 turnos/s** (con budget timeout; antes p95=4471ms).
+- ✅ Broadcast multicanal en vivo (degradación sin tokens auditada); búsqueda y notificaciones 200.
+- ✅ n8n: "Activated workflow 01/02" en logs del contenedor.
+- ⚠️ Twenty API key sigue expirada (config pendiente); secretos S1-S3 siguen diferidos a deploy.
+
+## [3.3.0] — 2026-08-15 (Oleada I: Dual-Write PG + Multicanal + Monitoreo completo)
+
+### Added
+- **Multicanal (5 canales)**: `services/channels/` — adapters Telegram (Bot API completa: sendMessage, getFile, normalización de texto/voz/foto/video, secret de webhook), Messenger (Graph API v21 + hub.verify), Email (API HTTP genérica Resend/Postmark/Mailgun/SendGrid + normalización inbound), TikTok (bases; requiere API aprobada/agregador), WhatsApp (Twilio existente) + registry con `sendToChannel`/`listChannels`. Rutas: `GET|POST /webhooks/telegram`, `GET|POST /webhooks/messenger`, `POST /webhooks/email-inbound`, `POST /webhooks/tiktok-comments`, `GET /api/channels/status`, `POST /api/channels/test`. Pipeline inbound unificado `handleInboundMessage` (normalizar → lead+delivery → media → grafo agente → reply por el mismo canal → audit).
+- **Bases multimodales (F-36/G-36)**: `services/mediaProcessor.js` — STT audio→texto vía OpenRouter `/audio/transcriptions` (configurable `OPENROUTER_STT_MODEL`), visión imagen→descripción vía `gpt-4o-mini`, video→audio+thumbnail; degradación elegante (null sin configuración). **Instrumentado SOAC**: spans `media.stt`/`media.vision` + eventos `api_call/error` con latencia y modelo.
+- **Puente OTLP logs**: `otelBridge.sendLog/flushLogs` (v1/logs, batch 2s, trace/span correlacionados) + `auditLogger` conectado → logs-doags.otel-production poblado (109+ docs con `event.type`, `wibsite.module/flow/action`, `trace_id`).
+- **SOAC ampliado**: `/health` expone `modules.channels` y `modules.multimodal`; eventos `media.processed`/`media.degraded` en el pipeline; TeVS +2 tests (TEST-CHN-001 multicanal, TEST-MM-001 multimodal) → suite 13 tests.
+- `jest.config.js` + `__tests__/helpers/` (testApp con store temporal, PG/Redis aislados, closeAll) + suite `channels.test.js` (18 tests).
+
+### Changed
+- **F-08 dual-write PG conectado a rutas** (`writeCampaignToPg/writeLeadToPg/writeScoreToPg/writeOptOutToPg` en store.js): POST /api/campaigns, /api/campaigns/:id/leads, upload CSV, /api/leads/score, /api/opt-outs, webhooks WhatsApp/Twilio/Chatwoot. pgStore con ids explícitos (mismo UUID que JSON), guardas de existencia y derivación de campaign_id en scores. Verificado en vivo: campaña→lead→score→opt-out en PG.
+- **Dify integrado al flujo real**: `DIFY_API_KEY` en compose del helper; `llmClient` normaliza URL (base o `/v1/workflows/run`), envía `contact_name/phone`, y parsea el output real del workflow (`outputs.llm` fenced JSON: `intent_label/intent_score/confidence/total_tokens/suggested_response`) — modo primary verificado con span usage y audit completos.
+- **Bug corregido**: `updateStore` sin `await` en rutas → respuestas `[]` y datos sin persistir antes del dual-write.
+- `conversationStore`: `closeRedis()` + guard re-init; index.js con graceful shutdown (SIGTERM/SIGINT → closeRedis + pool.end) y `app.closeAll` para tests.
+- **Leak de worker Jest corregido** (closeRedis/closeAll/stores aislados/mocks de red); suites de app usan helper compartido.
+- `conversation_summaries` migrada a PG (F-14 desbloqueado).
+- ILM: `traces@lifecycle`, `logs`, `metrics` → rollover 1d + delete 30d (antes 30d sin rollover diario).
+- Limpieza de residuos: `monitoring/` (prometheus/grafana/alertmanager) eliminado; nginx `/erp/` y `/reportes/` comentadas (ERP/BI diferidos, no descartados).
+- Docs: ESTADO-GENERAL/LOGROS/OBJETIVOS-PENDIENTES/GAPS-MINIFASES actualizados al estado real; nuevo `docs/ANALISIS-CRUZADO-2026-08-15.md`; `SECURITY-GAPS-PRE-DEPLOY.md` re-verificado (S1-S3 diferidos a deploy).
+
+### Verified
+- ✅ Jest: 19 suites, **169/169 PASS** (antes 17 suites/151).
+- ✅ TeVS: **13/13 PASSED** (11 originales + TEST-CHN-001 canales + TEST-MM-001 multimodal) · e2e-trace: **10/10 ×5 corridas**.
+- ✅ Dual-write PG end-to-end vía API real (campaña/lead/score/opt-out con mismos UUIDs).
+- ✅ Webhook Telegram simulado E2E: lead + grafo 4 etapas + LLM real + reply degradado + audit en PG y ES logs con atributos completos.
+- ✅ **Dify conectado al flujo real**: `DIFY_API_KEY` pasa al helper; URL normalizada; parseo del output real (`outputs.llm` fenced JSON con `intent_label/intent_score/total_tokens`); modo primary verificado (3794ms, 352 tokens) con fallback OpenRouter + circuit breaker.
+- ✅ ILM rollover en vivo: nuevo backing index `logs-…-2026.08.15-000002`.
+- ✅ **SOAC cubre toda la oleada**: spans `media.stt`/`media.vision`, eventos `media.processed/media.degraded`, `channel.test_send`, `webhook_received/failed` — todo con módulo/flujo/acción y trace/span.
+- ⚠️ Pendientes documentados: S1-S3 seguridad (deploy), n8n activación UI, k6, alertas Kibana (ver ANALISIS-CRUZADO §6).
+
 ## [3.2.0] — 2026-08-12 (Oleada H: Trazabilidad E2E + Re-auditoría F-35)
 ### Added
 - **Gate de trazabilidad E2E (F-46)**: `scripts/verify/e2e-trace.js` — inyecta mensaje con marker único, verifica 10 aserciones en `audit_logs` (PG) y en Elastic (OTel): cadena `HTTP POST /api/agent/chat → agent.graph.run → llm.completion`, tokens de uso (`gen_ai.usage.input_tokens/output_tokens`, `llm.usage.total_tokens`) e `wibsite.intent/score` sin pérdida entre saltos. 10/10 en 3 corridas consecutivas (exit 0). Consulta ES con polling (hasta 8 intentos) porque el elasticsearchexporter reintenta batches mezclados con spans ajenos (redis `PUBLISH` de otros servicios del stack).

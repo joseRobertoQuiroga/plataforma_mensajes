@@ -1,63 +1,83 @@
 # OBJETIVOS PENDIENTES — Por Completar
 
-> Priorizado por impacto y dependencias — Última actualización: 2026-08-12
-> Fuente de verdad de fases: `docs/tecnica/TEC-06-FASES-IMPLEMENTACION.md` §5 (34/56 fases ✅ · 22 ⬜) · Gaps: `docs/GAPS-MINIFASES.md`
+> Priorizado por impacto y dependencias — última actualización: **2026-08-15**
+> Fuente de verdad de fases: `docs/tecnica/TEC-06-FASES-IMPLEMENTACION.md` §5 (**40+/56 fases ✅** — verificado en vivo 15/08) · Gaps sectorizados: `docs/ANALISIS-CRUZADO-2026-08-15.md` · Seguridad: `docs/SECURITY-GAPS-PRE-DEPLOY.md`
 
 ---
 
 ## ✅ LO QUE YA HAY (implementado y verificado en docs/código)
 
-### Infraestructura (20 servicios docker-compose)
-- Solo Docker, ningún orquestador superior · PostgreSQL 15 + pgvector (5 BD), Redis 7, Weaviate 1.26.1 + t2v-transformers
-- **Elastic Stack**: Elasticsearch 9.4.2 + Kibana + OTel Collector (sustituye Prometheus/Grafana/GlitchTip) · MinIO · Authelia 4.37 (config + nginx auth_request)
-- Nginx unificado :8080 con rutas /hub/, /chatwoot/, /dify/, /n8n/, /crm/, /kibana/, /minio-console/ + security headers
-- Backups PostgreSQL (`backup.sh`) y verificación unificada (`verify-fase.sh`, TEC-06 F-34/F-41/F-55)
+### Infraestructura (20 servicios docker-compose — verificado EN VIVO 15/08)
+- Stack completo corriendo: gateway HTTPS 200 (/hub/, /api/health), 403 sin SSO, n8n :5679 200, Dify :5001 200, helper :3100 200
+- **Elastic Stack**: ES 9.4.2 + Kibana + OTel Collector **operativos** (traces+metrics+logs; ILM rollover 1d/30d) · MinIO · Authelia (SSO verificado)
+- Backups PostgreSQL (`backup.sh`) y verificación unificada (`verify-fase.sh`)
 
-### Helper Node (~108 rutas · package.json v2.1.1)
-- CRUD campañas multi-canal + leads + Excel/CSV + tracking + scoring (rule-based + LLM) + 11 plantillas
-- Middleware seguridad: API Key, rate limit, sanitizador 23 patrones, HMAC webhooks + PII filter + auditLogger 12 event types
-- ConversationStore (9 estados), Lead Profile Builder, Agent Config (10 rubros/5 personalidades), RAG Weaviate + fallback, Anti-Hallucination, SLI/SLO, templateEngine + validador, agentCore (POC F-13), dual write JSON+PG (F-07/F-08)
-- Dashboard SPA + `hub/control-center.html` (portal shell /hub/, F-43/F-44)
+### Helper Node (~120 rutas · package.json v2.2.0 · 169 tests en 19 suites)
+- CRUD campañas multi-canal + leads + Excel/CSV + tracking + scoring + 11 plantillas
+- Middleware seguridad: API Key, rate limit, sanitizador 23 patrones, HMAC + PII filter + auditLogger 24 event types + **puente OTLP logs → ES**
+- ConversationStore (9 estados) + checkpointer con **`conversation_summaries` migrada a PG (15/08)**
+- RLS tenant 7 políticas + tenantContext · dual-write JSON+PG **conectado a rutas y verificado (15/08)** · agentCore (grafo 9 nodos, guards, Dify+fallback) · RAG · Anti-Hallucination · templateEngine
+- **Multicanal (15/08):** 5 adapters + pipeline inbound unificado + webhooks (telegram/messenger/email/tiktok) + `/api/channels/status|test` + bases multimodales (STT+visión)
 
 ### Canal real y módulos
-- **Bridge Twilio operativo** (F-03…F-06, F-24): inbound, broadcast + StatusCallback, typing, opt-out duro → reemplaza Meta
-- Dify: workflow clasificador 8 nodos LLM con OpenRouter (7 modelos) · n8n: 3 workflows activos en BD · Twenty: 10 campos custom + sync 12/12 · SPICED/MEDDIC 13 campos · plantillas comercial: objeciones 8, temperatura + decay, cadencia 8 intentos, handoff (F-19…F-23)
+- **Bridge Twilio operativo** (F-03…F-06, F-24) · Dify workflow clasificador · n8n 3 workflows en BD · Twenty sync · SPICED/MEDDIC · plantillas comercial (objeciones, cadencia, handoff)
 
 ### Verificación y documentación
-- 112 tests unitarios (8 suites) + 15 contract + 174 documentados · auditoría integral 78 checks OK (2026-08-03) · suite TeVS creada (11 tests + runner + ILM + alertas + dashboard)
-- 100+ docs: capa contextual (CTX-01…07), técnica (TEC-01…06), maestro RAG (68 entradas, 33✅), GAPS-MINIFASES
+- **169 tests (19 suites) PASS** · **TeVS 11/11 PASSED** (ejecutado y persistido desde 11/08) · **e2e-trace 10/10** · auditorías 03/08, 13/08, 14/08 y análisis cruzado 15/08
 
 ---
 
-## 🚨 P0 — Bloqueantes para el siguiente hito
+## 🔴 P0 — Bloqueantes para el siguiente hito
 
 | # | Objetivo | TEC-06 | Detalle |
 |---|----------|--------|---------|
-| 1 | **Verificar stack en vivo** | — | Docker Desktop estuvo detenido el 2026-08-12: `docker compose up -d` + `docker compose ps` + checks de ESTADO-GENERAL |
-| 2 | **Rotación de secretos reales** | F-32 | HELPER_API_KEY débil/`"test"` hardcodeada en `nginx.conf:214`; ELASTIC_PASSWORD hardcodeada en `otel-collector/config.yaml`; regenerar todos los `<generar>` de `.env.example` |
-| 3 | **Ejecutar suite TeVS por primera vez** | F-36/38 | `scripts/tevs/tevs-runner.ps1` — 11 tests creados, 0 ejecuciones registradas |
-| 4 | **Limpieza de secreto/PII en git** | F-35 | `wibsite-store.json` (PII 2.4 MB), `certs/nginx.key`, `n8n-cookies*.txt`, `n8n_login.json`, `%{redirect_url}'` → .gitignore + purge histórico |
-| 5 | **Cutover PG primario + multi-tenant** | F-09, F-10, F-11 | Migración JSON→PG completa, `tenant_id`+RLS, middleware tenantContext (gated: F-09) |
+| 1 | ~~Verificar stack en vivo~~ ✅ 15/08 | — | 20 contenedores up, gateway/helper/n8n/dify 200 verificados |
+| 2 | **Seguridad pre-deploy (S1-S3)** | F-32/F-35 | Ver `docs/SECURITY-GAPS-PRE-DEPLOY.md`: HELPER_API_KEY literal, ELASTIC_PASSWORD en CI, nginx.key+PII en git history — **diferido a etapa deploy por decisión** |
+| 3 | ~~Ejecutar suite TeVS~~ ✅ | F-36/38 | 11/11 PASSED con corridas persistidas (11/08, 12/08, 15/08) |
+| 4 | Limpieza de secreto/PII en git | F-35 | Parte de S3 (filter-repo) — etapa deploy |
+| 5 | Cutover PG primario + multi-tenant | F-09, F-10, F-11 | **F-08 dual-write ✅ (15/08)**; falta feature flag `STORE_MODE=pg` con lecturas unificadas (B1 en análisis cruzado) |
 
-## 🔴 P1 — Funcionalidad core
+## 🟠 P1 — Funcionalidad core
 
 | # | Objetivo | TEC-06 | Detalle |
 |---|----------|--------|---------|
-| 6 | ~~Motor agéntico completo~~ ✅ 2026-08-12 | F-14, F-16, F-17, F-18 | Checkpointer memoria profunda (F-14), grafo 9 nodos (F-16), guardas confidencialidad/autonomía (F-17), Dify como nodo + fallback (F-18) — implementado con grafo propio (fallback permitido por F-13) |
-| 7 | ~~Sync máquinas comercial ↔ técnica~~ ✅ 2026-08-12 | F-21 | commercialState.js con MAP comercial↔técnico + hook en onTransition (dep F-16/F-20 ok) |
-| 8 | Re-auditoría de seguridad completa | F-35 | Ejecutar con los gaps cerrados (depende F-31, F-32, F-33) |
-| 9 | CI con gates | F-42 | `.github/workflows/tevs-validation.yml` y `.gitlab-ci.yml` existen pero asumen URLs internas inexistentes (depende F-41) |
-| 10 | Trazabilidad E2E sin pérdida | F-46 | e2e-trace en PRUEBAS (depende F-40/41/44) |
-| 11 | n8n: credenciales + toggle UI | F-02 | 3 workflows activos en BD; falta credenciales UI (depende F-01) |
-| 12 | Frappe ERP | F-28, F-29 | Solo ruta nginx huérfana (`/erp/`→frappe:8000); servicio no existe en compose (depende F-05) |
+| 6 | ~~Motor agéntico completo~~ ✅ | F-14, F-16, F-17, F-18 | Implementado + probado (49/49 en 6 suites) |
+| 7 | ~~Sync máquinas comercial ↔ técnica~~ ✅ | F-21 | commercialState.js + hook onTransition |
+| 8 | Re-auditoría de seguridad completa | F-35 | ✅ hecha (13-14/08); re-correr tras corregir S1-S3 en deploy |
+| 9 | CI con gates | F-42 | workflows corregidos (branches, secrets, flags); password ES hardcodeada → S2 |
+| 10 | ~~Trazabilidad E2E~~ ✅ | F-46 | gate e2e-trace 10/10 estable |
+| 11 | n8n: credenciales + toggle UI | F-02 | workflows activos en BD; falta activación UI (puerto host :5679) |
+| 12 | Frappe ERP | F-28, F-29 | **Diferido** — ruta nginx `/erp/` comentada (núcleo actual: Dify + Twenty) |
 
 ## 🟡 P2 — Robustez y SaaS
 
 | # | Objetivo | TEC-06 | Detalle |
 |---|----------|--------|---------|
-| 13 | Suite de comportamiento del agente | F-47 | 20+ guiones con aserciones (depende F-19…F-24) |
-| 14 | Load test 50 conversaciones | F-51 | Script k6 pendiente (depende F-36/F-47) |
-| 15 | Portal: búsqueda + notificaciones | F-45 | (depende F-43) |
+| 13 | ~~Suite de comportamiento del agente~~ ✅ 15/08 | F-47 | `behavior.test.js`: venta completa con cotización, soporte/derivación, KB sin pérdida de contexto |
+| 14 | ~~Load test 50 conversaciones~~ ✅ 15/08 | F-51 | `scripts/load/k6-scenario.js` + simulador node (`load-test-node.js`) — 8 conv: p95 1177ms, 3.29 turnos/s |
+| 15 | Portal: búsqueda + notificaciones | F-45 | ✅ **implementado 15/08** (Ctrl+K `/api/search`, notificaciones, Lead Panel) |
+
+## ➕ Alcance nuevo (15/08) — multicanal
+
+| # | Objetivo | Detalle |
+|---|----------|---------|
+| MC1 | Probar Telegram real | BotFather → `TELEGRAM_BOT_TOKEN` → `/api/channels/test` → webhook con URL pública |
+| MC2 | Conectar Messenger/Email/WhatsApp Cloud | tokens por canal a medida que estén disponibles |
+| MC3 | ~~Alertas~~ 🟡 parcial | endpoint `/api/internal/alerts` operativo en el hub; reglas Kibana por crear |
+| MC4 | Multimodal avanzado | ✅ STT/visión/TTS implementados; frames de video (FFmpeg) futuros |
+| MC5 | ~~Broadcast multicanal~~ ✅ 15/08 | `POST /api/channels/broadcast` con auditoría por envío |
+
+## ➕ Oleada J (15/08) — implementados y verificados
+
+| # | Pendiente | Estado |
+|---|-----------|--------|
+| J1 | R2 — RAG conectado al grafo | ✅ nodo `kb` + carga de `kb-documents` al arranque + stemming — verificado en runtime |
+| J2 | C1-C4 — cuestionarios/estimación/mini-cotización | ✅ quoteEngine + nodo cotizacion + plantilla 8 servicios |
+| J3 | G-37 TTS + sendVoice | ✅ synthesizeSpeech + reply_audio on_demand |
+| J4 | B1 — lectura PG (STORE_MODE=pg) | ✅ snapshot con TTL + findAll stores |
+| J5 | B2 — n8n activación | ✅ 2/3 workflows activos en runtime (logs verificados) |
+| J6 | Portal Fase 2 parcial | ✅ Lead Panel + Ctrl+K + notificaciones |
+| J7 | Dify budget timeout | ✅ DIFY_BUDGET_MS=6000 → fallback fluido (p95 4471→1177ms) |
 | 16 | BI Metabase + KPIs | F-52 | Solo ruta nginx huérfana (`/reportes/`→metabase:3000); requiere F-09/F-10 |
 | 17 | Planes + onboarding automático | F-53 | (depende F-10/F-30) |
 | 18 | Despliegue distribuido prod + piloto | F-54, F-56 | deploy.sh + go-live (requiere I + G + F) |

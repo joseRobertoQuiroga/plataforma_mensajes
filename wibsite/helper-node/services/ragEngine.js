@@ -183,13 +183,20 @@ function addInMemoryDocument(tenantId, title, content, source) {
   return { documentId: docId, fallback: true };
 }
 
+function termMatches(content, term) {
+  if (content.includes(term)) return true;
+  if (term.length > 5 && content.includes(term.slice(0, -2))) return true;
+  if (term.length > 4 && content.includes(term.slice(0, -1))) return true;
+  return false;
+}
+
 function queryInMemoryKB(tenantId, queryText, limit = 5) {
   const terms = queryText.toLowerCase().split(/\s+/).filter(t => t.length > 2);
   const results = [];
   for (const [key, doc] of inMemoryKB.entries()) {
     if (!key.startsWith(`${tenantId}:`)) continue;
     const content = doc.content.toLowerCase();
-    const matchCount = terms.filter(t => content.includes(t)).length;
+    const matchCount = terms.filter(t => termMatches(content, t)).length;
     if (matchCount > 0) {
       results.push({ ...doc, relevance: matchCount / terms.length });
     }

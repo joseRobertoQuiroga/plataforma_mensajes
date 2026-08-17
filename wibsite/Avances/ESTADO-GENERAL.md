@@ -9,12 +9,12 @@
 | Campo | Valor |
 |-------|-------|
 | **Nombre** | Wibsite Business |
-| **Propósito** | Plataforma de mensajería omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email) |
+| **Propósito** | Plataforma de mensajería omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email, Telegram) |
 | **Stack** | Chatwoot + Dify + n8n + Twenty CRM + Helper Node + PostgreSQL + Redis + Weaviate + Elastic Stack (Elasticsearch + Kibana + OTel Collector) + MinIO |
 | **Orquestación** | Docker Compose (20 servicios) |
-| **Estado General** | 🟡 **Fase 1 en progreso — 40/56 fases TEC-06 ✅** — Pendientes: cutover PG/tenant RLS, Frappe/ERP, F-42 CI gates, load test, SaaS/piloto |
-| **Última actualización** | 2026-08-12 |
-| **Helper Node** | v2.1.1 según `package.json` (docs previas citaban v2.2.0) — ~108 rutas, 149 tests |
+| **Estado General** | 🟡 **Fase 1 en progreso — 40+/56 fases TEC-06 ✅** — Pendientes: secretos pre-deploy, cutover PG completo (lecturas), Frappe/ERP (diferido), SaaS/piloto |
+| **Última actualización** | 2026-08-15 (verificación en vivo: stack 20 contenedores, gateway 200, tests 176/176 en 22 suites, TeVS 13/13, e2e-trace 10/10) |
+| **Helper Node** | v2.2.0 — ~130 rutas, 176 tests (22 suites) |
 
 ---
 
@@ -22,35 +22,41 @@
 
 ```
 Infraestructura         ████████████████████ 100%  ✅  +Authelia, Elastic Stack, MinIO (compose 20 servicios)
-Helper Node             ████████████████████ 100%  ✅  v2.1.1 + store facade + agentCore + templateEngine (~108 rutas)
+Helper Node             ████████████████████ 100%  ✅  v2.2.0 + store facade dual-write + agentCore + templateEngine (~120 rutas)
 Middleware Seguridad    ████████████████████ 100%  ✅  Auth, Rate Limit, Sanitizer, HMAC + PII filter
-Conversation Store      ████████████████████ 100%  ✅  State machine 9 estados + checkpointer (TTL 7d, checkpoint Redis/PG)
+Conversation Store      ████████████████████ 100%  ✅  State machine 9 estados + checkpointer (conversation_summaries migrada a PG 15/08)
 Lead Profile Builder    ████████████████████ 100%  ✅  Tags, next action, score history
 Agent Config Editor     ████████████████████ 100%  ✅  10 tipos negocio, 5 personalidades
 RAG Engine              ████████████████████ 100%  ✅  Weaviate + fallback in-memory
 Anti-Hallucination      ████████████████████ 100%  ✅  Boundaries, triggers, unknown responses
 SLI/SLO Monitoring      ████████████████████ 100%  ✅  Health+, metrics, uptime tracking + prom-client
 Template Engine         ████████████████████ 100%  ✅  Load, validate, merge, 3 plantillas
-Agent Graph Engine      ████████████████████ 100%  ✅  Grafo 9 nodos ejecutable (F-16) + checkpointer (F-14) + guards (F-17) + Dify node/fallback (F-18) + sync comercial (F-21)
-Audit Logging           ████████████████████ 100%  ✅  PII filter + 12 event types + PG persistencia
+Agent Graph Engine      ████████████████████ 100%  ✅  Grafo 9 nodos (F-16) + checkpointer (F-14) + guards (F-17) + Dify/fallback (F-18) + sync comercial (F-21)
+Audit Logging           ████████████████████ 100%  ✅  PII filter + 24 event types + PG + puente OTLP logs → Elasticsearch (15/08)
 Portal Shell            ████████████████████ 100%  ✅  9 módulos, SSO, postMessage
 CRM Metodológico        ████████████████████ 100%  ✅  Script SPICED/MEDDIC 13 campos
-Verificación            ████████████████████ 100%  ✅  verify-fase.sh + contract-tests.js + TeVS (11 tests) + 149 tests Jest (17 suites)
-Observabilidad          ████████████████████ 100%  ✅  Elasticsearch + Kibana + otel-collector activo (spans OTel → ES, trazas helper verificadas)
+Verificación            ████████████████████ 100%  ✅  TeVS 11/11 + e2e-trace 10/10 + 169 tests Jest (19 suites)
+Observabilidad          ████████████████████ 100%  ✅  ES 9.4.2 + Kibana + OTel: traces+metrics+logs con rollover diario (ILM 1d/30d, 15/08)
 Dify (IA)               ████████████████████ 100%  ✅
 Twenty CRM              ████████████████████ 100%  ✅
 n8n Workflows           ██████████████████░░  90%  ⚠️  3 workflows activos en BD; falta toggle UI y credenciales
+Multicanal              ██████████████████░░  90%  ✅  Pipeline unificado: Email+Telegram+WhatsApp+Messenger+TikTok + broadcast + pruebas por canal; falta conectar tokens
+Multimodal              ██████████████████░░  90%  ✅  STT (audio→texto) + visión (imagen→descripción) + TTS (texto→voz con reply_audio) vía OpenRouter
+RAG de negocio          ████████████████████ 100%  ✅  Conectado al grafo (nodo kb) + carga de kb-documents en arranque — verificado en runtime
+Cotizaciones            ████████████████████ 100%  ✅  Cuestionarios por servicio (8 servicios) + estimación por alcance + mini-cotización (nodo cotizacion)
+Portal Shell            ██████████████████░░  90%  ✅  8 módulos SSO + Lead Panel + búsqueda Ctrl+K + notificaciones; postMessage cross-module pendiente
+Carga (F-51)            ████████████████████ 100%  ✅  k6 + simulador node: 8 conv p95 1177ms · 3.29 turnos/s
+n8n Workflows           ██████████████████░░  90%  ⚠️  2/3 activos en runtime (01 inbound + 02 broadcast); tercero variante con credenciales pendientes
 Documentación           ████████████████████ 100%  ✅  100+ archivos técnicos
 Scripts/Automatiz.      ████████████████████ 100%  ✅  backup, migrate, verify, fields, orphan-check
 Chatwoot Inbox          ████████████████░░░░  80%  ⚠️  Inbox + puente Twilio configurado
-Meta WhatsApp API       ░░░░░░░░░░░░░░░░░░░░   0%  🚫  Reemplazado por bridge Twilio (TEC-06 F-03…F-06 ✅)
-SSO (Authelia)          ████████████████████ 100%  ✅  Config compose + nginx auth_request
-Flujo Inbound Real      ████████████████████ 100%  ✅  Twilio→helper→n8n→Dify→Twenty (F-05)
+Meta WhatsApp API       ████████████████░░░░  80%  ⚠️  Webhook Meta listo (/webhooks/whatsapp); envío por Twilio hasta migración
+SSO (Authelia)          ████████████████████ 100%  ✅  Config compose + nginx auth_request (verificado 403 sin SSO)
+Flujo Inbound Real      ████████████████████ 100%  ✅  Twilio→helper→n8n→Dify→Twenty (F-05) + pipeline multicanal (15/08)
 Flujo Campaign Real     ████████████████████ 100%  ✅  /api/twilio/send + StatusCallback (F-06)
-Tests Unitarios         ████████████████████ 100%  ✅  149 tests (17 suites)
-Tests Contract          ████████████████████ 100%  ✅  15 tests entre módulos
-Pruebas Completas       ████████████████████ 100%  ✅  174 tests documentados; auditoría 78 checks (03/08)
-TeVS (Elastic)          ████████████████████ 100%  ✅  Suite 11 tests + runner — 11/11 PASSED (12/08; re-corrida 13/08 con helper final)
+Tests Unitarios         ████████████████████ 100%  ✅  176 tests (22 suites) — 15/08
+TeVS (Elastic)            13/13 PASSED (15/08)
+Dual-Write PG           ████████████████████ 100%  ✅  Rutas conectadas al facade (F-08): campañas/leads/scores/opt-outs verificados en PG (15/08)
 ```
 
 ---
@@ -68,14 +74,18 @@ TeVS (Elastic)          ██████████████████�
 | **n8n** | ✅ Servicio OK, ⚠️ Config pendiente | Workflows importados, body parser bug conocido | Activar workflows UI, crear credenciales |
 | **Twenty CRM** | ✅ Completo | API key JWT, 10 campos custom, sync funcional | — |
 | **Helper Node** | ✅ Completo | ~108 rutas (~35+ grupos), dashboard SPA, PostgreSQL + JSON fallback | — |
-| **Elasticsearch** | ✅ Config (compose) | Almacén de trazas/logs OTel (índices `*-doags.otel-production`) | Arrancar Docker Desktop y verificar ingestión |
-| **Kibana** | ✅ Config (compose) | UI observabilidad en :5601 | Arrancar y revisar dashboards OTel |
-| **OTel Collector** | ✅ Config (compose) | Receive OTLP :4317/:4318 → export ES :9200 | Revisar password hardcodeada en config (gap conocido) |
-| **MinIO** | ✅ Config (compose) | Object storage :9000 + consola :9001 | — |
-| **Meta API** | 🚫 No configurado | — | Reemplazado por bridge Twilio (F-03…F-06 ✅) |
-| **Authelia** | ✅ Config (compose) | Gateway SSO con nginx auth_request | Runtime no verificado (Docker Desktop detenido) |
+| **Elasticsearch** | ✅ Operativo | Datastreams traces/metrics/logs con ILM rollover 1d + delete 30d (15/08) | — |
+| **Kibana** | ✅ Operativo | UI observabilidad en :5601 | — |
+| **OTel Collector** | ✅ Operativo | OTLP :4317/:4318 → ES: traces + metrics + logs (helper emite logs 15/08) | — |
+| **MinIO** | ✅ Operativo | Object storage :9000 + consola :9001 | — |
+| **Meta API** | ⚠️ Webhook listo | `/webhooks/whatsapp` (GET verify + POST) | Envío por Twilio hasta migración |
+| **Authelia** | ✅ Operativo | Gateway SSO con nginx auth_request — verificado 403 sin SSO (14/08) | — |
+| **Telegram** | ✅ Adapter listo | Bot API sendMessage + webhook + normalización (voz/foto/video) | Conectar TELEGRAM_BOT_TOKEN y probar con bot real |
+| **Multimodal** | ✅ Bases | STT (OpenRouter transcripciones) + visión (gpt-4o-mini) con degradación elegante | Configurar OPENROUTER_STT_MODEL |
+| **Frappe/ERP** | ⬜ Diferido | Ruta nginx `/erp/` comentada; decisión de negocio futura | F-28/F-29 |
+| **Metabase/BI** | ⬜ Diferido | Ruta nginx `/reportes/` comentada | F-52 |
 
-> **Nota operativa (2026-08-12):** Docker Desktop estaba **detenido** al momento de esta actualización, por lo que el estado de contenedores en ejecución **no pudo verificarse en vivo**; la matriz anterior refleja configuración estática (`docker-compose.yml`, nginx.conf, configs). La última auditoría ejecutada (2026-08-03, `scripts/logs/audit.log`) registró 78 pruebas OK.
+> **Verificación en vivo (2026-08-15):** Docker Desktop activo, 20 contenedores, gateway HTTPS 200 (/hub/, /api/health), 403 sin SSO (/api/campaigns), helper :3100 200, n8n :5679 200, Dify :5001 200. Dual-write PG verificado end-to-end (campaña→lead→score→opt-out). Pipeline multicanal verificado con webhook Telegram simulado (lead + grafo + LLM OpenRouter real + auditoría en PG y ES).
 
 ---
 
@@ -92,7 +102,8 @@ TeVS (Elastic)          ██████████████████�
 - 100+ archivos de documentación técnica
 - Dashboard SPA con monitoreo en tiempo real + hub/control-center
 - Upload Excel/CSV con auto-detección de columnas
-- Motor agéntico ejecutable (Oleada C, 2026-08-12): grafo 9 nodos con aristas condicionales, checkpointer de memoria (Redis + PG `conversation_summaries`), guards de confidencialidad/autonomía (zonas green/yellow/red con PII assisted), Dify como nodo con fallback OpenRouter + circuit breaker, y sync máquina comercial↔técnica vía `commercialState` — 26 tests nuevos (149 total, 17 suites)
+- Motor agéntico ejecutable (Oleada C, 2026-08-12): grafo 9 nodos con aristas condicionales, checkpointer de memoria (Redis + PG `conversation_summaries`), guards de confidencialidad/autonomía (zonas green/yellow/red con PII assisted), Dify como nodo con fallback OpenRouter + circuit breaker, y sync máquina comercial↔técnica vía `commercialState`
+- **Oleada multicanal + monitoreo (2026-08-15):** dual-write PG conectado a las rutas de negocio (F-08) y verificado end-to-end en runtime; migración `conversation_summaries` aplicada (F-14); ILM rollover diario (1d/30d) en traces/logs/metrics; puente OTLP logs (helper → ES logs datastream, 109+ docs); pipeline multicanal unificado (Email · Telegram · WhatsApp · Messenger · TikTok) + bases multimodales (STT audio + visión de imágenes vía OpenRouter, degradación elegante); tests 169/169 en 19 suites; TeVS 11/11 y e2e-trace 10/10 re-ejecutados; residuos limpiados (monitoring/ prometheus-grafana, rutas nginx /erp/ y /reportes/ comentadas)
 
 → Ver detalle completo en [`LOGROS.md`](./LOGROS.md)
 
@@ -102,11 +113,11 @@ TeVS (Elastic)          ██████████████████�
 
 | Prioridad | Acción | Requiere |
 |-----------|--------|----------|
-| 1 | 🚀 Iniciar Docker Desktop y levantar stack (`docker compose up -d`) | Docker Desktop corriendo |
-| 2 | 🔑 Regenerar secretos reales: HELPER_API_KEY, ELASTIC_PASSWORD, KIBANA_PASSWORD, KIBANA_SERVICE_TOKEN, etc. (ver .env.example) | — |
-| 3 | 📋 Ejecutar suite TeVS por primera vez (`scripts/tevs/tevs-runner.ps1`) | Stack Elástico arriba |
-| 4 | 🧹 Eliminar de git archivos sensibles: `wibsite-store.json` (PII), `certs/nginx.key`, `n8n-cookies*.txt`, `n8n_login.json`, `%{redirect_url}'` | Revisión de .gitignore |
-| 5 | ▶️ Continuar fases TEC-06 pendientes (F-09 cutover PG, F-10/11 tenant RLS, F-35 re-auditoría, F-42 CI gates, F-46 e2e-trace) | Ver tabla TEC-06 §5 |
+| 1 | 🔑 Conectar `TELEGRAM_BOT_TOKEN` (BotFather) y probar el bot real vía `/webhooks/telegram` o `/api/channels/test` | Token de bot |
+| 2 | 🔒 Resolver checklist de seguridad pre-deploy (`docs/SECURITY-GAPS-PRE-DEPLOY.md`: S1-S3) | Etapa deploy |
+| 3 | ⚙️ Activar workflows n8n (01-inbound, 02-broadcast) con credenciales en UI (:5679) | UI n8n |
+| 4 | 📊 Validar dashboards Kibana con los 3 datastreams (traces+metrics+logs) | Kibana :5601 |
+| 5 | ▶️ F-09 cutover PG (feature flag STORE_MODE=pg cuando RLS tenant complete) + F-51 load test k6 | Ver TEC-06 |
 
 → Ver detalle completo en [`OBJETIVOS-PENDIENTES.md`](./OBJETIVOS-PENDIENTES.md)
 

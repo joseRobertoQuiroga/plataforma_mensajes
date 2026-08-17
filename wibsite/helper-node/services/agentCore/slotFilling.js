@@ -2,7 +2,7 @@
 const NAME_RE = /(?:mi nombre es|me llamo|soy)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]{2,})(?:\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]{2,}))?/i;
 const PHONE_RE = /(\+?\d[\d\s\-()]{6,16}\d)/;
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
-const SERVICE_RE = /(desarrollo a medida|modulo nuevo|integracion de plataformas|integracion|auditoria|consultoria)/i;
+const SERVICE_RE = /(desarrollo a medida|desarrollo web|desarrollo movil|desarrollo mobile|full stack|fullstack|modulo nuevo|integracion de plataformas|integracion|auditoria|consultoria|tienda en linea|tienda online|ecommerce|e-commerce|app movil|plataforma|pasarela de pagos)/i;
 const URGENCY_RE = /(para el|antes de|cuanto antes|esta semana|este mes|urgente|la proxima)/i;
 
 function extractLeadFields(message, state = {}, template = {}) {

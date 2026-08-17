@@ -6,7 +6,7 @@
  */
 
 const { sanitizeForLog, logger } = require('./piiFilter');
-const { getTraceContext } = require('./otelBridge');
+const { getTraceContext, sendLog } = require('./otelBridge');
 
 const EVENT_TYPES = [
   'security_alert', 'state_transition', 'api_call', 'error',
@@ -83,6 +83,29 @@ async function logEvent(eventType, data, req = null) {
       console.error('[AuditLogger] DB insert failed:', e.message);
     }
   }
+
+  // OTLP Logs bridge (Elasticsearch logs datastream) — best-effort, nunca lanza
+  try {
+    sendLog({
+      level: entry.level,
+      message: entry.message,
+      traceId: entry.traceId,
+      spanId: entry.spanId,
+      attributes: {
+        'event.type': eventType,
+        'wibsite.tenant_id': entry.tenantId,
+        'wibsite.request_id': entry.requestId,
+        'wibsite.conversation_id': entry.conversationId,
+        'wibsite.user_id': entry.userId,
+        'wibsite.module': entry.module,
+        'wibsite.flow': entry.flow,
+        'wibsite.action': entry.action,
+        'wibsite.severity': entry.severity,
+        'wibsite.dependency': entry.dependency,
+        'wibsite.latency_ms': entry.latencyMs,
+      },
+    });
+  } catch (e) { /* ignore */ }
 
   return entry;
 }

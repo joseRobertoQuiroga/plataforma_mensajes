@@ -1,4 +1,4 @@
-# TEC-04 — Seguimiento de Cambios, Iteraciones y Deuda Técnica
+﻿# TEC-04 — Seguimiento de Cambios, Iteraciones y Deuda Técnica
 
 > **Versión:** 1.0 | **Fecha:** Julio 2026 | **Tipo:** Técnica (CONTROL)
 > **Propósito:** cómo se registra el avance, qué herramientas de seguimiento existen, qué inconsistencias/deuda hay abiertas y qué ritual de actualización mantiene la documentación confiable.
@@ -19,7 +19,7 @@
 | Funcionalidades | `docs/TAREAS-FUNCIONALES.md` | Checklist por objetivo | Semanal |
 | Objetivos técnicos | `docs/tecnica/TEC-03` (este sistema) | OT-01…12 con estado | Semanal |
 | Mapa RAG | `docs/maestro/MAESTRO-*` | Estado por funcionalidad core | Por cambio de feature |
-| Verificación | `verify-mvp.sh` / `verify-fase.sh` + 112 tests | Gates de avance | Por iteración |
+| Verificación | `verify-fase.sh` + 176 tests (22 suites) + TeVS 13/13 + e2e-trace 10/10 | Gates de avance | Por iteración |
 
 **Nada de esto es opcional:** la regla R3 (FASES-CRUZADAS) exige al completar un paso: verificación + marcar Hecho + CHANGELOG + notificación.
 
@@ -29,7 +29,7 @@
 |---|---|---|
 | v2.0.0 → v2.1.0 | Julio 2026 (Sesión 1, ~25h) | Helper v2: PostgreSQL + fallback, dashboard, Excel, plantillas, scoring |
 | v2.1.1 | 2026-07-10 (Sesión 2, ~15h) | Bugfixes: race condition (storeLock), 409 duplicados, normalización teléfonos; auditoría 14/14 + 2 bugs |
-| **v2.2.0** | Julio 2026 | Seguridad (auth/rate-limit/sanitizer/HMAC), conversation store 9 estados, lead profile, agent config, RAG engine, anti-hallucination, SLI/SLO, **112 tests** |
+| **v3.4.0** | Ago 2026 | Motor agéntico (grafo 9 nodos + RAG + cotizaciones + TTS), multicanal (5 canales), multimodal, dual-write PG, portal (Lead Panel + búsqueda), load tests, **176 tests (22 suites)** + TeVS 13 + e2e-trace 10/10 |
 | v3.0.0 (objetivo) | — | Estado ilustrativo post-MVP en FASE1-MVP-CRUZADO |
 
 Imágenes pineadas (OPS §7): chatwoot (evaluar pinning, usa `:latest` ⚠️ A-09), dify-api, n8n (fijada por bug ADR-019), twenty.
@@ -80,7 +80,7 @@ Fórmula: `(docs actualizados / docs totales) × 100` — objetivo >95%, alerta 
 
 ```
 [ ] Verificación del OT ejecutada y pasando
-[ ] 112 tests + nuevos tests pasando
+[ ] 176 tests (22 suites) + nuevos tests pasando + TeVS 13/13 + e2e-trace 10/10
 [ ] TEC-03 tabla §3 actualizada (estado + fecha verificación)
 [ ] Avances/ESTADO-GENERAL.md y LOGROS/OBJETIVOS actualizados
 [ ] CHANGELOG.md con entrada de versión

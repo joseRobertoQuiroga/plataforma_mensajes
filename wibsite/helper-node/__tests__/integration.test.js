@@ -1,4 +1,7 @@
 const request = require('supertest');
+const { loadApp, closeApp } = require('./helpers/testApp');
+
+jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
 jest.setTimeout(20000);
 
@@ -16,10 +19,11 @@ describe('Integration Tests - Flujo E2E', () => {
     process.env.N8N_URL = 'http://n8n:5678';
     process.env.CHATWOOT_URL = 'http://chatwoot:3000';
     process.env.CHATWOOT_INBOX_IDENTIFIER = 'test-inbox';
-    app = require('../index.js');
+    app = loadApp();
   }, 15000);
 
-  afterAll(() => {
+  afterAll(async () => {
+    await closeApp(app);
     delete process.env.HELPER_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.TWILIO_ACCOUNT_SID;

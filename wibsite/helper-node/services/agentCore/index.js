@@ -9,6 +9,9 @@ const { createObjecionesNode, matchObjection } = require('./nodes/objecionesNode
 const { createCierreNode } = require('./nodes/cierreNode');
 const { createHandoffNode } = require('./nodes/handoffNode');
 const { createFollowupNode } = require('./nodes/followupNode');
+const { createKbNode } = require('./nodes/kbNode');
+const { createCotizacionNode } = require('./nodes/cotizacionNode');
+const quoteEngine = require('./quoteEngine');
 const conversationStore = require('../conversationStore');
 const checkpointer = require('./checkpointer');
 const commercialState = require('./commercialState');
@@ -83,19 +86,43 @@ function createCommercialGraph(template, clientConfig) {
   graph.addNode('cierre', createCierreNode());
   graph.addNode('handoff', createHandoffNode());
   graph.addNode('seguimiento', createFollowupNode());
+  graph.addNode('kb', createKbNode());
+  graph.addNode('cotizacion', createCotizacionNode());
 
   graph.addEdge('apertura', 'analyze');
+
+  graph.addEdge('analyze', 'kb', (result, ctx) => !!ctx.state._kbMatch);
 
   graph.addEdge('analyze', 'objeciones', (result, ctx) =>
     OBJECTION_READY_STAGES.includes(ctx.state._stage) && !!matchObjection(ctx.message, ctx.template));
 
   graph.addEdge('analyze', 'cierre', (result, ctx) => autonomy.wantsCommitment(ctx.message));
 
-  graph.addEdge('analyze', 'propuesta', (result, ctx) =>
-    ctx.state._stage === 'calificacion' && fitComplete(ctx.state));
+  graph.addEdge('analyze', 'propuesta', (result, ctx) => {
+    if (!(ctx.state._stage === 'calificacion' && fitComplete(ctx.state))) return false;
+    // El cuestionario por servicio se completa en el nodo calificacion:
+    // no saltar directo a propuesta si quedan preguntas pendientes
+    const product = quoteEngine.matchProduct(ctx.state, ctx.template);
+    return !(product && quoteEngine.pendingQuestion(product, ctx.state.qAnswers || {}));
+  });
+
+  // Mini-cotización (C4): el lead pidió precios y la zona lo permite
+  graph.addEdge('propuesta', 'cotizacion', (result, ctx) =>
+    autonomy.wantsPricing(ctx.message)
+    && ctx.state._autonomyZone === 'yellow'
+    && !!ctx.state._matchedProduct);
 
   graph.addEdge('analyze', 'calificacion', (result, ctx) =>
     ['greeting', 'calificacion', 'apertura'].includes(ctx.state._stage));
+
+  // Mini-cotización desde una propuesta ya enviada (máquina en proposal):
+  // el lead pide precios y el cuestionario está completo (se evalúa ANTES que profundizacion)
+  graph.addEdge('analyze', 'cotizacion', (result, ctx) => {
+    if (!autonomy.wantsPricing(ctx.message)) return false;
+    if (!['propuesta', 'proposal'].includes(ctx.state._stage)) return false;
+    const product = quoteEngine.matchProduct(ctx.state, ctx.template);
+    return !!(product && !quoteEngine.pendingQuestion(product, ctx.state.qAnswers || {}));
+  });
 
   graph.addEdge('analyze', 'profundizacion', (result, ctx) =>
     ['propuesta'].includes(ctx.state._stage)

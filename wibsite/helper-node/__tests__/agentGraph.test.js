@@ -29,7 +29,9 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
   test('guion: lead curioso → handoff en ≤8 turnos con campos minimos', async () => {
     const guion = [
       { msg: 'Hola', expectStage: 'calificacion' },
-      { msg: 'Soy Ana Lopez, busco integracion de plataformas', expectStage: 'propuesta' },
+      { msg: 'Soy Ana Lopez, busco integracion de plataformas', expectStage: 'calificacion' },
+      { msg: 'Quiero conectar el CRM y pasarela de pagos', expectStage: 'calificacion' },
+      { msg: 'Unas pocas operaciones al dia', expectStage: 'propuesta' },
       { msg: 'contame mas del alcance', expectStage: 'profundizacion' },
       { msg: 'esta muy caro eso', expectStage: 'objeciones' },
       { msg: 'ok, entiendo', expectStage: 'cierre' },
@@ -57,12 +59,16 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
     expect(conv.metadata.commercial_state).toBe('agendado/cerrado');
   });
 
-  test('camino sin objecion: propuesta → profundizacion (completa campos) → cierre', async () => {
+  test('camino sin objecion: cuestionario → propuesta → profundizacion (completa campos) → cierre', async () => {
     const conversationId2 = 'conv-f16-no-objection';
     await cleanup(conversationId2);
     const t1 = await turn('hola', conversationId2);
     expect(t1.stage).toBe('calificacion');
-    const t2 = await turn('soy Pedro, desarrollo a medida', conversationId2);
+    const t1b = await turn('soy Pedro, desarrollo a medida', conversationId2);
+    expect(t1b.stage).toBe('calificacion');
+    const t1c = await turn('un MVP para validar', conversationId2);
+    expect(t1c.stage).toBe('calificacion');
+    const t2 = await turn('sin integraciones externas', conversationId2);
     expect(t2.stage).toBe('propuesta');
     const t3 = await turn('si, contame', conversationId2);
     expect(t3.stage).toBe('profundizacion');
@@ -94,7 +100,10 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
   test('memoria entre turnos: campos extraidos persisten y no se piden repetidos', async () => {
     const conversationId4 = 'conv-f16-mem';
     await cleanup(conversationId4);
-    const t2 = await turn('soy Juan Perez, me interesa auditoria', conversationId4);
+    const t1 = await turn('soy Juan Perez, me interesa auditoria y consultoria', conversationId4);
+    expect(t1.stage).toBe('calificacion');
+    expect(t1.response).toContain('auditar');
+    const t2 = await turn('necesito revisar la seguridad', conversationId4);
     expect(t2.stage).toBe('propuesta');
     expect(t2.response).not.toContain('nombre');
     await cleanup(conversationId4);
@@ -105,6 +114,7 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
     await cleanup(conversationId5);
     await turn('hola', conversationId5);
     await turn('soy Ana, quiero una auditoria', conversationId5);
+    await turn('revision de codigo', conversationId5);
     const conv = await conversationStore.getConversationState('default', conversationId5);
     expect(conv).not.toBeNull();
     expect(conv.state).toBe('proposal');

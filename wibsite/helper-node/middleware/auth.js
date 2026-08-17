@@ -9,7 +9,15 @@ const PUBLIC_ROUTES = [
   { path: '/metrics', method: 'GET' },
   { path: '/api/sli/metrics', method: 'GET' },
   { path: '/webhooks/whatsapp', method: 'GET' },
+  { path: '/webhooks/whatsapp', method: 'POST' },
   { path: '/api/llm/health', method: 'GET' },
+  // Multicanal (protección vía tokens de verificación/firma de cada plataforma)
+  { path: '/webhooks/telegram', method: 'GET' },
+  { path: '/webhooks/telegram', method: 'POST' },
+  { path: '/webhooks/messenger', method: 'GET' },
+  { path: '/webhooks/messenger', method: 'POST' },
+  { path: '/webhooks/email-inbound', method: 'POST' },
+  { path: '/webhooks/tiktok-comments', method: 'POST' },
 ];
 
 function isPublicRoute(req) {

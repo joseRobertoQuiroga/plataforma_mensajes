@@ -1,4 +1,4 @@
-# Análisis de Estado — Gaps de Minifases, Seguridad y Estándares (14/08/2026)
+﻿# Análisis de Estado — Gaps de Minifases, Seguridad y Estándares (14/08/2026)
 
 **Alcance:** validar el estado real de las minifases pendientes (P0/P1/P2/P3) y confirmar que lo implementado cumple con el estándar de seguridad/control: **quién → qué → cómo → en qué módulo → en qué proceso**, con trazabilidad `trace_id`/`span_id` persistida en PostgreSQL (`audit_logs`) y Elasticsearch/Kibana (OTel).
 
@@ -14,6 +14,7 @@
 | P0 — Seguridad de secretos | ⚠️ **3 hallazgos críticos**: API key literal no evaluado, password ES hardcodeado en `.gitlab-ci.yml`, `nginx.key`+`wibsite-store.json` (PII) en git |
 | P0 — Cutover PG + RLS | 🟡 RLS **implementado y verificado** (7 políticas) · pero **dual-write PG es código muerto** y tabla `conversation_summaries` NO existe → F-14/F-09 reales ⬜ |
 | P1 — LangGraph agente | ✅ Verificado con tests: 49/49 PASS en 6 suites (graph, guards, checkpointer, commercialState, conversation, agentConfig) |
+| Tests de negocio | ✅ **22/22 suites, 176/176 tests PASS (15/08, Oleada J: +kbRag, +quoteFlow, +behavior, +channels)** (15/08/2026): `flow.test.js` arreglado (store JSON duplicado en index.js unificado al facade `services/store.js`) |
 | P1 — CI/Trazabilidad | ✅ F-42/F-46 corregidos y verificado (gate e2e 10/10×3 previo, TeVS 11/11) · ⚠️ 1 fallo histórico en tevs-results del 11/08 |
 | P1 — n8n UI / Frappe | 🟡 n8n operativo (5679) pero activación de workflows NO verificable · Frappe ⬜ (solo ruta huérfana `nginx.conf:517`), Metabase ⬜ (`nginx.conf:500`) |
 | P2 — Suite/load/BI/planes/deploy | ⬜ F-47, F-51 (no existe k6), F-52, F-53, F-54/56 sin implementar |
@@ -141,11 +142,13 @@
 
 ## 5. Hallazgos ordenados por severidad
 
+> **S1-S3 (seguridad)** están documentados a detalle en **[`SECURITY-GAPS-PRE-DEPLOY.md`](./SECURITY-GAPS-PRE-DEPLOY.md)** — excluidos del trabajo de implementación en curso; pendientes para la etapa de deploy.
+
 | ID | Sev | Hallazgo | Referencia |
 |---|---|---|---|
-| S1 | 🔴 | `HELPER_API_KEY` = literal `wb_dev_$(openssl rand -hex 16)` sin evaluar (key pública fija) | `.env:57`, env del contenedor |
-| S2 | 🔴 | `ELASTIC_PASSWORD` hardcodeado en `.gitlab-ci.yml:12` | `.gitlab-ci.yml:12` |
-| S3 | 🔴 | `nginx.key` + `wibsite-store.json` (PII) en git history | commit `a603c91` |
+| S1 | 🔴 | `HELPER_API_KEY` = literal `wb_dev_$(openssl rand -hex 16)` sin evaluar (key pública fija) | `.env:57`, env del contenedor → ver SECURITY-GAPS |
+| S2 | 🔴 | `ELASTIC_PASSWORD` hardcodeado en `.gitlab-ci.yml:12` | `.gitlab-ci.yml:12` → ver SECURITY-GAPS |
+| S3 | 🔴 | `nginx.key` + `wibsite-store.json` (PII) en git history | commit `a603c91` → ver SECURITY-GAPS |
 | S4 | 🟠 | Tabla `conversation_summaries` no migrada → checkpointer F-14 falla en silencio en prod | `checkpointer.js:14,38-41` vs `\dt` |
 | S5 | 🟠 | Dual-write PG (F-08/F-09): `writeCampaign/writeLead/writeScore/writeOptOut` definidos pero **jamás invocados** desde rutas; PG solo recibe seeds y audit_logs | `store.js:76-91`, grep en `index.js` |
 | S6 | 🟠 | Datastream traces no rola por fecha (spans del 13/08 en índice del 11/08) | `_cat/indices` + `_index` en hits |
@@ -154,30 +157,37 @@
 | S9 | 🟡 | `monitoring/` con configs de Prometheus/Grafana/Alertmanager huérfanas tras F-36 | `monitoring/` vs compose |
 | S10 | 🟡 | n8n expuesto en puerto 5679 host (no 5678) — documentación/diagnósticos apuntan al equivocado | `docker port wibsite-n8n` |
 | S11 | 🟡 | Logs-datastream con 1 solo doc → logging de aplicación casi ausente en ES | `_data_stream` |
-| S12 | 🟡 | `flow.test.js` roto (`checkWeaviateHealth is not a function`, `index.js:184`) + leak de worker Jest | suite actual |
+| S12 | ✅ **RESUELTO (15/08/2026)** | `flow.test.js` arreglado: causa raíz = store JSON duplicado en `index.js` (cache propio) vs facade `services/store.js`; unificado delegando al facade + borrado de archivo en afterEach. Suite completa **22/22 suites, 176/176 tests PASS (15/08, Oleada J: +kbRag, +quoteFlow, +behavior, +channels)** | suite actual |
 | S13 | 🟡 | Docs contradictorias para el seguimiento (§4) | varios |
 
 ---
 
 ## 6. Plan de corrección sugerido
 
-**P0 (seguridad primero):**
+**P0 (seguridad primero — S1-S3 documentados en [`SECURITY-GAPS-PRE-DEPLOY.md`](./SECURITY-GAPS-PRE-DEPLOY.md), pendientes para deploy):**
 1. Generar API key real (`openssl rand -hex 32`), aplicarla en `.env`, compose y clientes; eliminar el literal.
 2. Mover `ELASTIC_PASSWORD` de `.gitlab-ci.yml` a variables enmascaradas del runner GitLab.
-3. Aplicar `scripts/conversation-summaries-schema.sql` a PG (desbloquea F-14).
-4. Decidir cutover: o conectar rutas al facade dual (`store.js` `writeCampaign`/`writeLead`/…) o declarar JSON-only y eliminar deuda F-08/09 (G1 de la auditoría previa).
-5. Purga git (`filter-repo`) de `nginx.key` y `wibsite-store.json` + rotación de certificado.
-6. (Opcional) Configurar ILM/datastream para que traces rolen por día.
+3. Purga git (`filter-repo`) de `nginx.key` y `wibsite-store.json` + rotación de certificado.
+
+**Correcciones ya aplicadas (15/08/2026):**
+4. ✅ `flow.test.js` arreglado + **store JSON unificado**: `index.js` tenía cache/lock propios (`loadStore`/`saveStore`/`updateStore`/`getStore` locales) duplicados al facade → ahora delegan a `services/store.js` (un solo cache, un solo lock). Suite completa **22/22 suites, 176/176 tests PASS (15/08, Oleada J: +kbRag, +quoteFlow, +behavior, +channels)**.
+5. ✅ `await updateStore(...)` aplicado en rutas que hacían fire-and-forget (campaigns `index.js:274`, leads/score `:864`, chatwoot webhook `:2608`) — el error era silencioso con `updateJsonStore` cache TTL.
+6. ✅ `PUT /api/agent/config` ya no usa `saveStore` huérfano; persiste vía `updateStore` (`index.js:1974-1984`).
+
+**Pendientes no-seguridad:**
+7. Aplicar `scripts/conversation-summaries-schema.sql` a PG (desbloquea F-14).
+8. Decidir cutover: o conectar rutas al facade dual (`store.js` `writeCampaign`/`writeLead`/…) o declarar JSON-only y eliminar deuda F-08/09 (G1 de la auditoría previa).
+9. (Opcional) Configurar ILM/datastream para que traces rolen por día.
 
 **P1:**
-7. F-02: configurar credenciales + activar workflows 01/02 en el editor n8n (UI accesible en `:5679`); alinear mapeo de puerto.
-8. F-28/29/F-52: decisión de negocio — retirar rutas huérfanas `/erp/` y `/reportes/` o levantar los servicios.
-9. Completar `ci.yml` (lint + audit + contract) y activar gates en PR.
-10. Re-ejecutar TeVS completo tras los fixes P0 y documentar resultado en `tevs-results` de la fecha.
+10. F-02: configurar credenciales + activar workflows 01/02 en el editor n8n (UI accesible en `:5679`); alinear mapeo de puerto.
+11. F-28/29/F-52: decisión de negocio — retirar rutas huérfanas `/erp/` y `/reportes/` o levantar los servicios.
+12. Completar `ci.yml` (lint + audit + contract) y activar gates en PR.
+13. Re-ejecutar TeVS completo tras los fixes P0 y documentar resultado en `tevs-results` de la fecha.
 
 **P2:**
-11. F-47 suite de comportamiento del vendedor (E2E con grafo real), F-51 k6 (`50 conv`, umbrales P95).
-12. F-52/53/54 en oleada J cuando F-09/10 estén cerradas; F-56 depende de ellas.
+14. F-47 suite de comportamiento del vendedor (E2E con grafo real), F-51 k6 (`50 conv`, umbrales P95).
+15. F-52/53/54 en oleada J cuando F-09/10 estén cerradas; F-56 depende de ellas.
 
 ---
 
@@ -208,6 +218,7 @@ GET /traces-doags.otel-production/_search          # 23 llm.completion, 19 openr
 
 # Jest (núcleo agente F-14/16/17/21)
 npx jest agentGraph guards commercialState checkpointer conversation agentConfig  # 6 suites, 49/49 PASS
+npx jest --forceExit --testTimeout 30000                                          # suite completa 18/18, 151/151 PASS (15/08/2026)
 
 # Secretos
 docker exec wibsite-helper printenv HELPER_API_KEY  # wb_dev_$(openssl rand -hex 16)  → literal

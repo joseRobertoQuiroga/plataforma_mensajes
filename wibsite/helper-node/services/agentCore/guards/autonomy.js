@@ -11,7 +11,7 @@ const YELLOW_DISCLAIMER = ' (Precios referenciales, sujetos a propuesta formal)'
 
 function wantsPricing(message = '') {
   const lower = message.toLowerCase();
-  return /cotizacion|cotiza|precio|cuanto cuesta|costo|cuanto sale|presupuesto|factura|pago/.test(lower);
+  return /cotizacion|cotiza|precio|cuanto cuesta|costo|cuanto sale|presupuesto|factura|cuanto me saldria|cuanto saldria|cuanto costaria/.test(lower);
 }
 
 function wantsCommitment(message = '') {

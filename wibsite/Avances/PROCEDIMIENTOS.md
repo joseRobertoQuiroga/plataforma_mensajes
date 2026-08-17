@@ -1,4 +1,4 @@
-# PROCEDIMIENTOS — Operación y Mantenimiento
+﻿# PROCEDIMIENTOS — Operación y Mantenimiento
 
 > Comandos y pasos esenciales para el día a día — Última actualización: 2026-08-12
 
@@ -186,7 +186,7 @@ cat backups/<archivo>.dump | docker exec -i wibsite-postgres psql -U wibsite -d 
 
 ## 8. Observabilidad (Elastic Stack + OpenTelemetry)
 
-> Reemplaza a Prometheus/Grafana/GlitchTip (servicios eliminados de `docker-compose.yml`; `monitoring/` queda como esqueleto heredado).
+> Reemplaza a Prometheus/Grafana/GlitchTip (servicios eliminados de `docker-compose.yml`; `monitoring/` eliminado (15/08)).
 
 ```bash
 # Cluster health

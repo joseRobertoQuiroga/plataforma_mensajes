@@ -6,6 +6,7 @@ COPY index.js ./
 COPY middleware/ ./middleware/
 COPY services/ ./services/
 COPY templates/ ./templates/
+COPY kb-documents/ ./kb-documents/
 COPY public/ ./public/
 COPY wibsite-store.json* ./
 EXPOSE 3100

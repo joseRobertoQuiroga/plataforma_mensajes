@@ -67,6 +67,12 @@
 - `docs/AUDIT-CROSSCHECK.md` · `docs/AUDIT-TEST-MONITORING-STATUS.md` — Auditoría cruzada código↔docs↔infra
 - `docs/DIAGNOSTICO-FINAL.md` · `docs/ANALISIS-CRITICO-FINAL.md` · `docs/GAPS-MINIFASES.md` — Diagnósticos finales y 45 micro-gaps
 - `docs/CIERRE-FINAL-TWILIO.md` — Cierre del puente Twilio (F-03…F-06)
+- `docs/ANALISIS-CRUZADO-2026-08-15.md` — 🆕 Análisis cruzado del estado real + gaps sectorizados (bloqueante/alcance/diferido)
+- `docs/ANALISIS-OPERATIVO-MULTICANAL-RAG-COTIZACIONES.md` — 🆕 Canales, multimodal (STT/visión/TTS), RAG, plantillas dinámicas y cotizaciones
+- `docs/SIMULACRO-INTEGRAL-2026-08-15.md` — 🆕 Simulacro completo multiagente/multimodal con diagrama de servicios externos y validación SOAC
+- `docs/VALIDACION-CONTENEDORES-PORTAL-2026-08-15.md` — 🆕 Inventario de los 20 contenedores (propósito) + validación del portal/microfrontends
+- `docs/AUDIT-DOCUMENTAL-2026-08-15.md` — 🆕 Sincronización docs↔código↔tests↔runtime: matriz de docs vivos actualizados vs históricos
+- `docs/SECURITY-GAPS-PRE-DEPLOY.md` — 🆕 Gaps de seguridad aislados para la etapa deploy (S1-S3)
 
 ## 7. Manuales
 - `docs/MANUAL-TECNICO.md` — Manual técnico por plataforma (endpoints, pruebas, flujos)

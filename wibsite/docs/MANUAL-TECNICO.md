@@ -126,6 +126,35 @@ API central de integración + Dashboard SPA de monitoreo.
 | POST | /api/twenty/sync | Sincronizar lead individual |
 | POST | /api/twenty/sync-all | Sincronizar todos los leads |
 
+#### Agente comercial (grafo 8 etapas + RAG + cotización)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | /api/agent/chat | Turno del agente (message/conversationId) — grafo con cuestionarios por servicio, KB (nodo kb) y mini-cotización (nodo cotizacion) |
+| GET | /api/agent/templates | Listar plantillas de negocio |
+| PUT | /api/agent/templates/:id | Guardar plantilla dinámicamente (products, questionnaire, estimate_factors) |
+| GET | /api/agent/config · PUT | Configuración del agente por tenant |
+
+#### Multicanal (Email · Telegram · WhatsApp · Messenger · TikTok)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | /api/channels/status | Estado/configuración de los 5 canales |
+| POST | /api/channels/test | Enviar mensaje de prueba `{channel, to, text}` |
+| POST | /api/channels/broadcast | Broadcast multicanal `{channel, message_template, audience}` |
+| GET+POST | /webhooks/telegram | Webhook Telegram (verificación + mensajes; voz/foto con STT/visión) |
+| GET+POST | /webhooks/messenger | Webhook Messenger (hub.verify + mensajes) |
+| POST | /webhooks/email-inbound | Entrada de email (proveedor-agnóstico) |
+| POST | /webhooks/tiktok-comments | Comentarios TikTok (agregador/API) |
+| POST | /webhooks/twilio-inbound | WhatsApp/Twilio inbound (existente) |
+
+#### Portal (búsqueda, notificaciones, observabilidad)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | /api/search?q= | Búsqueda global (leads + campañas) — Ctrl+K del portal |
+| GET | /api/notifications | Notificaciones unificadas (incidentes/seguridad/fallbacks 24h) |
+| GET | /api/internal/health-detailed | Dependencias reales (PG, Redis ping, Elastic cluster, LLM, canales, multimodal) |
+| GET | /api/internal/alerts | Alertas activas |
+| GET | /api/knowledge-base/query | Consulta directa a la base de conocimiento |
+
 #### Dashboard
 | Método | Ruta | Descripción |
 |--------|------|-------------|

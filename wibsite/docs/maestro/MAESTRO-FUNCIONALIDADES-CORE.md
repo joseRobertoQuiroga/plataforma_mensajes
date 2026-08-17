@@ -1,4 +1,4 @@
-# Archivo Maestro — Funcionalidades Core de la Plataforma (Mapa RAG)
+﻿# Archivo Maestro — Funcionalidades Core de la Plataforma (Mapa RAG)
 
 > **Versión:** 1.1 | **Fecha:** Agosto 2026 | **Tipo:** Índice maestro de seguimiento técnico rápido
 > **Uso:** cada funcionalidad core tiene un **ID RAG-GX-YY**, su **path**, las **funciones/endpoints** que la componen, **cómo se abarca la solución**, su **estado** y sus **referencias**. Buscar por ID o por grupo. Detalle de implementación en [TEC-02](../tecnica/TEC-02-FUNCIONES-IMPLEMENTACION.md); contexto en CTX-0X.
@@ -48,7 +48,7 @@
 | RAG-G2-01 | API de integración | `helper-node/index.js` (2138 líneas, v2.2.0) | Express 5, ~60 endpoints `/api/*` + legacy v1, `updateStore()` atómico con lock, caché 200ms | Servicio central que conecta campañas, leads, scoring, CRM, webhooks, LLM, RAG | ✅ | ADR-009/017, TEC-02 §G2 |
 | RAG-G2-02 | Middleware de seguridad | `helper-node/middleware/` | `authMiddleware` (X-API-Key), `rateLimiter` 30/60 rpm, `sanitizerMiddleware` (23 patrones inyección), HMAC Meta/Chatwoot | Defensa en capa de aplicación complementaria al borde (Authelia/Nginx) | ✅ | ROAD 0.1, SEC C-01/C-03/C-04 |
 | RAG-G2-03 | Servicios internos | `helper-node/services/` | `leadProfile`, `agentConfig`, `ragEngine`, `conversationStore` (ver G10-G12) | Lógica desacoplada en módulos importados por index.js | ✅ | LOGROS v2.2.0 |
-| RAG-G2-04 | Suite de tests | `helper-node` (tests) | 112 tests, 8 suites (security, conversation, leadProfile, agentConfig, ragEngine, antiHallucination, rateLimiter, integration) | Gate de regresión en cada iteración | ✅ | TEC-04 §3 |
+| RAG-G2-04 | Suite de tests | `helper-node` (tests) | 176 tests, 22 suites (unitarias + agente + integración + multicanal + comportamiento) | Gate de regresión en cada iteración | ✅ | TEC-04 §3 |
 
 ## G3 — Campañas multi-canal
 
@@ -207,7 +207,7 @@
 | Fase | Objetivo (4 palabras) | RAGs que actualiza | Pruebas clave | Verif. funcionamiento | Gate |
 |---|---|---|---|---|---|
 | F-07 | DUMP JSON→PG | G1-03 | Conteos JSON == PG | Script idempotente con backup previo | Prod: ejecutado con store respaldo |
-| F-08 | DUAL WRITE PG+JSON | G1-03 | 112 tests + diff stores | CRUD OK con flag `dual` | Prod: 48h sin divergencias |
+| F-08 | DUAL WRITE PG+JSON | G1-03 | 176 tests + dual-write verificado en vivo | CRUD OK con flag `dual` + rutas conectadas | Prod: 48h sin divergencias |
 | F-09 | CUTOVER PG primario | G1-03 | Suite + restart | Endpoints OK tras reinicio; `/health` db OK | Prod: rollback testado en <10 min |
 | F-10 | tenant_id + RLS | G18-02 | SQL: tenant A no ve B | Endpoints solo datos del tenant | Prod: 7 días sin violaciones |
 | F-11 | Middleware tenantContext | G18-02 | Tests cross-tenant | API 403/404 correctos | Prod: pentest cross-tenant = 0 |
@@ -302,7 +302,7 @@
 1. **Seleccionar** la primera fila con ⬜ en la tabla de TEC-06 §5 cuyas dependencias estén ✅.
 2. **Leer solo:** esta tabla (fila de arriba) + la fase completa en TEC-06 + referencias directas (CTX/ADR/TEC).
 3. **Implementar** siguiendo los pasos numerados de TEC-06 (nada fuera del alcance).
-4. **Ejecutar** las pruebas de la columna "Pruebas clave" + las suites de test existentes (112 tests base).
+4. **Ejecutar** las pruebas de la columna "Pruebas clave" + las suites de test existentes (176 tests base).
 5. **Cerrar** si verificaciones pasan → marcar ✅ en TEC-06 §5 + actualizar esta tabla (cambiar estado de los RAGs de la columna "RAGs que actualiza") + CHANGELOG. Si falla, no avanzar (regla de oro).
 
 ---

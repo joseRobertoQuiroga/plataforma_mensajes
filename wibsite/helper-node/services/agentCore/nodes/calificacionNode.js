@@ -1,6 +1,7 @@
 'use strict';
 const { extractLeadFields, fitComplete, missingFields } = require('../slotFilling');
 const { createPropuestaNode } = require('./propuestaNode');
+const quoteEngine = require('../quoteEngine');
 
 function createCalificacionNode() {
   return async (context) => {
@@ -9,7 +10,41 @@ function createCalificacionNode() {
     const message = context.message || '';
 
     const extracted = extractLeadFields(message, state, template);
-    const mergedState = { ...state, ...extracted };
+    let mergedState = { ...state, ...extracted };
+
+    const product = quoteEngine.matchProduct(mergedState, template);
+    if (product) mergedState._matchedProduct = product;
+
+    // Cuestionario por servicio (C2): recoger respuestas antes que datos genéricos
+    if (product && (product.questionnaire || []).length) {
+      let answers = { ...(state.qAnswers || {}) };
+      const askedField = state.pendingQuestion;
+      if (askedField) {
+        const asked = (product.questionnaire || []).find(q => q.field === askedField);
+        if (asked) answers[askedField] = quoteEngine.answerQuestion(asked, message);
+      }
+      mergedState.qAnswers = answers;
+
+      const pending = quoteEngine.pendingQuestion(product, answers);
+      if (pending) {
+        return {
+          output: {
+            stage: 'calificacion',
+            text: pending.question,
+            fit: false,
+            extractedFields: Object.keys(extracted),
+            next_action: 'cuestionario',
+            questionnaire: true,
+          },
+          state: {
+            ...mergedState,
+            _stage: 'calificacion',
+            _qualified: false,
+            pendingQuestion: pending.field,
+          },
+        };
+      }
+    }
 
     const fit = fitComplete(mergedState);
 

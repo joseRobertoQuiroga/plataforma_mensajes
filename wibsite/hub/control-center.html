@@ -219,7 +219,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <span class="nav-icon">🧩</span> Módulos & Estado
   </div>
   <div class="nav-item" id="nav-alerts" onclick="showView('alerts')">
-    <span class="nav-icon">🔔</span> Alertas Prometheus
+    <span class="nav-icon">🔔</span> Alertas (Kibana/ES)
     <span class="nav-badge warn" id="badge-alerts">0</span>
   </div>
 
@@ -316,8 +316,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
             <div class="dep-row"><div class="dep-name"><span class="dep-icon">🗄️</span> PostgreSQL</div><div id="dep-pg"><span class="chip chip-yellow">...</span></div></div>
             <div class="dep-row"><div class="dep-name"><span class="dep-icon">🔴</span> Redis</div><div id="dep-redis"><span class="chip chip-yellow">...</span></div></div>
             <div class="dep-row"><div class="dep-name"><span class="dep-icon">🧠</span> Weaviate (RAG KB)</div><div id="dep-weaviate"><span class="chip chip-yellow">...</span></div></div>
-            <div class="dep-row"><div class="dep-name"><span class="dep-icon">🤖</span> LLM (OpenRouter)</div><div id="dep-llm"><span class="chip chip-yellow">...</span></div></div>
-            <div class="dep-row"><div class="dep-name"><span class="dep-icon">🐛</span> GlitchTip</div><div id="dep-glitchtip"><span class="chip chip-yellow">...</span></div></div>
+            <div class="dep-row"><div class="dep-name"><span class="dep-icon">🤖</span> LLM (OpenRouter + Dify)</div><div id="dep-llm"><span class="chip chip-yellow">...</span></div></div>
+            <div class="dep-row"><div class="dep-name"><span class="dep-icon">🔍</span> Elasticsearch (SOAC)</div><div id="dep-elastic"><span class="chip chip-yellow">...</span></div></div>
           </div>
         </div>
         <div class="card">
@@ -389,8 +389,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           <option value="resolved">Resolved</option>
         </select>
         <button class="btn" onclick="loadAlerts()">↻ Actualizar</button>
-        <a href="http://localhost:9090" target="_blank" class="btn">🔗 Prometheus</a>
-        <a href="http://localhost:9093" target="_blank" class="btn">🔗 Alertmanager</a>
+        <a href="/kibana/" class="btn">🔗 Kibana (reglas de alerta)</a>
       </div>
       <div id="alerts-list">
         <div class="empty-state"><div class="empty-icon">🔔</div><p>Cargando alertas...</p></div>
@@ -551,28 +550,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:16px;">Visualización unificada de métricas y tracking de errores.</div>
       
       <div class="tool-links" style="margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
-        <button class="btn primary tab-monitor" onclick="setMonitorTab(this, 'http://localhost:3004/d/wibsite-helper/wibsite-helper-api-and-monitoring?kiosk')">
-          <span class="tool-icon">📈</span> Grafana
+        <button class="btn primary tab-monitor" onclick="setMonitorTab(this, '/kibana/')">
+          <span class="tool-icon">📈</span> Kibana (Observabilidad)
         </button>
-        <button class="btn tab-monitor" onclick="setMonitorTab(this, 'http://localhost:9090')">
-          <span class="tool-icon">🔥</span> Prometheus
+        <button class="btn tab-monitor" onclick="setMonitorTab(this, '/kibana/')">
+          <span class="tool-icon">🧭</span> Elasticsearch (SOAC)
         </button>
-        <button class="btn tab-monitor" onclick="window.open('http://localhost:8282', '_blank')">
-          <span class="tool-icon">🐛</span> GlitchTip
-        </button>
-        <button class="btn tab-monitor" onclick="window.open('http://localhost:9001', '_blank')">
+        <button class="btn tab-monitor" onclick="window.open('/minio-console/', '_blank')">
           <span class="tool-icon">🗂️</span> MinIO
         </button>
-        
         <div style="margin-left:auto; display:flex; gap:8px;">
-          <a href="http://localhost:9093" target="_blank" class="tool-link" style="padding:7px 10px;" title="Abrir externamente">
-            <span class="tool-icon">🔔</span> Alertmanager <span style="font-size:.6rem;color:var(--text3)">:9093</span>
-          </a>
+          <span class="tool-link" style="padding:7px 10px; cursor:default;" title="Retirados del stack (sustituidos por Elastic Stack)">
+            <span class="tool-icon">ℹ️</span> Grafana/Prometheus/GlitchTip retirados (F-36)
+          </span>
         </div>
       </div>
       
       <div class="card" style="padding:0; height:750px; border:1px solid var(--border); border-radius:12px; overflow:hidden;">
-        <iframe id="monitoring-iframe" src="http://localhost:3004/d/wibsite-helper/wibsite-helper-api-and-monitoring?kiosk" width="100%" height="100%" frameborder="0" style="background:#060b14;"></iframe>
+        <iframe id="monitoring-iframe" src="/kibana/" width="100%" height="100%" frameborder="0" style="background:#060b14;"></iframe>
       </div>
     </div>
 
@@ -628,14 +623,14 @@ async function apiFetch(path, options = {}) {
 const viewMeta = {
   dashboard: { title: 'Dashboard General', desc: 'Vista de salud del sistema en tiempo real', load: loadDashboard },
   modules: { title: 'Módulos & Estado', desc: 'Estado individual de cada módulo de negocio', load: loadModules },
-  alerts: { title: 'Alertas Prometheus', desc: 'Alertas activas y resueltas de Alertmanager', load: loadAlerts },
+  alerts: { title: 'Alertas (Kibana/ES)', desc: 'Reglas de alerta gestionadas en Kibana (Elastic Stack)', load: loadAlerts },
   incidents: { title: 'Incidentes', desc: 'Errores rastreados con contexto completo', load: loadIncidents },
   security: { title: 'Eventos de Seguridad', desc: 'Bloqueos, intentos de acceso y anomalías', load: loadSecurityEvents },
   fallbacks: { title: 'Fallbacks Activos', desc: 'Activaciones de modo de respaldo por dependencia', load: loadFallbacks },
   logs: { title: 'Audit Logs', desc: 'Registro de todas las acciones y eventos del sistema', load: loadLogs },
   trace: { title: 'Rastrear Request', desc: 'Traza completa de un request por su requestId', load: () => {} },
   tests: { title: 'Pruebas & Smoke Tests', desc: 'Validación del sistema sin afectar datos reales', load: () => {} },
-  tools: { title: 'Herramientas Externas', desc: 'Acceso a Grafana, Prometheus, GlitchTip y MinIO', load: () => {} }
+  tools: { title: 'Herramientas Externas', desc: 'Acceso a Kibana (observabilidad), Elasticsearch (SOAC) y MinIO', load: () => {} }
 };
 
 function showView(name) {
@@ -685,7 +680,8 @@ async function loadDashboard() {
     renderDep('dep-redis', health.dependencies?.redis?.status === 'available' ? 'green' : 'yellow', health.dependencies?.redis?.status, health.dependencies?.redis?.mode);
     renderDep('dep-weaviate', health.dependencies?.weaviate?.status === 'connected' ? 'green' : 'yellow', health.dependencies?.weaviate?.status, health.dependencies?.weaviate?.mode);
     renderDep('dep-llm', health.dependencies?.llm?.status === 'configured' ? 'green' : 'red', health.dependencies?.llm?.status, health.dependencies?.llm?.model);
-    renderDep('dep-glitchtip', health.dependencies?.glitchtip?.status === 'configured' ? 'green' : 'yellow', health.dependencies?.glitchtip?.status, null);
+    const esOk = ['connected', 'connected-yellow'].includes(health.dependencies?.elastic?.status);
+    renderDep('dep-elastic', esOk ? (health.dependencies?.elastic?.cluster === 'green' ? 'green' : 'yellow') : 'red', health.dependencies?.elastic?.status, health.dependencies?.elastic?.cluster);
 
     // SLI
     document.getElementById('sli-requests').textContent = (health.sli?.requestCount || 0).toLocaleString();

@@ -1,4 +1,4 @@
-# TEC-03 — Objetivos Técnicos, Fases y Cómo Implementarlos
+﻿# TEC-03 — Objetivos Técnicos, Fases y Cómo Implementarlos
 
 > **Versión:** 1.0 | **Fecha:** Julio 2026 | **Tipo:** Técnica (CÓMO/EJECUCIÓN)
 > **Propósito:** lista única de objetivos técnicos (OT-XX) con su implementación concreta, verificación y trazabilidad a objetivos de negocio (CTX) y fases. **Es el documento de planificación de iteraciones.**
@@ -97,7 +97,7 @@ Router por `intent_label`+`conversation_state` → 6 agentes (Qualifier/Sales/Su
 Pipeline multimedia (ROAD 2.1: 7 tipos, cola Bull, límites 10/25/50/20MB, storage por tenant → MinIO de OT-04), TTS con fallback 4 proveedores (ROAD 3.1), llamadas Twilio Voice (ROAD 3.2). **Contexto:** CTX-04 §10.1 (edge case 1).
 
 ### OT-12 — Suite de verificación continua (transversal)
-Completar `verify-mvp.sh` (FASE1-MVP-CRUZADO) y `verify-fase.sh <FASE>` (FASES-CRUZADAS); CI GitHub Actions `mvp-tests.yml`; 112 tests actuales + tests E2E de flujo real. **Regla:** verificación fallida = no avanzar (regla de oro).
+Completar `verify-mvp.sh` (FASE1-MVP-CRUZADO) y `verify-fase.sh <FASE>` (FASES-CRUZADAS); CI GitHub Actions `mvp-tests.yml`; 176 tests actuales (22 suites) + tests E2E de flujo real. **Regla:** verificación fallida = no avanzar (regla de oro).
 
 ## 3. Tabla de seguimiento (actualizar en cada iteración)
 
@@ -114,7 +114,7 @@ Completar `verify-mvp.sh` (FASE1-MVP-CRUZADO) y `verify-fase.sh <FASE>` (FASES-C
 | OT-09 | Planes/límites SaaS | P2 | U-F7 | CTX06-O1 | 🔴 | — |
 | OT-10 | Multi-agente | P2 | U-F4 | CTX05-O6 | 🔴 | — |
 | OT-11 | Multi-modal + voz | P2-P3 | U-F4 | CTX04-O9 | 🔴 | — |
-| OT-12 | Verificación continua | P0 transversal | todas | Reglas de oro | 🟡 112 tests OK | — |
+| OT-12 | Verificación continua | P0 transversal | todas | Reglas de oro | ✅ 176 tests OK + TeVS 13/13 + e2e-trace 10/10 | — |
 
 **Cadencia de actualización:** este tabla se revisa semanal (junto a `Avances/OBJETIVOS-PENDIENTES.md`) — ver TEC-04 §3.
 

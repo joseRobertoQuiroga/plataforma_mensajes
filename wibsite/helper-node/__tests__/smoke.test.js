@@ -1,4 +1,7 @@
 const request = require('supertest');
+const { loadApp, closeApp } = require('./helpers/testApp');
+
+jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
 jest.setTimeout(25000);
 
@@ -16,7 +19,11 @@ describe('Smoke Tests - flujo esencial', () => {
     process.env.N8N_URL = 'http://n8n:5678';
     process.env.CHATWOOT_URL = 'http://chatwoot:3000';
     process.env.CHATWOOT_INBOX_IDENTIFIER = 'test-inbox';
-    app = require('../index.js');
+    app = loadApp();
+  });
+
+  afterAll(async () => {
+    await closeApp(app);
   });
 
   const API_KEY = 'test-api-key-123';

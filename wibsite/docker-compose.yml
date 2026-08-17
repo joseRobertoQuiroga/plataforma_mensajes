@@ -485,6 +485,7 @@ services:
       STORE_MODE: ${STORE_MODE:-dual}
       N8N_URL: http://n8n:5678
       DIFY_API_URL: http://dify-api:5001
+      DIFY_API_KEY: ${DIFY_API_KEY}
       CHATWOOT_URL: http://chatwoot:3000
       TWENTY_URL: http://twenty-server:3000
       TWENTY_API_KEY: ${TWENTY_API_KEY}
@@ -508,6 +509,21 @@ services:
       PG_DATABASE: wibsite
       # Observabilidad
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-wibsite_elastic_pass_2026}
+      # Multicanal (Email · Telegram · WhatsApp · TikTok · Messenger)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      MESSENGER_PAGE_TOKEN: ${MESSENGER_PAGE_TOKEN:-}
+      MESSENGER_VERIFY_TOKEN: ${MESSENGER_VERIFY_TOKEN:-}
+      EMAIL_API_URL: ${EMAIL_API_URL:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      TIKTOK_API_URL: ${TIKTOK_API_URL:-}
+      TIKTOK_API_KEY: ${TIKTOK_API_KEY:-}
+      # Multimodal (OpenRouter)
+      OPENROUTER_STT_MODEL: ${OPENROUTER_STT_MODEL:-}
+      OPENROUTER_VISION_MODEL: ${OPENROUTER_VISION_MODEL:-openai/gpt-4o-mini}
     depends_on:
       - n8n
       - dify-api

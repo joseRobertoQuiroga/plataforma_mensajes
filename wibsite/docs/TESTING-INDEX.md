@@ -26,6 +26,13 @@ Este documento centraliza la estrategia de pruebas del proyecto, los niveles de 
 - Integration tests: ejecutables con éxito en el helper actual.
 - End-to-end: se cubre de forma inicial con la suite de integración y se puede ampliar cuando los servicios externos estén disponibles.
 
+## Estado actual (15/08/2026)
+
+- **Jest: 22 suites · 176/176 PASS** — unitarias (security, conversation, leadProfile, agentConfig, ragEngine, antiHallucination, rateLimiter, tenantContext, channels, kbRag, quoteFlow, behavior) + agente (agentGraph, guards, checkpointer, commercialState, difyFallback) + integración (contract, contract-integrations, smoke, flow, integration).
+- **TeVS (SOAC): 13/13 PASSED** — catálogo: TEST-AGENT-001 (telemetría LLM), TEST-CHN-001 (multicanal), TEST-CORR-001 (correlación trace-logs), TEST-DATA-001 (traces), TEST-DEV-001/002/003 (error rate, presupuesto, alucinación), TEST-DR-001/002 (resiliencia collector, redundancia), TEST-MM-001 (degradación multimodal), TEST-OBS-001 (salud ES/Kibana), TEST-SEC-001/002 (auth, retención audit). Runner: `scripts/tevs/tevs-runner.ps1 -TestFolder scripts/tevs/tests`.
+- **Gate e2e-trace (F-46): 10/10** — `node scripts/verify/e2e-trace.js --key <HELPER_API_KEY>`.
+- **Load tests (F-51)**: `scripts/load/k6-scenario.js` (k6) + `scripts/load/load-test-node.js` (simulador local; 8 conv p95 1177ms · 3.29 turnos/s).
+
 ## Comandos recomendados
 
 Desde la carpeta del helper:
@@ -54,7 +61,12 @@ Desde la carpeta del helper:
 | Scoring | Integration | ✅ |
 | Templates | Integration | ✅ |
 | Opt-out | Integration | ✅ |
-| Knowledge base | Integration | ✅ |
+| Knowledge base | Unit / Integration | ✅ (RAG conectado al grafo, nodo kb) |
+| Grafo agente (8 etapas) | Unit / Behavior | ✅ (agentGraph + behavior) |
+| Cuestionarios + cotización | Unit / Behavior | ✅ (quoteFlow) |
+| Multicanal (5 adapters) | Unit | ✅ (channels) |
+| Multimodal (STT/visión/TTS) | Unit / Integration | ✅ (channels + mediaProcessor) |
+| Flujos de negocio (lead→score→campaña) | Integration | ✅ (flow) |
 
 ## Seguimiento
 

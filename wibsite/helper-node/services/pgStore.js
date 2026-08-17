@@ -36,9 +36,9 @@ const CampaignStore = {
 
   async create(data) {
     const result = await query(
-      `INSERT INTO campaigns (name, description, channel, message_template, template_name, audience_filter, status, scheduled_at, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [data.name, data.description, data.channel || 'whatsapp', data.message_template,
+      `INSERT INTO campaigns (id, name, description, channel, message_template, template_name, audience_filter, status, scheduled_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [data.id, data.name, data.description, data.channel || 'whatsapp', data.message_template,
        data.template_name, JSON.stringify(data.audience_filter || {}),
        data.status || 'draft', data.scheduled_at || null, data.created_by || null]
     );
@@ -84,16 +84,28 @@ const LeadStore = {
     return result.rows;
   },
 
+  async findAll(filters = {}) {
+    let sql = 'SELECT * FROM campaign_leads WHERE 1=1';
+    const params = [];
+    if (filters.limit) { sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`; params.push(filters.limit); }
+    else sql += ' ORDER BY created_at DESC';
+    const result = await query(sql, params);
+    return result.rows;
+  },
+
   async findById(id) {
     const result = await query('SELECT * FROM campaign_leads WHERE id = $1', [id]);
     return result.rows[0] || null;
   },
 
   async create(campaignId, data) {
+    if (!campaignId) return null;
+    const campaignCheck = await query('SELECT 1 FROM campaigns WHERE id = $1', [campaignId]);
+    if (!campaignCheck.rows.length) return null;
     const result = await query(
-      `INSERT INTO campaign_leads (campaign_id, name, phone, email, facebook_id, tiktok_id, custom_fields, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [campaignId, data.name, data.phone, data.email, data.facebook_id,
+      `INSERT INTO campaign_leads (id, campaign_id, name, phone, email, facebook_id, tiktok_id, custom_fields, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [data.id, campaignId, data.name, data.phone, data.email, data.facebook_id,
        data.tiktok_id, JSON.stringify(data.custom_fields || {}), data.status || 'pending']
     );
     return result.rows[0];
@@ -150,10 +162,14 @@ const LeadStore = {
 
 const ScoreStore = {
   async create(data) {
+    if (!data.lead_id) return null;
+    const leadCheck = await query('SELECT campaign_id FROM campaign_leads WHERE id = $1', [data.lead_id]);
+    if (!leadCheck.rows.length) return null;
+    const campaignId = data.campaign_id || leadCheck.rows[0].campaign_id;
     const result = await query(
       `INSERT INTO lead_scores (lead_id, campaign_id, score, score_factors, score_model, notes)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [data.lead_id, data.campaign_id, data.score,
+      [data.lead_id, campaignId, data.score,
        JSON.stringify(data.score_factors || {}), data.score_model || 'rule-based', data.notes || null]
     );
     return result.rows[0];
@@ -163,6 +179,15 @@ const ScoreStore = {
     const result = await query(
       'SELECT * FROM lead_scores WHERE lead_id = $1 ORDER BY classified_at DESC', [leadId]
     );
+    return result.rows;
+  },
+
+  async findAll(filters = {}) {
+    let sql = 'SELECT * FROM lead_scores';
+    const params = [];
+    if (filters.limit) { sql += ` ORDER BY classified_at DESC LIMIT $${params.length + 1}`; params.push(filters.limit); }
+    else sql += ' ORDER BY classified_at DESC';
+    const result = await query(sql, params);
     return result.rows;
   }
 };
@@ -183,6 +208,15 @@ const OptOutStore = {
       'SELECT * FROM opt_outs WHERE phone = $1 AND ($2 IS NULL OR channel = $2)',
       [phone, channel]
     );
+    return result.rows;
+  },
+
+  async findAll(filters = {}) {
+    let sql = 'SELECT * FROM opt_outs';
+    const params = [];
+    if (filters.limit) { sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`; params.push(filters.limit); }
+    else sql += ' ORDER BY created_at DESC';
+    const result = await query(sql, params);
     return result.rows;
   }
 };
