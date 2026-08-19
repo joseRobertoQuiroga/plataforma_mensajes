@@ -121,6 +121,10 @@ try {
     name: 'incident_total', help: 'Total incidents tracked',
     labelNames: ['module', 'severity']
   });
+  promCounters.uiE2eTotal = new promClient.Counter({
+    name: 'ui_e2e_total', help: 'Total UI E2E test results (Playwright)',
+    labelNames: ['spec', 'result']
+  });
 
   app.use((req, res, next) => {
     const start = Date.now();
@@ -2826,7 +2830,45 @@ app.get('/api/channels/status', async (req, res) => {
   res.json({ data: listChannels() });
 });
 
-// ─── Búsqueda global (portal Ctrl+K) ─────────────────────
+// ─── Resultados E2E de UI (Playwright → SOAC) ──────────────
+// El reporter de Playwright publica aquí el resultado de cada spec;
+// se registra como evento e2e_ui (audit PG + ES logs) con trace/span.
+app.post('/api/internal/ui-results', async (req, res) => {
+  try {
+    const { spec, result, duration_ms, trace_url, video_url, console_errors, network_errors, project } = req.body;
+    if (!spec || !result) return res.status(400).json({ error: 'spec y result requeridos' });
+
+    const ok = result === 'passed';
+    const skipped = result === 'skipped';
+    await logEvent('e2e_ui', {
+      level: skipped ? 'info' : (ok ? 'info' : 'error'),
+      message: `UI E2E ${spec} → ${result} (${duration_ms || 0}ms)`,
+      tenantId: 'default',
+      module: 'ui-e2e',
+      flow: 'e2e.playwright',
+      action: skipped ? 'test.skipped' : (ok ? 'test.finished' : 'test.failed'),
+      severity: skipped ? null : (ok ? null : 'high'),
+      dependency: 'playwright',
+      latencyMs: duration_ms || null,
+      data: {
+        spec, result, project: project || 'chromium',
+        duration_ms: duration_ms || null,
+        trace_url: trace_url || null,
+        video_url: video_url || null,
+        console_errors: (console_errors || []).slice(0, 20),
+        network_errors: (network_errors || []).slice(0, 20),
+      },
+    });
+
+    if (promCounters && promCounters.uiE2eTotal) {
+      promCounters.uiE2eTotal.inc({ spec, result: ok ? 'passed' : 'failed' });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/search', async (req, res) => {
   try {
     const q = String(req.query.q || '').toLowerCase().trim();

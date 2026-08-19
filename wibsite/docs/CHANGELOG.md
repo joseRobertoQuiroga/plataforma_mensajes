@@ -1,5 +1,24 @@
 # Wibsite Business — Historial de Cambios
 
+## [3.5.0] — 2026-08-16 (Integración E2E de UI — Playwright + SOAC)
+
+### Added
+- **Suite E2E de UI con Playwright** en `wibsite/e2e/` (`playwright.config.js`, `reporter.js`, `helpers/auth.js`, `specs/`): portal hub (SLI real), monitoring (health + dependencias), agent, n8n y portal/search (skipped por SSO).
+- **Reporter Playwright → SOAC**: emite eventos `e2e_ui` (test.finished/failed/skipped) con módulo `ui-e2e`, flujo `e2e.playwright`, dependencia `playwright`, `latency_ms` y `tenant_id=default`.
+- **`helper-node/index.js`**: endpoint `POST /api/internal/ui-results` + contador `ui_e2e_total`; handler `e2e_ui` distingue `skipped` (nivel info, sin severity).
+- **`scripts/tevs/tests/TEST-UI-001-ui-e2e.ps1`**: verifica eventos `e2e_ui` en ES (últimas 24h, gate ≥1 `test.finished`), tag `ui,e2e,playwright,gate3`, no bloqueante.
+
+### Changed
+- `helpers/auth.js`: `loginViaAuthelia` con selectores robustos (input por tipo + espera de render SPA).
+- `reporter.js`: elimina `test.project()` → `test.titlePath()[0]`; preserva `skipped`; console_errors solo en `failed`.
+- Especs: `portal.spec.js` valida SLI en `/hub/control-center.html` (no `index.html`); `n8n.spec.js` informativo (espera de render); `search.spec.js` y portal shell en `test.skip` con anotación SSO.
+
+### Verified
+- ✅ Suite E2E de UI: **5 passed / 2 skipped** (7 eventos `e2e_ui` en PG y ES).
+- ✅ Telemetría SOAC: eventos `e2e_ui` en PG (`audit_logs`) y ES (`logs-doags.otel-production`) con módulo/flujo/dependencia/latencia.
+- ✅ TeVS **14/14 PASSED** (incluye TEST-UI-001) · e2e-trace **10/10**.
+- ⚠️ Login SSO Authelia con credenciales documentadas devuelve "Incorrect username or password" → specs de portal shell y search en skip hasta configurar la password real.
+
 ## [3.4.0] — 2026-08-15 (Oleada J: Pendientes implementados — RAG, cotizaciones, TTS, portal, cutover, carga)
 
 ### Added
