@@ -16,6 +16,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 1,
+  globalSetup: './global-setup.js',
   reporter: [
     ['list'],
     ['html', { open: 'never', outputFolder: 'playwright-report' }],

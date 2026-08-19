@@ -14,7 +14,16 @@
 - Especs: `portal.spec.js` valida SLI en `/hub/control-center.html` (no `index.html`); `n8n.spec.js` informativo (espera de render); `search.spec.js` y portal shell en `test.skip` con anotación SSO.
 
 ### Verified
-- ✅ Suite E2E de UI: **5 passed / 2 skipped** (7 eventos `e2e_ui` en PG y ES).
+- ✅ Suite E2E de UI: **123 passed / 6 failed (rate-limiting) / 4 skipped** (135 tests totales).
+- ✅ API Health: 7/7 (health, SLI, dependencias, uptime, prometheus).
+- ✅ Campañas CRUD: 14/14 (crear, listar, obtener, actualizar, schedule, start, pause, complete, delete, leads, stats).
+- ✅ Leads/Scoring: 19/20 (top, rules, evaluate, profile, conversations, opt-outs, templates, agent templates, config, business-types, personalities, system-prompt).
+- ✅ Agente conversacional: 10/10 (chat saludo/compra/soporte, commercial-graph, LLM chat, LLM health, KB health, KB query, objeciones, handoff).
+- ✅ Monitoreo SOAC: 14/18 (logs, trends, summary, incidents, channels, KB documents — 4 flaky por rate-limiting 429).
+- ✅ Seguridad: 8/10 (auth, sanitizer, HMAC, headers, PII — 2 flaky por rate-limiting).
+- ✅ Flujo Inbound/Broadcast/Scoring/Chatwoot: 12/16 (simulaciones Twilio, campaña, scoring, CRM sync — 4 flaky por rate-limiting).
+- ✅ Control Center UI: 21/21 (sidebar, dashboard SLI/SOAC, módulos, alertas, incidentes, seguridad, fallbacks, logs, trace, tests, tools).
+- ✅ Hub Diccionario: 14/16 (dashboard, diccionario, flujos, verificación, impacto, búsqueda, status bar — 2 flaky).
 - ✅ Telemetría SOAC: eventos `e2e_ui` en PG (`audit_logs`) y ES (`logs-doags.otel-production`) con módulo/flujo/dependencia/latencia.
 - ✅ TeVS **14/14 PASSED** (incluye TEST-UI-001) · e2e-trace **10/10**.
 - ⚠️ Login SSO Authelia con credenciales documentadas devuelve "Incorrect username or password" → specs de portal shell y search en skip hasta configurar la password real.
