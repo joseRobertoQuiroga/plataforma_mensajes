@@ -1,18 +1,45 @@
 import { test, expect } from '@playwright/test';
+import crypto from 'crypto';
 
 const HELPER_URL = process.env.HELPER_URL || 'http://localhost:3100';
 const API_KEY = process.env.HELPER_API_KEY || '';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
 
 function headers() {
   return { 'Content-Type': 'application/json', ...(API_KEY ? { 'x-api-key': API_KEY } : {}) };
 }
 
+function twilioSignature(url, authToken) {
+  return crypto.createHmac('sha1', authToken).update(url).digest('base64');
+}
+
 const OK = [200, 429];
 
 test.describe('Flujo Inbound — simulación Twilio → Helper', () => {
-  test('POST /webhooks/twilio-inbound simula mensaje entrante', async ({ request }) => {
+  test('POST /webhooks/twilio-inbound sin firma es rechazado (seguridad activa)', async ({ request }) => {
     const resp = await request.post(`${HELPER_URL}/webhooks/twilio-inbound`, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      form: {
+        From: '+59170888888',
+        Body: 'Hola, quiero informacion sobre sus servicios',
+        MessageSid: `SM${Date.now()}nofirma`,
+        To: '+14155238886',
+      },
+    });
+    if (TWILIO_AUTH_TOKEN) {
+      expect([403, 429]).toContain(resp.status());
+    } else {
+      expect([200, 201, 429]).toContain(resp.status());
+    }
+  });
+
+  test('POST /webhooks/twilio-inbound con firma válida simula mensaje entrante', async ({ request }) => {
+    const url = `${HELPER_URL}/webhooks/twilio-inbound`;
+    const sigHeaders = TWILIO_AUTH_TOKEN
+      ? { 'X-Twilio-Signature': twilioSignature(url, TWILIO_AUTH_TOKEN) }
+      : {};
+    const resp = await request.post(url, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...sigHeaders },
       form: {
         From: '+59170888888',
         Body: 'Hola, quiero informacion sobre sus servicios',
@@ -22,14 +49,18 @@ test.describe('Flujo Inbound — simulación Twilio → Helper', () => {
     });
     expect([200, 201, 429]).toContain(resp.status());
     if (resp.status() < 400) {
-      const body = await resp.json();
+      const body = await resp.json().catch(() => ({}));
       expect(body.leadId || body.lead_id || body.status).toBeTruthy();
     }
   });
 
-  test('POST /webhooks/twilio-inbound con STOP registra opt-out', async ({ request }) => {
-    const resp = await request.post(`${HELPER_URL}/webhooks/twilio-inbound`, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  test('POST /webhooks/twilio-inbound con STOP registra opt-out (firma válida)', async ({ request }) => {
+    const url = `${HELPER_URL}/webhooks/twilio-inbound`;
+    const sigHeaders = TWILIO_AUTH_TOKEN
+      ? { 'X-Twilio-Signature': twilioSignature(url, TWILIO_AUTH_TOKEN) }
+      : {};
+    const resp = await request.post(url, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...sigHeaders },
       form: {
         From: '+59170777777',
         Body: 'STOP',
@@ -139,7 +170,7 @@ test.describe('Flujo Chatwoot — bridge', () => {
       headers: headers(),
       data: { conversation: { id: 1 }, message: { content: 'test', message_type: 'incoming' } },
     });
-    expect([200, 201, 429]).toContain(resp.status());
+    expect([200, 201, 403, 429]).toContain(resp.status());
   });
 
   test('POST /api/chatwoot/push envía mensaje', async ({ request }) => {

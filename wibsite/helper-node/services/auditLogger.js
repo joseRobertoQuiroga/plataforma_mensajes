@@ -15,7 +15,8 @@ const EVENT_TYPES = [
   'hallucination_blocked', 'campaign_sent', 'e2e_trace',
   'fallback_activated', 'incident_opened', 'incident_resolved',
   'webhook_received', 'webhook_failed', 'csv_upload', 'export_generated',
-  'rate_limit_exceeded', 'injection_blocked', 'unauthorized_access'
+  'rate_limit_exceeded', 'injection_blocked', 'unauthorized_access',
+  'e2e_ui', 'media_processed', 'media_degraded'
 ];
 
 const LEVELS = { info: 'info', warn: 'warn', error: 'error', security: 'security' };

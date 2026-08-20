@@ -64,9 +64,9 @@ test.describe('Monitoreo — incidentes y seguridad', () => {
     expect(OK).toContain(resp.status());
   });
 
-  test('GET /api/internal/security-events retorna eventos', async ({ request }) => {
+  test('GET /api/internal/security/events retorna eventos', async ({ request }) => {
     if (!API_KEY) test.skip();
-    const resp = await request.get(`${HELPER_URL}/api/internal/security-events?hours=24`, { headers: headers() });
+    const resp = await request.get(`${HELPER_URL}/api/internal/security/events?hours=24`, { headers: headers() });
     expect([200, 401, 429]).toContain(resp.status());
   });
 

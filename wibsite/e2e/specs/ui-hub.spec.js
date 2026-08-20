@@ -16,8 +16,10 @@ test.describe('Hub Diccionario Visual — carga y navegación', () => {
 
   test('Dashboard — muestra stats de servicios', async ({ page }) => {
     await expect(page.locator('#tab-dashboard')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=Servicios Docker')).toBeVisible();
-    await expect(page.locator('text=Endpoints API')).toBeVisible();
+    await expect(page.locator('#dashStats')).toBeVisible({ timeout: 15000 });
+    const statsText = await page.locator('#dashStats').textContent();
+    expect(statsText).toContain('Servicios');
+    expect(statsText).toContain('Endpoints API');
   });
 
   test('Dashboard — muestra progreso por área', async ({ page }) => {
@@ -52,8 +54,9 @@ test.describe('Hub Diccionario Visual — carga y navegación', () => {
   test('Objetivos — vista accesible con filtros', async ({ page }) => {
     await page.click('[data-tab="objetivos"]');
     await expect(page.locator('#tab-objetivos')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('text=Logrados')).toBeVisible();
-    await expect(page.locator('text=Pendientes')).toBeVisible();
+    await expect(page.locator('[data-ofilter="done"]')).toBeVisible();
+    await expect(page.locator('[data-ofilter="pending"]')).toBeVisible();
+    await expect(page.locator('#objectivesList')).toBeVisible();
   });
 
   test('Verificación — vista accesible', async ({ page }) => {

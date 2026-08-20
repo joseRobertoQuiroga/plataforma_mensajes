@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 
-const { authMiddleware, verifyMetaWebhookSignature, verifyChatwootWebhookSignature } = require('./middleware/auth');
+const { authMiddleware, verifyMetaWebhookSignature, verifyChatwootWebhookSignature, verifyTwilioWebhookSignature } = require('./middleware/auth');
 const { createTenantContextMiddleware, queryWithTenant, getTenantId } = require('./middleware/tenantContext');
 const { rateLimiter } = require('./middleware/rateLimiter');
 const { sanitizerMiddleware } = require('./middleware/sanitizer');
@@ -76,6 +76,7 @@ app.use(createAuditMiddleware('api_call'));
 app.use(errorTrackerMiddleware()); // auto-tracks 500 errors with full context
 app.use('/webhooks', verifyMetaWebhookSignature);
 app.use('/webhooks', verifyChatwootWebhookSignature);
+app.use(verifyTwilioWebhookSignature);
 
 // Servir Control Center Frontend unificado
 app.use('/admin', express.static(path.join(__dirname, '../hub')));
