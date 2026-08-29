@@ -52,6 +52,7 @@ function buildLeadProfile(leadId, store) {
     updatedAt: lead.updated_at,
     tags: buildTags(lead, deliveryStats, engagementScore, recencyScore),
     nextAction: suggestNextAction(lead, deliveryStats, engagementScore, recencyScore),
+    notes: lead.notes || [],
   };
 }
 
@@ -80,7 +81,7 @@ function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore) {
     return { action: 'try_to_close', reason: `Lead ha respondido, score ${lead.score}/100` };
   }
   if (lead.score >= 70 && !lead.contact_id) {
-    return { action: 'sync_to_crm', reason: 'Lead caliente, sincronizar a CRM' };
+    return { action: 'sync_to_crm', reason: 'Lead caliente (score alto) sin CRM: sincronizar con Twenty primero' };
   }
   if (deliveryStats.daysSinceContact !== null && deliveryStats.daysSinceContact < 3 && lead.score < 40) {
     return { action: 'send_nurturing', reason: 'Lead reciente pero frío, enviar contenido educativo' };

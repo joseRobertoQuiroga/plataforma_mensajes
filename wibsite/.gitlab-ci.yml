@@ -1,30 +1,47 @@
 stages:
   - test
   - validate_tevs
-  - deploy
 
 variables:
-  # URLs internas del stack (elasticsearch:9200) solo son válidas si el job
-  # comparte la red de docker compose del runner; desde GitLab settings se puede
-  # overridear ELASTIC_URL, ELASTIC_USER y ELASTIC_PASSWORD.
+  # URLs internas del stack (elasticsearch:9200) válidas porque el runner ejecuta
+  # los jobs en la red compartida wibsite_default (ver infrastructure/gitlab).
+  # ELASTIC_PASSWORD NO se define aquí (hallazgo S2 cerrado): configurar como
+  # variable CI/CD masked + protected en GitLab → Settings → CI/CD → Variables.
   ELASTIC_URL: "http://elasticsearch:9200"
   ELASTIC_USER: "elastic"
-  ELASTIC_PASSWORD: "wibsite_elastic_pass_2026"
+  KIBANA_URL: "http://kibana:5601/kibana"
+  HELPER_URL: "http://helper:3100"
+  GATEWAY_URL: "https://nginx:443"
+
+helper-tests:
+  stage: test
+  image: node:22-alpine
+  tags:
+    - test
+  script:
+    - cd wibsite/helper-node
+    - npm ci --no-audit --no-fund --silent
+    - npm run test:unit
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+  timeout: 15m
 
 validate_tevs:
   stage: validate_tevs
   image: mcr.microsoft.com/powershell:lts-7.2-alpine-3.14
+  tags:
+    - test
   script:
     - echo "Running TEVS Validation (Deployment Gate)..."
-    - cd scripts/tevs
-    # Ejecuta el runner (requiere Elasticsearch + otel-collector levantados vía
-    # docker compose en el runner con red compartida). GitLab falla si exit != 0.
+    - cd wibsite/scripts/tevs
     - pwsh -File ./tevs-runner.ps1 -TestFolder ./tests -ElasticUrl $ELASTIC_URL -ElasticUser $ELASTIC_USER -ElasticPassword $ELASTIC_PASSWORD
   artifacts:
     when: always
     paths:
-      - scripts/tevs/tests/
+      - wibsite/scripts/tevs/tests/
   rules:
-    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
   needs:
-    - test
+    - helper-tests
+  timeout: 20m

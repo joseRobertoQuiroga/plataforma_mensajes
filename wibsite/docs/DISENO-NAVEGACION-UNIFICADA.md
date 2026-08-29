@@ -1,5 +1,7 @@
 # Wibsite Business — Diseño de Navegación Unificada
 
+> **ESTADO: OBSOLETO (Reemplazado por Frontend Unificado en Next.js, ver ADR-022)**
+>
 > **Versión:** 1.0 | **Fecha:** Julio 2026 | **Propósito:** Diseño de unificación de servicios en una sola vista navegable sin retorno a instancia original.
 
 ---

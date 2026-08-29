@@ -6,6 +6,7 @@ process.env.STORE_PATH = path.join(os.tmpdir(), `wibsite-store-test-${process.pi
 process.env.REDIS_URL = 'redis://127.0.0.1:6379';
 process.env.PG_HOST = '127.0.0.1';
 process.env.PG_PORT = '5433';
+process.env.TWILIO_ACCOUNT_SID = 'AC-test';
 
 const request = require('supertest');
 const app = require('../index');
@@ -13,7 +14,7 @@ const storeFacade = require('../services/store');
 
 jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
-describe('Flujos de Negocio (Business Flows)', () => {
+describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', () => {
   beforeAll(async () => {
     storeFacade.initPgStore(null);
   }, 30000);
@@ -33,22 +34,16 @@ describe('Flujos de Negocio (Business Flows)', () => {
     jest.clearAllMocks();
   });
 
-  test('Flujo Completo: Creación de Lead -> Scoring -> Campaign', async () => {
-    const webhookPayload = {
-      event: 'message_created',
-      id: 101,
-      sender: {
-        id: 50,
-        name: 'Carlos Perez',
-        phone_number: '+59170000001'
-      },
-      content: 'Hola, quiero más información sobre los servicios'
-    };
-
+  test('Flujo Completo: Webhook Twilio Inbound -> Lead -> Scoring -> Campaign', async () => {
     const resWebhook = await request(app)
-      .post('/api/webhooks/chatwoot')
-      .set('x-api-key', 'test-key')
-      .send(webhookPayload);
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({
+        From: 'whatsapp:+59170000001',
+        Body: 'Hola, quiero más información sobre los servicios',
+        ProfileName: 'Carlos Perez',
+        MessageSid: 'SM-test-101'
+      });
 
     expect(resWebhook.status).toBe(200);
 
@@ -81,29 +76,36 @@ describe('Flujos de Negocio (Business Flows)', () => {
     expect(resCampaign.body.status).toBe('draft');
   });
 
-  test('Flujo de Opt-Out (Unsubscribe)', async () => {
+  test('Flujo de Opt-Out (Unsubscribe) vía STOP', async () => {
     storeFacade.getStore().leads.push({ id: 'L-123', name: 'Ana', phone: '+59160000002', status: 'active', opt_out: false });
 
-    const webhookPayload = {
-      event: 'message_created',
-      id: 102,
-      sender: {
-        id: 51,
-        name: 'Ana',
-        phone_number: '+59160000002'
-      },
-      content: 'DETENER'
-    };
-
     const resWebhook = await request(app)
-      .post('/api/webhooks/chatwoot')
-      .set('x-api-key', 'test-key')
-      .send(webhookPayload);
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({
+        From: 'whatsapp:+59160000002',
+        Body: 'STOP',
+        ProfileName: 'Ana',
+        MessageSid: 'SM-test-102'
+      });
 
     expect(resWebhook.status).toBe(200);
 
     const lead = storeFacade.getStore().leads.find(l => l.phone === '+59160000002');
     expect(lead).toBeDefined();
-    expect(lead.opt_out).toBe(true);
+    const optOuts = storeFacade.getStore().optOuts;
+    expect(optOuts.some(o => o.phone === '+59160000002')).toBe(true);
+  });
+
+  test('GET /api/leads lista leads creados por inbound', async () => {
+    await request(app)
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({ From: '+59170000003', Body: 'Hola, necesito una cotización', MessageSid: 'SM-test-103' });
+
+    const res = await request(app).get('/api/leads').set('x-api-key', 'test-key');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.some(l => l.phone === '+59170000003')).toBe(true);
   });
 });

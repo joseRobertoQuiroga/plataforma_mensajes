@@ -19,7 +19,11 @@ try {
     # (se verifica vía el contrato del pipeline: el agente sigue respondiendo con media no procesado)
     $agentUrl = "http://localhost:3100/api/agent/chat"
     $key = $env:HELPER_API_KEY
-    if (-not $key) { $key = 'wb_dev_$(openssl rand -hex 16)' }
+    if (-not $key) {
+        $envLine = Get-Content (Join-Path $PSScriptRoot "../../../.env") | Where-Object { $_ -match "^HELPER_API_KEY=" } | Select-Object -First 1
+        if ($envLine) { $key = ($envLine -split "=", 2)[1].Trim() }
+    }
+    if (-not $key) { throw "HELPER_API_KEY no disponible" }
     $body = @{ conversationId = "tevs-mm-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"; message = "Hola, tengo una consulta" } | ConvertTo-Json
     $agent = Invoke-RestMethod -Method Post -Uri $agentUrl -Headers @{ "x-api-key" = $key } -ContentType "application/json" -Body $body -TimeoutSec 60
     if (-not $agent.response) {

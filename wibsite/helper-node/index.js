@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 
-const { authMiddleware, verifyMetaWebhookSignature, verifyChatwootWebhookSignature, verifyTwilioWebhookSignature } = require('./middleware/auth');
+const { authMiddleware, verifyMetaWebhookSignature, verifyTwilioWebhookSignature } = require('./middleware/auth');
 const { createTenantContextMiddleware, queryWithTenant, getTenantId } = require('./middleware/tenantContext');
 const { rateLimiter } = require('./middleware/rateLimiter');
 const { sanitizerMiddleware } = require('./middleware/sanitizer');
@@ -20,9 +20,13 @@ const {
 const storeFacade = require('./services/store');
 const pgStore = require('./services/pgStore');
 const { buildLeadProfile } = require('./services/leadProfile');
-const { getAgentConfig, updateAgentConfig, buildSystemPrompt } = require('./services/agentConfig');
+const { getAgentConfig, updateAgentConfig, buildSystemPrompt, BUSINESS_TYPES, PERSONALITY_TYPES } = require('./services/agentConfig');
+const agentKnowledge = require('./services/agentKnowledge');
+const agentRegistry = require('./services/agentRegistry');
+const mediaProcessor = require('./services/mediaProcessor');
 const { addDocument, queryKnowledgeBase, deleteDocument, listDocuments, checkWeaviateHealth, addInMemoryDocument, queryInMemoryKB } = require('./services/ragEngine');
 const { initRedis, closeRedis, checkRedisHealth, createConversationState, getConversationState, transitionState, incrementMessageCount, deleteConversationState, listActiveConversations, isValidTransition, CONVERSATION_STATES, STATE_LABELS } = require('./services/conversationStore');
+const chatGroups = require('./services/chatGroups');
 const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
 const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
@@ -54,7 +58,6 @@ const PORT = process.env.PORT || 3100;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ─── Request ID Middleware (FIRST — needed for full traceability) ─
@@ -75,11 +78,8 @@ app.use(sanitizeMiddleware);
 app.use(createAuditMiddleware('api_call'));
 app.use(errorTrackerMiddleware()); // auto-tracks 500 errors with full context
 app.use('/webhooks', verifyMetaWebhookSignature);
-app.use('/webhooks', verifyChatwootWebhookSignature);
 app.use(verifyTwilioWebhookSignature);
 
-// Servir Control Center Frontend unificado
-app.use('/admin', express.static(path.join(__dirname, '../hub')));
 // ─── Multi-Tenant Context (se inicializa después del pool PG) ────
 // La función initTenantMiddleware() se llama en el bloque de DB init
 let tenantContextMiddleware = (req, res, next) => next(); // placeholder until DB ready
@@ -395,19 +395,91 @@ app.post('/api/agent/commercial-graph', async (req, res) => {
 
 app.post('/api/agent/chat', async (req, res) => {
   try {
-    const { template_id, client_id, message, conversationId } = req.body;
-    if (!message || typeof message !== 'string') return res.status(400).json({ error: 'El campo message es requerido' });
+    const { template_id, client_id, message, conversationId, agent_id, mediaUrl, mediaType, audioBase64 } = req.body;
+    if (!message && !mediaUrl && !audioBase64) return res.status(400).json({ error: 'El campo message (o media/audio) es requerido' });
     const template = templateEngine.loadTemplate(template_id || 'default');
     let clientConfig = null;
     if (client_id) clientConfig = templateEngine.loadClientConfig(client_id);
+
+    // 1. Perfil del agente seleccionado (multi-agente)
+    const store = getStore();
+    const agent = agent_id ? agentRegistry.getAgent(agent_id, store) : agentRegistry.getActiveAgent(store);
+    if (agent) {
+      template.meta = {
+        ...(template.meta || {}),
+        agent_name: agent.name,
+        agent_personality: PERSONALITY_TYPES[agent.personality]?.label || agent.personality,
+        agent_instructions: PERSONALITY_TYPES[agent.personality]?.instructions || '',
+        agent_tone: agent.tone,
+      };
+      template.agent_profile = {
+        name: agent.name,
+        personality: agent.personality,
+        tone: agent.tone,
+        business_type: agent.business_type,
+        auto_reply_enabled: agent.auto_reply_enabled,
+      };
+    }
+
+    // 2. Conocimiento cargado por el usuario (lotes) → contexto del agente
+    const knowledgeContext = agentKnowledge.buildKnowledgeContext(store);
+    if (knowledgeContext) {
+      template.industry_knowledge = (template.industry_knowledge || '')
+        + (template.industry_knowledge ? '\n' : '')
+        + knowledgeContext;
+      const productBatches = agentKnowledge.listKnowledge(store).filter(k => k.type === 'producto');
+      if (productBatches.length) {
+        const products = (template.products || []);
+        for (const batch of productBatches) {
+          const name = batch.items[0] || batch.title;
+          if (!products.some(p => p.name === name)) {
+            products.push({
+              name,
+              description: batch.content || batch.title,
+              price: batch.items[1] || 'consultar precio',
+            });
+          }
+        }
+        template.products = products;
+      }
+    }
+
+    // 3. Multimodal: imagen → descripción de visión; audio → transcripción STT
+    let augmented = String(message || '');
+    const conversationIdUsed = conversationId || crypto.randomUUID();
+    if (mediaUrl) {
+      const description = await mediaProcessor.describeImage({
+        url: mediaUrl,
+        prompt: 'Describe esta imagen en detalle para una conversación de ventas: qué contiene, texto legible, contexto comercial.',
+        conversationId: conversationIdUsed,
+      }).catch(() => null);
+      if (description) {
+        augmented = `[El cliente envió una imagen. Descripción de visión: ${description}]\n${augmented}`;
+      } else {
+        augmented = `[El cliente envió una imagen (${mediaType || 'adjunto'})]\n${augmented}`;
+      }
+    }
+    if (audioBase64) {
+      const audioBuffer = Buffer.from(audioBase64, 'base64');
+      const transcript = await mediaProcessor.transcribeAudio({
+        buffer: audioBuffer, filename: 'voice.webm', language: 'es',
+        conversationId: conversationIdUsed,
+      }).catch(() => null);
+      if (transcript) {
+        augmented = `[El cliente envió un audio. Transcripción: ${transcript}]\n${augmented}`;
+      } else {
+        augmented = `[El cliente envió un audio (sin transcripción disponible)]\n${augmented}`;
+      }
+    }
+
     const result = await executeCommercialGraph({
-      message,
-      conversationId: conversationId || crypto.randomUUID(),
+      message: augmented || 'Hola',
+      conversationId: conversationIdUsed,
       tenantId: req.tenantId || 'default',
       template,
       clientConfig,
     });
-    res.json(result);
+    res.json({ ...result, agent: agent ? { id: agent.id, name: agent.name, personality: agent.personality, tone: agent.tone } : null });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -986,196 +1058,6 @@ app.get('/api/opt-outs/check', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// TWENTY CRM PROXY
-// ═══════════════════════════════════════════════════════
-
-app.get('/api/twenty/health', async (req, res) => {
-  try {
-    const twentyUrl = process.env.TWENTY_URL || 'http://twenty-server:3000';
-    const twentyKey = process.env.TWENTY_API_KEY;
-    const resp = await axios.get(`${twentyUrl}/healthz`, { timeout: 5000 });
-    res.json({ connected: resp.status === 200, hasApiKey: !!twentyKey });
-  } catch (e) {
-    res.json({ connected: false, hasApiKey: !!process.env.TWENTY_API_KEY, error: e.message });
-  }
-});
-
-// Sync a single lead to Twenty CRM as a person
-app.post('/api/twenty/sync', async (req, res) => {
-  try {
-    const twentyUrl = process.env.TWENTY_URL || 'http://twenty-server:3000';
-    const twentyKey = process.env.TWENTY_API_KEY;
-
-    const { lead_id, leadId, lead, name, phone, email, pain_points, interests, score, score_history, source, custom_fields } = req.body;
-    const effectiveLeadId = lead_id || leadId;
-
-    // Support passing a lead_id to look up from store, or direct lead data
-    let leadData = lead;
-    if (effectiveLeadId && !lead) {
-      const store = getStore();
-      leadData = store.leads.find(l => l.id === effectiveLeadId);
-      if (!leadData) return res.status(404).json({ error: 'Lead not found' });
-    }
-
-    const fullName = name || leadData?.name || '';
-    const phoneNumber = phone || leadData?.phone || '';
-    const emailAddr = email || leadData?.email || '';
-    const painPoints = pain_points || leadData?.custom_fields?.pain_point || leadData?.score_data?.pain_points || '';
-    const interestsList = interests || leadData?.custom_fields?.interest || '';
-    const leadSource = source || leadData?.source || leadData?.custom_fields?.source || 'web';
-    const scoreValue = score !== undefined ? score : (leadData?.score || 0);
-    const history = score_history || (leadData?.score_data ? JSON.stringify(leadData.score_data) : '{}');
-    const customData = custom_fields || (leadData?.custom_fields ? JSON.stringify(leadData.custom_fields) : '{}');
-
-    // Split name into first/last
-    const nameParts = fullName.split(' ');
-    const firstName = nameParts[0] || '';
-    const lastName = nameParts.slice(1).join(' ') || ' ';
-
-    // Normalize phone: skip if empty (fix #5)
-    const normalizedPhone = phoneNumber && phoneNumber.trim()
-      ? (phoneNumber.startsWith('+') ? phoneNumber : '+' + phoneNumber)
-      : '';
-
-    // Check if person already exists — fetch with pagination (fix #10)
-    let existingPerson = null;
-    let offset = 0;
-    const pageSize = 100;
-    while (!existingPerson) {
-      const searchResp = await axios.get(`${twentyUrl}/rest/people?limit=${pageSize}&offset=${offset}`, {
-        headers: { Authorization: `Bearer ${twentyKey}` },
-        timeout: 5000,
-      });
-      const people = searchResp.data?.data?.people || [];
-      existingPerson = people.find(p =>
-        (normalizedPhone && p.phones?.primaryPhoneNumber === normalizedPhone) ||
-        (emailAddr && p.emails?.primaryEmail === emailAddr)
-      );
-      if (existingPerson || people.length < pageSize) break;
-      offset += pageSize;
-    }
-
-    let person;
-    let twentyId;
-    if (existingPerson) {
-      const updateResp = await axios.patch(`${twentyUrl}/rest/people/${existingPerson.id}`,
-        {
-          name: { firstName, lastName: lastName || ' ' },
-          ...(emailAddr ? { emails: { primaryEmail: emailAddr } } : {}),
-          ...(normalizedPhone ? { phones: { primaryPhoneNumber: normalizedPhone } } : {}),
-          painPoints,
-          interests: interestsList,
-          leadOrigin: leadSource,
-          leadScoreHistory: history,
-          leadLastScore: scoreValue,
-          leadCustomData: customData,
-        },
-        { headers: { Authorization: `Bearer ${twentyKey}`, 'Content-Type': 'application/json' }, timeout: 5000 }
-      );
-      person = updateResp.data?.data?.updatePerson;
-      twentyId = existingPerson.id;
-    } else {
-      const createResp = await axios.post(`${twentyUrl}/rest/people`,
-        {
-          name: { firstName, lastName: lastName || ' ' },
-          ...(emailAddr ? { emails: { primaryEmail: emailAddr } } : {}),
-          ...(normalizedPhone ? { phones: { primaryPhoneNumber: normalizedPhone } } : {}),
-          painPoints,
-          interests: interestsList,
-          leadOrigin: leadSource,
-          leadScoreHistory: history,
-          leadLastScore: scoreValue,
-          leadCustomData: customData,
-        },
-        { headers: { Authorization: `Bearer ${twentyKey}`, 'Content-Type': 'application/json' }, timeout: 5000 }
-      );
-      person = createResp.data?.data?.createPerson;
-      twentyId = person?.id;
-    }
-
-    if (leadData?.id && twentyId) {
-      updateStore(s => {
-        const l = s.leads.find(l => l.id === leadData.id);
-        if (l) l.contact_id = twentyId;
-      });
-    }
-
-    res.json({
-      synced: true,
-      action: existingPerson ? 'updated' : 'created',
-      twenty_id: twentyId,
-      person,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message, details: e.response?.data });
-  }
-});
-
-// Sync all leads to Twenty
-app.post('/api/twenty/sync-all', async (req, res) => {
-  try {
-    const store = getStore();
-    const results = { total: store.leads.length, synced: 0, errors: 0, details: [] };
-    for (const lead of store.leads) {
-      try {
-        const twentyUrl = process.env.TWENTY_URL || 'http://twenty-server:3000';
-        const twentyKey = process.env.TWENTY_API_KEY;
-
-        const nameParts = (lead.name || '').split(' ');
-        const leadPhone = (lead.phone || '').trim();
-        const normalizedPhone = leadPhone ? (leadPhone.startsWith('+') ? leadPhone : '+' + leadPhone) : '';
-        const payload = {
-          name: { firstName: nameParts[0] || '', lastName: nameParts.slice(1).join(' ') || ' ' },
-          ...(lead.email ? { emails: { primaryEmail: lead.email } } : {}),
-          ...(normalizedPhone ? { phones: { primaryPhoneNumber: normalizedPhone } } : {}),
-          painPoints: lead.custom_fields?.pain_point || lead.score_data?.pain_points || '',
-          interests: lead.custom_fields?.interest || '',
-          leadOrigin: lead.source || lead.custom_fields?.source || 'web',
-          leadScoreHistory: JSON.stringify(lead.score_data || {}),
-          leadLastScore: lead.score || 0,
-          leadCustomData: JSON.stringify(lead.custom_fields || {}),
-        };
-
-        // Check if exists (with pagination)
-        let existingPerson = null;
-        let offset = 0;
-        const pageSize = 100;
-        while (!existingPerson) {
-          const searchResp = await axios.get(`${twentyUrl}/rest/people?limit=${pageSize}&offset=${offset}`, {
-            headers: { Authorization: `Bearer ${twentyKey}` }, timeout: 5000
-          });
-          const people = searchResp.data?.data?.people || [];
-          existingPerson = people.find(p =>
-            normalizedPhone && p.phones?.primaryPhoneNumber === normalizedPhone
-          );
-          if (existingPerson || people.length < pageSize) break;
-          offset += pageSize;
-        }
-
-        if (existingPerson) {
-          await axios.patch(`${twentyUrl}/rest/people/${existingPerson.id}`, payload, {
-            headers: { Authorization: `Bearer ${twentyKey}`, 'Content-Type': 'application/json' }, timeout: 5000
-          });
-          results.synced++;
-          results.details.push({ id: lead.id, action: 'updated', twenty_id: existingPerson.id });
-        } else {
-          const createResp = await axios.post(`${twentyUrl}/rest/people`, payload, {
-            headers: { Authorization: `Bearer ${twentyKey}`, 'Content-Type': 'application/json' }, timeout: 5000
-          });
-          const pid = createResp.data?.data?.createPerson?.id;
-          results.synced++;
-          results.details.push({ id: lead.id, action: 'created', twenty_id: pid });
-        }
-      } catch (e) {
-        results.errors++;
-        results.details.push({ id: lead.id, error: e.message });
-      }
-    }
-    res.json(results);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ═══════════════════════════════════════════════════════
 // LEAD SCORING ENGINE (rule-based)
 // ═══════════════════════════════════════════════════════
 
@@ -1350,8 +1232,8 @@ app.get('/api/scoring/compare/:leadId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Auto-scoring trigger from Chatwoot webhook
-app.post('/api/scoring/trigger-from-chatwoot', async (req, res) => {
+// Auto-scoring trigger desde el pipeline nativo (Wibsite 2.0)
+app.post('/api/scoring/trigger-inbound', async (req, res) => {
   try {
     const { conversation_id, sender, content, message_type } = req.body;
     if (!conversation_id && !sender?.phone_number) {
@@ -1450,25 +1332,6 @@ app.post('/api/campaigns/auto-activate', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── Twenty CRM: Webhook receptor (bidireccionalidad)
-app.post('/webhooks/twenty', async (req, res) => {
-  try {
-    const { recordId, objectType, changes } = req.body;
-    if (!recordId || !changes) return res.status(400).json({ error: 'recordId and changes required' });
-    updateStore(s => {
-      const lead = s.leads.find(l => l.contact_id === recordId);
-      if (!lead) return;
-      if (changes.name) lead.name = changes.name;
-      if (changes.email) lead.email = changes.email;
-      if (changes.phone) lead.phone = changes.phone;
-      if (changes.leadLastScore !== undefined) lead.score = changes.leadLastScore;
-      if (changes.leadConversationMode) lead.conversation_mode = changes.leadConversationMode;
-      lead.updated_at = new Date().toISOString();
-    });
-    res.json({ status: 'synced' });
-  } catch (e) { res.status(200).json({ error: 'ignored' }); }
-});
-
 // ─── Dashboard: trends data for charts
 app.get('/api/dashboard/trends', async (req, res) => {
   try {
@@ -1517,6 +1380,59 @@ app.get('/api/dashboard/summary', async (req, res) => {
 // LEADS CRUD (Individual)
 // ═══════════════════════════════════════════════════════
 
+// Lista de leads con filtros (Wibsite 2.0)
+app.get('/api/leads', async (req, res) => {
+  try {
+    const store = getStore();
+    const { search: q, status, channel, min_score, limit = 200 } = req.query;
+    let items = [...store.leads];
+    if (q) {
+      const needle = String(q).toLowerCase().trim();
+      items = items.filter(l => [l.name, l.phone, l.email, l.source, l.id]
+        .filter(Boolean).some(f => String(f).toLowerCase().includes(needle)));
+    }
+    if (status) items = items.filter(l => String(l.status || 'new').toLowerCase() === String(status).toLowerCase());
+    if (channel) {
+      items = items.filter(l => (l.source || l.custom_fields?.channel || 'web').toLowerCase().includes(String(channel).toLowerCase()));
+    }
+    if (min_score !== undefined) items = items.filter(l => (l.score || 0) >= parseInt(min_score));
+    items.sort((a, b) => (b.score || 0) - (a.score || 0));
+    res.json(items.slice(0, parseInt(limit)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Crear lead manual (Wibsite 2.0 — pipeline FAB, importación, API)
+app.post('/api/leads', async (req, res) => {
+  try {
+    const { name, phone, email, status, source, campaign_id, custom_fields } = req.body;
+    if (!name && !phone && !email) return res.status(400).json({ error: 'name, phone o email requeridos' });
+    const lead = {
+      id: crypto.randomUUID(),
+      campaign_id: campaign_id || null,
+      contact_id: null,
+      name: name || phone || 'Desconocido',
+      phone: phone || null,
+      email: email || null,
+      source: source || 'manual',
+      status: status || 'nuevo',
+      score: 0,
+      score_data: {},
+      custom_fields: custom_fields || {},
+      notes: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await updateStore(s => s.leads.push(lead));
+    if (lead.campaign_id) await storeFacade.writeLeadToPg(lead.campaign_id, lead).catch(() => {});
+    await logEvent('lead_created', {
+      level: 'info', message: `Lead creado manualmente: ${lead.name}`,
+      tenantId: req.tenantId || 'default', module: 'leads', flow: 'leads.manual', action: 'lead.created',
+      data: { lead_id: lead.id, name: lead.name, source: lead.source },
+    });
+    res.status(201).json(lead);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/leads/search', async (req, res) => {
   try {
     const { q, limit = 20 } = req.query;
@@ -1535,12 +1451,18 @@ app.patch('/api/leads/:id', async (req, res) => {
   try {
     const allowed = ['name', 'phone', 'email', 'custom_fields', 'status'];
     let updated = null;
-    updateStore(s => {
+    await updateStore(s => {
       const l = s.leads.find(l => l.id === req.params.id);
       if (!l) return;
       for (const k of allowed) {
         if (req.body[k] !== undefined) l[k] = req.body[k];
       }
+      // Notas: si llega notes como string, se agrega al historial
+      if (req.body.notes !== undefined) {
+        if (!Array.isArray(l.notes)) l.notes = [];
+        l.notes.push({ text: String(req.body.notes), at: new Date().toISOString(), by: req.body.notes_by || 'agente' });
+      }
+      if (Array.isArray(req.body.notes_replace)) l.notes = req.body.notes_replace;
       l.updated_at = new Date().toISOString();
       updated = l;
     });
@@ -1778,27 +1700,80 @@ app.delete('/api/conversations/:tenantId/:conversationId', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// CHATWOOT HELPERS
+// GRUPOS DE CHAT (agrupación manual + clasificación IA)
 // ═══════════════════════════════════════════════════════
 
-app.post('/api/chatwoot/normalize', (req, res) => {
-  const payload = req.body;
-  res.json({
-    message_type: payload.message_type || 'incoming',
-    content: payload.content || payload.text || '',
-    sender: {
-      name: payload.sender?.name || payload.meta?.sender?.name || 'Desconocido',
-      phone_number: payload.sender?.phone_number || payload.meta?.sender?.phone_number || '',
-      email: payload.sender?.email || payload.meta?.sender?.email || '',
-    },
-    conversation_id: payload.conversation?.id || payload.conversation_id,
-    account_id: payload.account?.id || payload.account_id,
-    inbox_id: payload.inbox?.id || payload.inbox_id,
-    source_id: payload.source_id || '',
-    conversation: payload.conversation || {},
-    timestamp: payload.created_at || new Date().toISOString(),
-  });
+app.get('/api/chat-groups', (req, res) => {
+  try {
+    const groups = chatGroups.listGroups();
+    res.json({ groups, total: groups.length, pendingGroupId: chatGroups.PENDING_GROUP_ID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
+
+app.post('/api/chat-groups', async (req, res) => {
+  try {
+    const group = await chatGroups.createGroup(req.body || {});
+    res.status(201).json(group);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.put('/api/chat-groups/:groupId', async (req, res) => {
+  try {
+    const group = await chatGroups.updateGroup(req.params.groupId, req.body || {});
+    res.json(group);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/chat-groups/:groupId', async (req, res) => {
+  try {
+    const result = await chatGroups.deleteGroup(req.params.groupId);
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.put('/api/conversations/:tenantId/:conversationId/group', async (req, res) => {
+  try {
+    const { groupId } = req.body || {};
+    if (!groupId) return res.status(400).json({ error: 'groupId is required' });
+    const result = await chatGroups.assignConversation(req.params.tenantId, req.params.conversationId, groupId, { source: 'manual' });
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/chat-groups/review', async (req, res) => {
+  try {
+    const { tenantId, conversationId } = req.body || {};
+    if (!tenantId || !conversationId) return res.status(400).json({ error: 'tenantId and conversationId are required' });
+    const result = await chatGroups.reviewConversation(tenantId, conversationId);
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/chat-groups/review-pending', async (req, res) => {
+  try {
+    const { tenantId } = req.body || {};
+    const result = await chatGroups.reviewPending({ tenantId });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// NORMALIZACIÓN DE MENSAJES (pipeline nativo Wibsite 2.0)
+// ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
 // MESSAGE TEMPLATES
@@ -2039,6 +2014,117 @@ app.get('/api/agent/business-types', (req, res) => {
 
 app.get('/api/agent/personalities', (req, res) => {
   res.json(require('./services/agentConfig').PERSONALITY_TYPES);
+});
+
+// ═══════════════════════════════════════════════════════
+// AGENT KNOWLEDGE (Wibsite 2.0 — lotes de contexto cargados)
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/agent/knowledge', (req, res) => {
+  try {
+    const store = getStore();
+    const { grouped } = req.query;
+    if (grouped === 'true' || grouped === '1') {
+      return res.json({ data: agentKnowledge.groupByDay(store), total: agentKnowledge.listKnowledge(store).length, types: agentKnowledge.KNOWLEDGE_TYPES });
+    }
+    res.json({ data: agentKnowledge.listKnowledge(store), total: agentKnowledge.listKnowledge(store).length, types: agentKnowledge.KNOWLEDGE_TYPES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agent/knowledge', async (req, res) => {
+  try {
+    const { type, title, content, items } = req.body;
+    let created = null;
+    await updateStore(s => { created = agentKnowledge.createKnowledge({ type, title, content, items }, s); });
+    await logEvent('knowledge_loaded', {
+      level: 'info', message: `Lote de conocimiento cargado: ${created.title}`,
+      tenantId: req.tenantId || 'default', module: 'agent', flow: 'agent.knowledge', action: 'knowledge.loaded',
+      data: { knowledge_id: created.id, type: created.type },
+    });
+    res.status(201).json(created);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.patch('/api/agent/knowledge/:id', async (req, res) => {
+  try {
+    let updated = null;
+    await updateStore(s => { updated = agentKnowledge.updateKnowledge(req.params.id, req.body, s); });
+    if (!updated) return res.status(404).json({ error: 'Lote no encontrado' });
+    res.json(updated);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/agent/knowledge/:id', async (req, res) => {
+  try {
+    let deleted = false;
+    await updateStore(s => { deleted = agentKnowledge.deleteKnowledge(req.params.id, s); });
+    if (!deleted) return res.status(404).json({ error: 'Lote no encontrado' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+// AGENT REGISTRY (Wibsite 2.0 — multi-agente)
+// ═══════════════════════════════════════════════════════
+
+app.get('/api/agents', (req, res) => {
+  try {
+    const store = getStore();
+    const tenantId = req.headers['x-tenant-id'] || 'default';
+    const config = getAgentConfig(tenantId, store);
+    res.json({
+      agents: agentRegistry.listAgents(store),
+      activeAgentId: agentRegistry.getActiveAgent(store)?.id || null,
+      active: config.auto_reply_enabled,
+      current: config,
+      businessTypes: Object.entries(BUSINESS_TYPES).map(([id, v]) => ({ id, ...v })),
+      personalities: Object.entries(PERSONALITY_TYPES).map(([id, v]) => ({ id, ...v })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agents', async (req, res) => {
+  try {
+    const { name, personality, tone, business_type, description } = req.body;
+    let created = null;
+    await updateStore(s => {
+      created = agentRegistry.createAgent({ name, personality, tone, business_type, description }, s);
+      if ((s.agents || []).length === 1) created.active = true;
+    });
+    await logEvent('agent_created', {
+      level: 'info', message: `Agente creado: ${created.name}`,
+      tenantId: req.tenantId || 'default', module: 'agent', flow: 'agent.registry', action: 'agent.created',
+      data: { agent_id: created.id, name: created.name },
+    });
+    res.status(201).json(created);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.put('/api/agents/:id', async (req, res) => {
+  try {
+    let updated = null;
+    await updateStore(s => { updated = agentRegistry.updateAgent(req.params.id, req.body, s); });
+    if (!updated) return res.status(404).json({ error: 'Agente no encontrado' });
+    res.json(updated);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/agents/:id', async (req, res) => {
+  try {
+    let deleted = false;
+    await updateStore(s => { deleted = agentRegistry.deleteAgent(req.params.id, s); });
+    if (!deleted) return res.status(404).json({ error: 'Agente no encontrado' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agents/:id/activate', async (req, res) => {
+  try {
+    let activated = null;
+    await updateStore(s => { activated = agentRegistry.setActiveAgent(req.params.id, s); });
+    if (!activated) return res.status(404).json({ error: 'Agente no encontrado' });
+    res.json({ status: 'activated', agent: activated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ═══════════════════════════════════════════════════════
@@ -2479,6 +2565,17 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const phone = from.replace(/^whatsapp:/, '').replace(/[^\d+]/g, '');
     const profileName = req.body.ProfileName || req.body.profileName || phone;
 
+    // 0. Opt-out: STOP/DETENER/BAJA marcan el lead como opt-out (cumplimiento WhatsApp)
+    if (/^(stop|detener|baja|opt.?out)$/i.test(String(body).trim())) {
+      const optEntry = { phone, channel: 'whatsapp', reason: 'User replied STOP', source: 'user_reply', created_at: new Date().toISOString() };
+      await updateStore(s => {
+        s.optOuts.push(optEntry);
+        s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_out'; l.opt_out = true; });
+      });
+      await storeFacade.writeOptOutToPg(optEntry);
+      return res.type('text/xml').send('<Response></Response>');
+    }
+
     // 1. Create lead + delivery in helper store
     let inboundLead = null;
     await updateStore(s => {
@@ -2518,10 +2615,6 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
       axios.post(`${n8nUrl}/webhook/chatwoot-inbound`, normalizedPayload).catch(() => {});
     } catch (e) { /* ignore forwarding errors */ }
 
-    // 3. Push to Chatwoot bridge
-    try {
-      await pushToChatwoot(phone, profileName, body);
-    } catch (e) { /* ignore chatwoot bridge errors */ }
 
     res.type('text/xml').send('<Response></Response>');
   } catch (e) {
@@ -2559,7 +2652,6 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 // ═══════════════════════════════════════════════════════
 
 const { getChannel, listChannels, sendToChannel } = require('./services/channels');
-const mediaProcessor = require('./services/mediaProcessor');
 const { processMedia } = mediaProcessor;
 
 async function handleInboundMessage(channel, normalized) {
@@ -2989,143 +3081,6 @@ app.post('/api/channels/test', async (req, res) => {
   }
 });
 
-// CHATWOOT BRIDGE (Twilio ↔ Chatwoot API inbox)
-// ═══════════════════════════════════════════════════════
-
-const CHATWOOT_URL = process.env.CHATWOOT_URL || 'http://chatwoot:3000';
-const CHATWOOT_INBOX_IDENTIFIER = process.env.CHATWOOT_INBOX_IDENTIFIER || 'Lo9jawjXVCz2gmupLcxqvYqr';
-
-async function pushToChatwoot(phone, name, message) {
-  try {
-    const contactResp = await axios.post(
-      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts`,
-      { name: name || phone, phone_number: phone },
-      { timeout: 10000 }
-    );
-    const sourceId = contactResp.data.source_id;
-    await axios.post(
-      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts/${sourceId}/conversations`,
-      { content: message },
-      { timeout: 10000 }
-    );
-    return sourceId;
-  } catch (e) {
-    throw new Error('Chatwoot push failed: ' + (e.response?.data?.message || e.message));
-  }
-}
-
-// Inbound: n8n pushes Twilio messages to Chatwoot
-app.post('/api/chatwoot/push', async (req, res) => {
-  try {
-    const { phone, name, message } = req.body;
-    if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
-
-    // 1. Create contact in Chatwoot
-    const contactResp = await axios.post(
-      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts`,
-      { name: name || phone, phone_number: phone },
-      { timeout: 10000 }
-    );
-    const sourceId = contactResp.data.source_id;
-
-    // 2. Create conversation with the message
-    const convResp = await axios.post(
-      `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX_IDENTIFIER}/contacts/${sourceId}/conversations`,
-      { content: message },
-      { timeout: 10000 }
-    );
-
-    res.json({ status: 'created', conversation_id: convResp.data.id, contact_source_id: sourceId });
-  } catch (e) {
-    res.status(500).json({ error: 'Chatwoot bridge failed: ' + (e.response?.data?.message || e.message) });
-  }
-});
-
-// Outbound: Chatwoot webhook → Twilio send (agent replies)
-app.post('/api/webhooks/chatwoot', async (req, res) => {
-  try {
-    const payload = req.body;
-    if (payload.event === 'message_created' && payload.sender) {
-      // Create or ensure lead exists based on webhook sender
-      let newLead = null;
-      let optedOutLead = null;
-      await updateStore(s => {
-        const existing = s.leads.find(l => l.phone === payload.sender.phone_number);
-        if (!existing && payload.sender.phone_number) {
-          newLead = {
-            id: crypto.randomUUID(),
-            name: payload.sender.name || 'Desconocido',
-            phone: payload.sender.phone_number,
-            status: 'active',
-            opt_out: false
-          };
-          s.leads.push(newLead);
-        }
-
-        // Handle Opt-Out logic
-        if (payload.content && typeof payload.content === 'string' && payload.content.trim().toUpperCase() === 'DETENER') {
-          const leadToOptOut = s.leads.find(l => l.phone === payload.sender.phone_number);
-          if (leadToOptOut) {
-            leadToOptOut.opt_out = true;
-            optedOutLead = leadToOptOut;
-          }
-        }
-      });
-      if (newLead) await storeFacade.writeLeadToPg(null, newLead);
-      if (optedOutLead) {
-        await storeFacade.writeOptOutToPg({
-          phone: optedOutLead.phone,
-          channel: 'chatwoot',
-          reason: 'User replied DETENER',
-          source: 'user_reply',
-          created_at: new Date().toISOString(),
-        });
-      }
-    }
-    res.status(200).json({ received: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/webhooks/chatwoot-outbound', async (req, res) => {
-  try {
-    const { message_type, content, conversation, contact } = req.body;
-
-    // Only relay outgoing messages (agent replies), not incoming echoes
-    if (message_type !== 'outgoing') return res.json({ status: 'ignored', reason: 'not_outgoing' });
-    if (!content || !content.trim()) return res.json({ status: 'ignored', reason: 'empty_content' });
-
-    // Extract phone from additional_attributes (set during contact creation)
-    let phone = conversation?.additional_attributes?.contact_phone
-             || contact?.phone_number
-             || conversation?.additional_attributes?.phone;
-
-    if (!phone) return res.status(400).json({ error: 'No phone in webhook payload' });
-
-    // Send via Twilio
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_PHONE_NUMBER;
-
-    const normalize = (num) => {
-      if (!num) return num;
-      if (num.startsWith('whatsapp:')) return num;
-      return `whatsapp:${num.replace(/[^\d+]/g, '')}`;
-    };
-
-    const resp = await axios.post(
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-      new URLSearchParams({ To: normalize(phone), From: normalize(fromNumber), Body: content }).toString(),
-      { auth: { username: accountSid, password: authToken }, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 }
-    );
-
-    res.json({ status: 'sent', sid: resp.data.sid, to: normalize(phone) });
-  } catch (e) {
-    res.status(500).json({ error: 'Chatwoot outbound failed: ' + (e.response?.data?.message || e.message) });
-  }
-});
-
 // ═══════════════════════════════════════════════════════
 // INTERNAL CONTROL CENTER ENDPOINTS
 // Accesibles solo con API key — alimentan el panel de superusuario
@@ -3552,17 +3507,139 @@ app.get('/api/sli/metrics', (req, res) => {
   });
 });
 
-// ─── Serve SPA for dashboard (catch-all) ─────────────
+// ─── Wibsite 2.0 — CHAT UNIFICADO (reply + media + intereses + agentes) ──
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'storage', 'media');
+
+// Subida de media (imagen/audio) para envío en chat
+app.post('/api/chat/media', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Archivo requerido (campo file)' });
+    const ext = path.extname(req.file.originalname).toLowerCase() || (req.file.mimetype?.includes('audio') ? '.ogg' : '.bin');
+    const filename = `${crypto.randomUUID()}${ext}`;
+    if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
+    fs.writeFileSync(path.join(MEDIA_DIR, filename), req.file.buffer);
+    await logEvent('media_uploaded', {
+      level: 'info', message: `Media subida ${filename} (${req.file.mimetype})`,
+      tenantId: req.tenantId || 'default', module: 'channels', flow: 'multicanal.media', action: 'media.uploaded',
+      data: { filename, mimetype: req.file.mimetype, size: req.file.size },
+    });
+    res.status(201).json({ url: `/media/${filename}`, filename, mimetype: req.file.mimetype, size: req.file.size });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Servir media subida (pública a nivel helper; nginx la protege con SSO)
+app.use('/media', express.static(MEDIA_DIR));
+
+// Reply unificado: envía por el adaptador del canal con soporte de media/audio
+app.post('/api/chat/reply', async (req, res) => {
+  try {
+    const { channel, to, text, mediaUrl, mediaType, audioBase64, audioFilename } = req.body;
+    if (!channel || !to) return res.status(400).json({ error: 'channel y to requeridos' });
+    if (!text && !mediaUrl && !audioBase64) return res.status(400).json({ error: 'text, mediaUrl o audioBase64 requeridos' });
+
+    const started = Date.now();
+    let sent;
+
+    if (audioBase64) {
+      const audioBuffer = Buffer.from(audioBase64, 'base64');
+      const adapter = getChannel(channel);
+      if (adapter?.sendVoice) {
+        const result = await adapter.sendVoice({ to, audioBuffer, filename: audioFilename || 'voice.ogg', caption: text || '' });
+        sent = { ok: true, result };
+      } else {
+        sent = await sendToChannel(channel, to, text || '[audio]');
+      }
+    } else if (channel === 'telegram' && mediaUrl) {
+      try {
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const FormData = require('form-data');
+        const form = new FormData();
+        form.append('chat_id', to);
+        if (String(mediaType || '').startsWith('image/')) form.append('photo', mediaUrl);
+        else form.append('document', mediaUrl);
+        if (text) form.append('caption', String(text).slice(0, 1024));
+        const resp = await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, form, {
+          headers: { ...form.getHeaders() }, timeout: 30000, maxContentLength: 50 * 1024 * 1024,
+        });
+        sent = resp.data?.ok ? { ok: true, result: resp.data.result } : { ok: false, error: resp.data?.description || 'telegram media failed' };
+      } catch (e) { sent = { ok: false, error: e.message }; }
+    } else {
+      sent = await sendToChannel(channel, to, text || '', mediaUrl ? { mediaUrl, mediaType } : {});
+    }
+
+    if (sent.ok) {
+      updateStore(s => {
+        s.deliveries.push({
+          id: crypto.randomUUID(), campaign_id: null, contact_id: to, contact_name: null,
+          phone: channel === 'email' ? null : to, status: 'sent', channel, direction: 'outbound',
+          content: text || `[media ${mediaType || 'audio'}]`, media_url: mediaUrl || null,
+          sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
+        });
+      });
+      await incrementMessageCount('default', `${channel}_${to}`).catch(() => {});
+    }
+
+    await logEvent(sent.ok ? 'channel_reply' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Reply ${channel} → ${to}: ${sent.ok ? 'enviado' : sent.error}`,
+      tenantId: req.tenantId || 'default', module: 'channels', flow: 'multicanal.reply', action: 'channel.reply',
+      severity: sent.ok ? null : 'medium', dependency: `${channel}-api`, latencyMs: Date.now() - started,
+      data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error, hasMedia: !!(mediaUrl || audioBase64) },
+    });
+
+    res.status(sent.ok ? 200 : 502).json({ ok: sent.ok, channel, to, error: sent.ok ? null : sent.error, ...(sent.result || {}) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Análisis de intereses del pipeline (dashboard)
+app.get('/api/interests', (req, res) => {
+  try {
+    const store = getStore();
+    const limit = parseInt(req.query.limit || '12', 10);
+    const interestMap = new Map();
+    const STOP = ['para', 'con', 'una', 'como', 'todo', 'esta', 'tiene', 'quiero', 'info', 'hola', 'mensaje', 'gracias', 'puede', 'esto', 'pero', 'mas', 'más', 'buenas', 'dias', 'tarde', 'noche', 'whatsapp', 'telegram'];
+    for (const lead of store.leads) {
+      const raw = [
+        lead.custom_fields?.interest, lead.custom_fields?.message, lead.custom_fields?.interests,
+        lead.custom_fields?.pain_points, lead.custom_fields?.product, lead.custom_fields?.segment,
+      ].filter(Boolean).join(' ').toLowerCase();
+      const score = lead.score || 0;
+      const channel = lead.source || lead.custom_fields?.channel || 'web';
+      if (!raw) continue;
+      for (const word of raw.split(/[^a-záéíóúñü0-9#]+/)) {
+        if (!word || word.length < 4 || STOP.includes(word)) continue;
+        const prev = interestMap.get(word) || { count: 0, scoreSum: 0, channels: new Set() };
+        prev.count++; prev.scoreSum += score; prev.channels.add(channel);
+        interestMap.set(word, prev);
+      }
+    }
+    const items = [...interestMap.entries()]
+      .map(([term, v]) => ({ term, count: v.count, avgScore: Math.round(v.scoreSum / v.count), channels: [...v.channels] }))
+      .sort((a, b) => (b.count * 0.6 + b.avgScore * 0.4) - (a.count * 0.6 + a.avgScore * 0.4))
+      .slice(0, limit);
+    res.json({ data: items, total: store.leads.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Agentes IA (config actual + catálogo)
+app.get('/api/agents', (req, res) => {
+  try {
+    const store = getStore();
+    const config = getAgentConfig(req.tenantId || 'default', store);
+    res.json({
+      active: config.auto_reply_enabled,
+      current: config,
+      businessTypes: Object.entries(BUSINESS_TYPES).map(([id, v]) => ({ id, ...v })),
+      personalities: Object.entries(PERSONALITY_TYPES).map(([id, v]) => ({ id, ...v })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Catch-all: API JSON 404 (Wibsite 2.0 — UI servida por Next.js) ──
 app.use((req, res) => {
-  if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/')) {
-    return res.status(404).json({ error: 'Not found' });
-  }
-  const publicPath = path.join(__dirname, 'public', 'index.html');
-  if (fs.existsSync(publicPath)) {
-    res.sendFile(publicPath);
-  } else {
-    res.json({ service: 'wibsite-helper', status: 'ok', version: '2.0.0' });
-  }
+  res.status(404).json({ error: 'Not found', path: req.path });
 });
 
 if (require.main === module) {

@@ -1,13 +1,13 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * Config E2E de UI — Wibsite Business
+ * Config E2E de UI â€” Wibsite Business
  * Apunta al gateway (https://localhost:8080) con el stack levantado.
  * Variables de entorno:
  *  WIBSITE_BASE_URL   (default https://localhost:8080)
- *  HELPER_URL         (default http://localhost:3100) — para reporter SOAC
- *  HELPER_API_KEY     — clave de la API del helper (reporter)
- *  E2E_USER / E2E_PASS — credenciales SSO (default admin@wibsite.com / Wibsite2024!)
+ *  HELPER_URL         (default http://localhost:3100) â€” para reporter SOAC
+ *  HELPER_API_KEY     â€” clave de la API del helper (reporter)
+ *  E2E_USER / E2E_PASS â€” credenciales SSO (default admin@wibsite.com / Admin@123)
  */
 export default defineConfig({
   testDir: './specs',

@@ -233,6 +233,101 @@ async function callOpenRouter(message, context) {
   return { result: parsed, mode: 'fallback', latencyMs };
 }
 
+function normalizeGroupScore(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return Math.max(0, Math.min(1, v));
+}
+
+function heuristicClassifyIntoGroup(text, groups) {
+  if (!groups || groups.length === 0) return { groupId: null, confidence: 0, reasoning: 'No hay grupos configurados para clasificar.' };
+  const hay = String(text || '').toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  for (const g of groups) {
+    const haystack = `${g.name || ''} ${g.description || ''} ${g.criteria || ''}`.toLowerCase();
+    const keywords = haystack.match(/[a-záéíóúüñ0-9]{3,}/g) || [];
+    const unique = [...new Set(keywords)].filter((k) => k.length > 2 && !['para', 'que', 'con', 'los', 'las', 'una', 'unos', 'unas', 'del', 'por'].includes(k));
+    if (unique.length === 0) continue;
+    let hits = 0;
+    for (const k of unique) {
+      if (hay.includes(k)) hits += 1;
+    }
+    const score = unique.length ? hits / unique.length : 0;
+    if (score > bestScore) { bestScore = score; best = g; }
+  }
+  if (!best || bestScore <= 0) {
+    return { groupId: null, confidence: 0, reasoning: 'No se encontró coincidencia clara con ningún grupo configurado.' };
+  }
+  return { groupId: best.id, confidence: Math.min(1, 0.4 + bestScore), reasoning: `Coincidencia heurística con "${best.name}" (${Math.round(bestScore * 100)}%).` };
+}
+
+/**
+ * Clasifica una conversación dentro de los grupos configurados.
+ * Usa OpenRouter con prompt dinámico; si no hay API key o falla, usa heurística.
+ * Retorna { groupId, confidence, reasoning, mode }.
+ */
+async function classifyIntoGroup(text, groups, context = {}) {
+  const fallback = heuristicClassifyIntoGroup(text, groups);
+  if (!OPENROUTER_API_KEY) return { ...fallback, mode: 'heuristic' };
+
+  const groupLines = (groups || []).map((g, i) =>
+    `${i + 1}. id=${g.id} | nombre=${g.name} | descripcion=${g.description || '—'} | criterio=${g.criteria || '—'}`
+  ).join('\n');
+  const systemPrompt =
+    'Eres un agente clasificador de conversaciones de un inbox omnicanal. ' +
+    'Analiza la conversación y elige el grupo más adecuado entre los disponibles. ' +
+    'Responde SOLO con JSON válido: {"groupId": "<id del grupo>", "confidence": <0-1>, "reasoning": "<explicación breve en español>"}. ' +
+    'Si ninguna conversación encaja claramente, usa "groupId": null con confidence bajo. No agregues texto adicional.';
+  const userPrompt =
+    `Grupos disponibles:\n${groupLines}\n\n` +
+    `Conversación:\n${String(text || '').substring(0, 4000)}`;
+
+  const started = Date.now();
+  try {
+    const resp = await axios.post(`${OPENROUTER_BASE}/chat/completions`, {
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0,
+      max_tokens: 200,
+    }, {
+      timeout: FALLBACK_TIMEOUT_MS,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+    });
+    const content = resp.data?.choices?.[0]?.message?.content || '';
+    const parsed = parseFinalResult(content);
+    const latencyMs = Date.now() - started;
+    const validGroup = groups && groups.some((g) => g.id === parsed?.groupId);
+    const result = {
+      groupId: validGroup ? parsed.groupId : (fallback.groupId || null),
+      confidence: normalizeGroupScore(parsed?.confidence) ?? (validGroup ? 0.7 : fallback.confidence),
+      reasoning: parsed?.reasoning || (validGroup ? 'Clasificado por el agente IA.' : fallback.reasoning),
+      mode: validGroup ? 'llm' : (fallback.groupId ? 'llm-fallback' : 'llm-nomatch'),
+    };
+    await logEvent('api_call', {
+      level: 'info',
+      message: `OpenRouter group classify ok (${latencyMs}ms)`,
+      tenantId: context.tenantId, conversationId: context.conversationId,
+      module: 'agentCore', flow: 'llm.group.classify',
+      action: 'chat.completions', dependency: 'openrouter-llm', latencyMs,
+      data: { groupId: result.groupId, confidence: result.confidence, mode: result.mode },
+    });
+    return result;
+  } catch (e) {
+    await logEvent('error', {
+      level: 'warn',
+      message: `OpenRouter group classify failed — ${e?.response?.status ? `http_${e.response.status}` : 'network_error'}`,
+      tenantId: context.tenantId, conversationId: context.conversationId,
+      module: 'agentCore', flow: 'llm.group.classify', action: 'chat.completions',
+      dependency: 'openrouter-llm',
+      data: { reason: e?.response?.status ? `http_${e.response.status}` : 'network_error' },
+    });
+    return { ...fallback, mode: 'heuristic' };
+  }
+}
+
 async function classify(message, context = {}) {
   const result = {
     intent: 'venta',
@@ -296,7 +391,8 @@ async function classify(message, context = {}) {
 }
 
 module.exports = {
-  classify, callDify, callOpenRouter, normalizeClassification, parseFinalResult, parseDifyWorkflowOutput,
+  classify, classifyIntoGroup, heuristicClassifyIntoGroup, normalizeGroupScore,
+  callDify, callOpenRouter, normalizeClassification, parseFinalResult, parseDifyWorkflowOutput,
   isCircuitOpen, registerFailure, registerSuccess,
   FAIL_THRESHOLD, COOLDOWN_MS,
 };

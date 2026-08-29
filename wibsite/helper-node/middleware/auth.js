@@ -22,6 +22,8 @@ const PUBLIC_ROUTES = [
   { path: '/webhooks/messenger', method: 'POST' },
   { path: '/webhooks/email-inbound', method: 'POST' },
   { path: '/webhooks/tiktok-comments', method: 'POST' },
+  // Media subida (imágenes/audios del chat) — protegida por SSO de nginx
+  { path: '/media', method: 'GET' },
 ];
 
 function isPublicRoute(req) {

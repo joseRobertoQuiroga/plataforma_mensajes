@@ -160,3 +160,13 @@
 **Decisión**: Simplificar el nodo End a una única salida `final_result` que contiene un JSON completo con todos los campos del resultado. El JSON se genera en el último nodo LLM (assemble_result) y se pasa directamente como output.  
 **Consecuencias**: Un solo output fácil de consumir. La respuesta de la API de Dify tiene `data.outputs.response_text` con el JSON completo.  
 **Prueba**: `POST /v1/workflows/run` → `data.outputs` contiene `response_text` con JSON parseable.
+
+## ADR-022: Consolidación del Frontend en Next.js App Router (Reemplazo de Microfrontends/Iframes)
+**Fecha**: 2026-08-24  
+**Contexto**: El diseño original (DISENO-NAVEGACION-UNIFICADA) planteaba un portal shell con iframes y comunicación vía postMessage para integrar módulos dispares (Dify, Chatwoot, Twenty, Dashboard). Esta arquitectura de microfrontends resultaba inestable, propensa a fallos de comunicación cross-origin, pérdida de contexto de estado y una mala experiencia de usuario (tiempos de carga lentos, duplicación de dependencias).  
+**Decisión**: Abandonar la arquitectura de portal shell con iframes y crear un frontend unificado nativo construido en **Next.js (App Router) con TypeScript y Tailwind (Glacier UI)**.  
+**Consecuencias**:  
+- Todo el UI de negocio (Dashboard, Inbox, Leads, Campañas, Plantillas, Reportes, Automatización) ahora reside en el directorio \rontend/\ como una aplicación SPA monolítica SSR/SSG.  
+- Las interacciones de estado son rápidas y nativas.  
+- El \helper-node\ actúa como el BFF (Backend for Frontend), consolidando y abstrayendo la comunicación con los servicios subyacentes (Chatwoot, Twenty, Dify, n8n) bajo la ruta \/api/*\.  
+- El servidor estático de Nginx (\/hub/\) y los scripts \postMessage\ quedan obsoletos.  

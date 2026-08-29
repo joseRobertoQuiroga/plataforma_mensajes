@@ -1,5 +1,42 @@
 # Wibsite Business — Historial de Cambios
 
+## [4.0.0] - 2026-08-24 (Wibsite 2.0 Glacier UI - Consolidación Frontend)
+
+### Added
+- **Wibsite 2.0 Glacier UI**: Migración completa a Next.js App Router, consolidando todos los microfrontends (Dify, Chatwoot, Dashboard, Twenty) en una aplicación SPA única.
+- **Pipeline Kanban**: Implementación completa de la vista de pipeline de ventas con re-scoring de IA en vivo, estados visuales y KPIs.
+- **Inbox Mejorado**: UI de chat nativo con filtrado de clientes y metadatos (evitando cargar el iframe pesado de Chatwoot).
+- **Tipografía y Localización**: Scripts de corrección aplicados globalmente para evitar *mojibake* en los caracteres UTF-8.
+
+### Changed
+- Reemplazada la arquitectura de **Portal Shell con Iframes y postMessage** por el frontend unificado en Next.js (ver ADR-022 en MEMORY.md).
+- Optimización de todos los endpoints de `helper-node` (200 OK unánime en auditoría cruzada de 10 flujos críticos).
+- La ruta raíz de Nginx ahora apunta al servidor `frontend:4000` en lugar de servir archivos estáticos (`/hub/`).
+
+
+## [3.6.0] — 2026-08-21 (Canal Telegram activo — configuración BotFather + validación SOAC)
+
+### Added
+- **Canal Telegram configurado y operativo**: bot `@wibsite_bot` (id 8920643619) verificado vía `getMe`; `TELEGRAM_BOT_TOKEN` y `TELEGRAM_WEBHOOK_SECRET` agregados al `.env`; helper reporta `channels.telegram.configured=true`.
+- **Webhook real de Telegram registrado** en Bot API (`setWebhook`) apuntando a túnel ngrok → `https://<ngrok>/webhooks/telegram` → nginx → helper, con `secret_token` y `allowed_updates=[message]`; `getWebhookInfo` sin errores y 0 pendientes.
+- **Cadena pública E2E validada**: POST simulado vía URL pública ngrok → nginx → helper → pipeline completo (webhook_received → Dify classify real 1661ms → grafo greeting→apertura→analyze→calificacion → channel.reply intentado) → auditoría SOAC en PG y ES.
+- **Lead persistido** del canal: `e2e_publico` (600888) en store JSON con `source=telegram_inbound`, `status=new` (store dual).
+
+### Verified
+- ✅ Contenedores **20/20 Up** (plugin-daemon y twenty-server con restarts transitorios al arranque por postgres "starting up"; se recuperaron solos — no requiere acción).
+- ✅ **SOAC**: Elasticsearch yellow (pipeline OTLP vivo, 3882+ docs), Kibana 200 en `/kibana/` (302 vía gateway = SSO), eventos channels en ES (webhook.received ×2, channel.reply ×2, webhook.rejected ×1).
+- ✅ Vista unificada: `/hub/` 200, `/hub/control-center.html` 200, `/hub/portal/index.html` 200, `/health` 200.
+- ✅ Suite Playwright Telegram: **9/9 PASS** (con `TELEGRAM_WEBHOOK_SECRET` en el entorno del runner).
+- ✅ Seguridad: secret_token inválido → 403 + `security_alert` auditado en PG/ES.
+
+### Observaciones documentadas (análisis posterior, sin cambios de código)
+- ⚠️ **Reply 400 "chat not found"**: esperado — los updates simulados usan chat_ids inexistentes en Telegram. Con un mensaje real del usuario el reply funcionará. No es bug del helper.
+- ⚠️ **Specs Telegram requieren `TELEGRAM_WEBHOOK_SECRET` en el entorno del runner**: sin la variable, el test envía sin header → 403 (el helper ahora sí valida secret). Gap de configuración del entorno de test, no del backend.
+- ⚠️ **Lead inbound queda en store JSON, no en `campaign_leads` de PG**: el dual-write actual escribe leads de canal a JSON (los de campaña sí van a PG). Validar si el inbound debe persistir a PG (análisis pendiente).
+- ⚠️ **ngrok**: URL gratis cambia al reiniciar el túnel → hay que re-setear `setWebhook` si ngrok se reinicia. Para persistencia se requiere dominio propio o plan ngrok.
+- ⚠️ **Keys pendientes para fases posteriores**: `META_APP_SECRET`, `META_APP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` (Meta/WhatsApp), `MESSENGER_PAGE_TOKEN`/`MESSENGER_VERIFY_TOKEN` (Messenger). `HELPER_API_KEY` sigue como literal sin resolver (seguridad pendiente).
+- ⚠️ **SSO Authelia**: credenciales documentadas siguen sin validar (bloquea UI de n8n/CRM/portal con login real).
+
 ## [3.5.0] — 2026-08-16 (Integración E2E de UI — Playwright + SOAC)
 
 ### Added

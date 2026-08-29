@@ -10,6 +10,7 @@
 
 | Servicio | Imagen | Puerto host→interno | Propósito | Estado |
 |---|---|---|---|---|
+| `frontend` | node:20-alpine (Next.js) | **4000** | Frontend SPA unificado (Wibsite 2.0) | ✅ |
 | `nginx` | nginx:1.27-alpine | **8080**→443, 80→80, 3003→3003 | Reverse proxy + hub estático | ✅ |
 | `postgres` | pgvector/pgvector:pg15 | interno 5432 | 5 BD + pgvector | ✅ |
 | `redis` | redis:7-alpine | interno 6379 | Cache/colas (Chatwoot, Dify, Twenty, helper, Authelia) | ✅ |
@@ -40,7 +41,7 @@ Volúmenes: `postgres_data`, `redis_data`, `weaviate_data`, `chatwoot_data`, `di
 ### Servidor principal (`:8080`)
 | Location | Destino | Notas |
 |---|---|---|
-| `/hub/`, `=` / | estático hub / 301→/hub/ | Portal de control |
+| `/` | frontend:4000 | Frontend UI Unificado (Glacier UI) |
 | `/api/`, `/admin/`, `/campaigns*` | helper:3100 | rate-limit zona `api` 30r/m |
 | `/webhooks/`, `/opt-outs/` | helper:3100 | públicos (Meta) |
 | `/webhook/`, `/webhook-test/`, `/webhook-waiting/`, `/rest/`, `/static/` | n8n:5678 | webhooks y REST n8n |

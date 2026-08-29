@@ -1,20 +1,82 @@
-# ===== Secretos y material sensible — nunca subir =====
+# ===== Secretos y material sensible — nunca versionar =====
 *.key
 *.pem
 *.pfx
+*.crt
 n8n-cookies*.txt
 n8n_login.json
-website_backup/
-authelia/oidc.key
-%{redirect_url}'
-helper-node/%{redirect_url}'
+wibsite-store.json
+*.sqlite3
+authelia/users.yml
+authelia/configuration.yml
+authelia/db.sqlite3
+wibsite/authelia/users.yml
+wibsite/authelia/configuration.yml
+wibsite/authelia/db.sqlite3
 
 # ===== Entornos locales =====
 .env
 *.env
 !*.env.example
+!*.env.local.example
 
 # ===== Dependencias y build =====
 node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# ===== Logs y artefactos de prueba =====
 logs/
 *.log
+test-results/
+playwright-report/
+*.png
+*.jpg
+*.jpeg
+
+# ===== Backups y copias locales =====
+backup_*/
+website_backup/
+copia de verificacion de plantilla/
+copia de verificación de plantilla/
+
+# ===== Scripts temporales / one-off de depuración =====
+tmp_*
+twenty-*.js
+test-upload.js
+test_xai*.py
+test_n8n*.py
+test_helper_api.py
+import_n8n*.py
+n8n_import.py
+extract_plugins.py
+install_plugin.py
+cleanup_workflows.py
+force_cleanup.py
+get_provider_detail.py
+check_*.py
+config_xai.py
+add_xai_model.py
+debug_import.py
+dify_login.py
+list_routes.py
+validate_workflow*.py
+
+# ===== Otros =====
+.DS_Store
+Thumbs.db
+# ===== Artefactos Playwright MCP / redirecciones mal formadas =====
+.playwright-mcp/
+%{redirect_url}'
+
+
+# ===== Helpers puntuales de depuraccion (no parte del estado real) =====
+import_workflows_final.py
+frontend/temp_templates.txt
+frontend/fix_dashboard.js
+
+wibsite/frontend/temp_templates.txt
+wibsite/frontend/fix_dashboard.js
+

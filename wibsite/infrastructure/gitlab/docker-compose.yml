@@ -1,0 +1,82 @@
+# GitLab Self-Managed (CE) — instancia local de la plataforma
+# Acceso: http://localhost:9080  (SSH: localhost:9022 · HTTPS self-signed: localhost:9443)
+# Puertos elegidos SIN colisión con el stack wibsite (80/8080/3003/5001-3/5679/8194/9000-1/9200/5601/4317-8)
+# Volúmenes nombrados para persistencia + bind mount de backups en ./backups
+
+name: gitlab
+
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab-ce
+    restart: unless-stopped
+    hostname: gitlab.local
+    ports:
+      - "9080:9080"
+      - "9443:443"
+      - "9022:22"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.local:9080'
+        gitlab_rails['gitlab_shell_ssh_port'] = 9022
+        # initial_root_password se define por variable de entorno (GITLAB_ROOT_PASSWORD) al desplegar.
+        gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']
+        # Perfil local: limitar consumo de RAM (host comparte con stack wibsite)
+        puma['worker_processes'] = 2
+        puma['min_threads'] = 4
+        puma['max_threads'] = 8
+        sidekiq['max_concurrency'] = 5
+        postgresql['shared_buffers'] = "256MB"
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitaly['enable'] = true
+        gitlab_rails['backup_path'] = '/var/opt/gitlab/backups'
+        gitlab_rails['backup_keep_time'] = 604800
+        gitlab_rails['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000' }
+        logging['logrotate_frequency'] = 'weekly'
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+      - ./backups:/var/opt/gitlab/backups
+    shm_size: '256m'
+    healthcheck:
+      test: ["CMD-SHELL", "gitlab-ctl status | grep -q 'run: gitlab-workhorse' && curl -sf -o /dev/null http://127.0.0.1:9080/-/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+
+  # ─── GitLab Runner (Self-Managed, executor docker) ──────────────
+  # - Socket del host: permite a los jobs construir imágenes (docker build)
+  # - network_mode=wibsite_default: los jobs alcanzan elasticsearch:9200,
+  #   postgres, redis, otel-collector del stack wibsite (necesario para TeVS)
+  runner:
+    image: gitlab/gitlab-runner:alpine
+    container_name: gitlab-runner
+    restart: unless-stopped
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - runner_config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - RUNNER_EXECUTOR=docker
+      - RUNNER_DOCKER_IMAGE=alpine:3.19
+      - RUNNER_TAG_LIST=dev,test,build,deploy
+      - RUNNER_NETWORK_MODE=wibsite_default
+      - RUNNER_VOLUMES=/var/run/docker.sock:/var/run/docker.sock,/cache
+      - RUNNER_RUN_UNTAGGED=false
+      - RUNNER_LOCKED=false
+      - RUNNER_REQUEST_CONCURRENCY=2
+      - RUNNER_DOCKER_ALLOW_PRIVILEGED=false
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  runner_config:

@@ -309,7 +309,7 @@ describe('Integration Tests - Flujo E2E', () => {
     expect([200, 201]).toContain(res.status);
   });
 
-  test('POST /api/webhooks/chatwoot procesa payloads externos', async () => {
+  test('Wibsite 2.0: puente /api/webhooks/chatwoot eliminado (404)', async () => {
     const payload = {
       event: 'message_created',
       message_type: 'incoming',
@@ -320,7 +320,7 @@ describe('Integration Tests - Flujo E2E', () => {
       .post('/api/webhooks/chatwoot')
       .set(auth)
       .send(payload);
-    
-    expect(res.status).toBe(200);
+
+    expect(res.status).toBe(404);
   });
 });

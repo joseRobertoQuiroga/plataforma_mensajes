@@ -26,9 +26,8 @@ function getClientIP(req) {
 
 function rateLimiter(req, res, next) {
   const clientIP = getClientIP(req);
-  // Telemetría interna (reporter de UI E2E): protegida por API key, no compite
-  // con el presupuesto público de requests (evita perder eventos e2e_ui bajo carga).
-  if (req.path === '/api/internal/ui-results') return next();
+  // Health checks y telemetría interna: nunca compiten por el presupuesto público
+  if (req.path === '/health' || req.path === '/metrics' || req.path === '/api/sli/metrics' || req.path === '/api/internal/ui-results') return next();
   const isLLM = req.path.startsWith('/api/llm/') || req.path.startsWith('/api/scoring/evaluate-llm');
   const maxReqs = isLLM ? LLM_MAX_REQUESTS : MAX_REQUESTS;
   const buckets = isLLM ? llmBuckets : ipBuckets;
