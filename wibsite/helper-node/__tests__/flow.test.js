@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
@@ -6,7 +6,7 @@ process.env.STORE_PATH = path.join(os.tmpdir(), `wibsite-store-test-${process.pi
 process.env.REDIS_URL = 'redis://127.0.0.1:6379';
 process.env.PG_HOST = '127.0.0.1';
 process.env.PG_PORT = '5433';
-// Puerto único por proceso: evita colisión EADDRINUSE con otros jobs de tests
+// Puerto Ãºnico por proceso: evita colisiÃ³n EADDRINUSE con otros jobs de tests
 // (unit/smoke/flow) que arrancan la app en paralelo en el mismo runner de CI.
 process.env.PORT = String(3100 + (process.pid % 2000));
 process.env.TWILIO_ACCOUNT_SID = 'AC-test';
@@ -15,9 +15,13 @@ const request = require('supertest');
 const app = require('../index');
 const storeFacade = require('../services/store');
 
+// En CI la variable protegida HELPER_API_KEY se inyecta; el header debe usar esa
+// key real. Localmente (sin la variable) se usa la key de test.
+const API_KEY = process.env.HELPER_API_KEY || 'test-key';
+
 jest.mock('../services/ragEngine', () => require('./helpers/ragEngineMock'));
 
-describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', () => {
+describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.0', () => {
   beforeAll(async () => {
     storeFacade.initPgStore(null);
   }, 30000);
@@ -43,7 +47,7 @@ describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', (
       .type('form')
       .send({
         From: 'whatsapp:+59170000001',
-        Body: 'Hola, quiero más información sobre los servicios',
+        Body: 'Hola, quiero mÃ¡s informaciÃ³n sobre los servicios',
         ProfileName: 'Carlos Perez',
         MessageSid: 'SM-test-101'
       });
@@ -58,7 +62,7 @@ describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', (
 
     const resScore = await request(app)
       .post('/api/leads/score')
-      .set('x-api-key', 'test-key')
+      .set('x-api-key', API_KEY)
       .send({ lead_id: leadId, score: 85, score_factors: { budget: 0.8, authority: 0.9 } });
 
     expect(resScore.status).toBe(201);
@@ -67,7 +71,7 @@ describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', (
 
     const resCampaign = await request(app)
       .post('/api/campaigns')
-      .set('x-api-key', 'test-key')
+      .set('x-api-key', API_KEY)
       .send({
         name: 'Promo Seguimiento',
         message_template: 'Hola {{name}}, tenemos una promo para ti.',
@@ -79,7 +83,7 @@ describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', (
     expect(resCampaign.body.status).toBe('draft');
   });
 
-  test('Flujo de Opt-Out (Unsubscribe) vía STOP', async () => {
+  test('Flujo de Opt-Out (Unsubscribe) vÃ­a STOP', async () => {
     storeFacade.getStore().leads.push({ id: 'L-123', name: 'Ana', phone: '+59160000002', status: 'active', opt_out: false });
 
     const resWebhook = await request(app)
@@ -104,9 +108,9 @@ describe('Flujos de Negocio (Business Flows) — pipeline nativo Wibsite 2.0', (
     await request(app)
       .post('/webhooks/twilio-inbound')
       .type('form')
-      .send({ From: '+59170000003', Body: 'Hola, necesito una cotización', MessageSid: 'SM-test-103' });
+      .send({ From: '+59170000003', Body: 'Hola, necesito una cotizaciÃ³n', MessageSid: 'SM-test-103' });
 
-    const res = await request(app).get('/api/leads').set('x-api-key', 'test-key');
+    const res = await request(app).get('/api/leads').set('x-api-key', API_KEY);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.some(l => l.phone === '+59170000003')).toBe(true);
