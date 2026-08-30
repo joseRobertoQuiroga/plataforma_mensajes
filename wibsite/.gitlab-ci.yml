@@ -7,12 +7,17 @@ variables:
   # los jobs en la red compartida wibsite_default (ver infrastructure/gitlab).
   # ELASTIC_PASSWORD NO se define aquí (hallazgo S2 cerrado): configurar como
   # variable CI/CD masked + protected en GitLab → Settings → CI/CD → Variables.
+  # OJO: las variables masked+protected solo se inyectan en ramas protegidas
+  # (main y dev lo están; ver infra/protected_branches).
   ELASTIC_URL: "http://elasticsearch:9200"
   ELASTIC_USER: "elastic"
   KIBANA_URL: "http://kibana:5601/kibana"
   HELPER_URL: "http://helper:3100"
   GATEWAY_URL: "https://nginx:443"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PREVALIDACIÓN AUTOMÁTICA — se ejecuta en CADA push a dev (integración) y en MRs
+# ─────────────────────────────────────────────────────────────────────────────
 helper-tests:
   stage: test
   image: node:22-alpine
@@ -24,9 +29,41 @@ helper-tests:
     - npm run test:unit
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
   timeout: 15m
 
+smoke-tests:
+  stage: test
+  image: node:22-alpine
+  tags:
+    - test
+  script:
+    - cd wibsite/helper-node
+    - npm ci --no-audit --no-fund --silent
+    - npm run test:smoke
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  timeout: 10m
+
+flow-tests:
+  stage: test
+  image: node:22-alpine
+  tags:
+    - test
+  script:
+    - cd wibsite/helper-node
+    - npm ci --no-audit --no-fund --silent
+    - npm run test:flow
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  timeout: 10m
+
+# TeVS: gate de prevalidación (dev) y gate de deploy (main)
 validate_tevs:
   stage: validate_tevs
   image: mcr.microsoft.com/powershell:lts-7.2-alpine-3.14
@@ -41,7 +78,10 @@ validate_tevs:
     paths:
       - wibsite/scripts/tevs/tests/
   rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
     - if: '$CI_COMMIT_BRANCH == "main"'
   needs:
     - helper-tests
+    - smoke-tests
+    - flow-tests
   timeout: 20m
