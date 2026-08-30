@@ -9,7 +9,7 @@
 
 | Issue | Ítem | Acción |
 |-------|------|--------|
-| #V1 | Re-ejecutar unit tests helper (176/22 suites) en estado actual | `cd helper-node && npm test` |
+| #V1 | Unit tests helper — **re-ejecutados 30/08** (24 suites; 83 tests unit en pipeline dev #58) | ✅ Cerrado parcial: `cd helper-node && npm run test:unit` |
 | #V2 | Localizar y probar endpoints Twenty CRM (404 en `/api/twenty/health`) | SPIKE en código |
 | #V3 | Validar multimodal STT/visión/TTS en runtime | Configurar OPENROUTER_STT_MODEL |
 | #V4 | Validar dashboards Kibana (traces+metrics+logs) | Kibana :5601 |

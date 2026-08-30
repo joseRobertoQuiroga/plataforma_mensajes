@@ -24,7 +24,7 @@
 
 ---
 
-## 2. Resumen ejecutivo de la brecha (estado 2026-08-29)
+## 2. Resumen ejecutivo de la brecha (estado 2026-08-30)
 
 ### 2.1 Implementado (verificado en código) — maestro RAG-GX-YY
 Catálogo completo en [`docs/maestro/MAESTRO-FUNCIONALIDADES-CORE.md`](../maestro/MAESTRO-FUNCIONALIDADES-CORE.md).
@@ -41,7 +41,7 @@ Resumen de estado de las 68 funcionalidades RAG:
 
 | ID | Ítem | Acción |
 |---|---|---|
-| V1 | Re-ejecutar unit tests helper (176/22 suites) | `cd helper-node && npm test` |
+| V1 | Unit tests helper — **re-ejecutados 30/08** (24 suites, 83 tests unit en pipeline dev) | ✅ Cerrado parcial: pipeline #58 green |
 | V2 | Localizar/probar endpoints Twenty CRM (404 `/api/twenty/health`) | SPIKE en código |
 | V3 | Validar multimodal STT/visión/TTS en runtime | Configurar `OPENROUTER_STT_MODEL` |
 | V4 | Validar dashboards Kibana (traces+metrics+logs) | Kibana :5601 |
@@ -105,6 +105,10 @@ Resumen de estado de las 68 funcionalidades RAG:
 
 ## 4. Actualización incremental (regla para cada tarea)
 
+> **Checklist obligatorio por MR:** el template `.gitlab/merge_request_templates/default.md` aparece
+> automáticamente en cada MR y exige marcar la validación de tests/E2E por alcance/TeVS/docs. Todo cambio
+> (código, flujo, módulo, docs) DEBE pasar el checklist antes del merge.
+
 1. **Antes** de implementar: registrar la funcionalidad como Issue en GitLab (board) con labels
    `status::ready` + `area::` + `priority::` + `type::`.
 2. **Durante**: mover el Issue a `status::in-progress`.
@@ -114,9 +118,13 @@ Resumen de estado de las 68 funcionalidades RAG:
    - `docs/maestro/MAESTRO-FUNCIONALIDADES-CORE.md` (cambiar estado del RAG-GX-YY,
      agregar si viene de `🔴` nuevo).
    - `docs/development/03-PENDIENTES-Y-VALIDACION.md` (bajar del bloque pendiente → cerrado).
+   - `docs/TESTING-INDEX.md` (conteos de tests si cambian).
    - `docs/CHANGELOG.md` (fecha + alcance).
    - Este `INDEX-GAPS.md` (resumen ejecutivo).
-5. **No avanzar** si las verificaciones fallan (regla de oro; el pipeline `dev`→`main` solo debe aceptar
+5. **Tests por alcance** (regla de consumo de recursos): E2E Playwright y validación profunda SOAC se
+   ejecutan **solo sobre las modificaciones del cambio** (o bajo demanda para bugs/cambios grandes),
+   nunca la suite completa en cada push.
+6. **No avanzar** si las verificaciones fallan (regla de oro; el pipeline `dev`→`main` solo debe aceptar
    verde).
 
 > Cada ítem V/P/F/T tiene su Issue tipado en GitLab; este índice es la referencia canónica de la brecha.

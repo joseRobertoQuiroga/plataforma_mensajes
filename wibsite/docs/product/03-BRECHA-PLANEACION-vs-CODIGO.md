@@ -1,20 +1,22 @@
 # Brecha: Planeación (documentación) vs Código
 
 > Principio: el **código y lo implementado es la verdad**. Todo lo que la documentación promete y el código/runtime no confirma se registra aquí como **PENDIENTE de implementar o validar**.
-> Última actualización: 2026-08-28.
+> Última actualización: 2026-08-30 (re-auditoría; previa 28/08).
 >
 > 📌 Vista derivada. La fuente canónica es [`../development/03-PENDIENTES-Y-VALIDACION.md`](../development/03-PENDIENTES-Y-VALIDACION.md); índice unificado en [`../INDEX-GAPS.md`](../INDEX-GAPS.md).
 
-## A. Discrepancias doc vs código (verificadas 28/08)
+## A. Discrepancias doc vs código (verificadas 30/08)
 
 | # | Documentación | Código/Runtime real | Acción |
 |---|---------------|---------------------|--------|
 | D1 | "Telegram: falta conectar token" (ESTADO-GENERAL) | `telegram configured=true` | Validar envío real con bot (BotFather) → cerrar brecha |
-| D2 | "~120-130 rutas helper" | 136 rutas | Actualizar métrica oficial a 136 |
-| D3 | "TeVS 11/11, 13/13" (docs 15/08) | 14/14 (pipeline #23) | Usar 14/14 como oficial |
+| D2 | "~120-130 rutas helper" | **136 rutas** (111 únicas) | ✅ Confirmado 30/08; métrica oficial 136 |
+| D3 | "TeVS 11/11, 13/13, 14/14" (docs previos) | **14 tests** (10/14 en CI dev; 4 de entorno informativos) | Usar 14 tests como catálogo oficial; 10/14 gate funcional |
 | D4 | "Twenty `/api/twenty/health`" (COMPONENTES) | 404 runtime; módulo no localizado en index.js | Re-localizar endpoints Twenty en código (SPIKE) |
 | D5 | "n8n 3 workflows activos" | healthz ok; activación vía SQL documentada, toggle UI pendiente | Verificar activos en runtime (SPIKE) |
 | D6 | "Chatwoot inbox configurado" | Contenedor up; verificación de inbox pendiente | Re-verificar inbox + webhook |
+| D7 | "Hub central + Dashboard SPA en helper" (docs previos) | `hub/` **eliminado** (commit `d17b09c`); frontend Next.js unificado (15 páginas) | ✅ Decisión técnica 30/08 → maestro G13 + 02-ESTADO actualizados |
+| D8 | "22 suites · 176 tests" (TESTING-INDEX 15/08) | **24 suites** de test (TESTING-INDEX actualizado 30/08) | ✅ Conteo real de archivos |
 
 ## B. En proceso (parcial — verificado parcialmente)
 

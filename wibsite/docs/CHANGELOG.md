@@ -1,5 +1,21 @@
 # Wibsite Business — Historial de Cambios
 
+## [4.1.0] - 2026-08-30 (Auditoría de prevalidación — alineación docs↔código + estándar MR)
+
+### Added
+- **Pipeline de prevalidación en GitLab (rama `dev`)**: jobs `helper-tests` (unit 83), `smoke-tests` (2), `flow-tests` (3) bloqueantes en dev/main; `validate_tevs` (14 tests) informativo en dev, gate estricto en main. Pipeline #58 SUCCESS.
+- **Template de MR con checklist de validación obligatorio**: `.gitlab/merge_request_templates/default.md` — tests por capa, E2E por alcance, TeVS, docs, higiene de secretos, backups/versionado.
+- **Fix de tests para CI**: `package-lock.json` regenerado; puerto único por proceso en tests; `flow.test.js` usa `HELPER_API_KEY` real de CI; `tevs-runner.ps1` usa `pwsh` en Linux; tests TeVS usan env vars de endpoints.
+- Rama `dev` protegida en GitLab (variables masked+protected disponibles).
+
+### Changed
+- **Docs alineados al estado real (30/08)**: `02-ESTADO-REAL-VERIFICADO` (frontend unificado, 20 contenedores, 136 rutas, 24 suites, pipeline #58), `01-OBJETIVOS-Y-METAS` (+objetivo 12 UI unificada), `03-BRECHA` (D7 hub eliminado, D8 conteos), maestro RAG G1-01/G13 (frontend Next.js sustituye hub/SPA), `TESTING-INDEX` (conteos reales 24 suites / TeVS 14), `INDEX-GAPS` (V1 cerrado, estándar MR).
+- Frontend Next.js unificado (v4.0.0) confirmado como frontera única; módulos externos (n8n/Dify/Chatwoot/Twenty) como motores sin UI.
+
+### Notes
+- TeVS DR-001/002 (redundancia collector), SEC-001 (SSO gateway) y UI-001 (evidencia E2E) requieren entorno completo — informativos en dev.
+- E2E Playwright y validación profunda SOAC: **por alcance / bajo demanda** (optimización de recursos).
+
 ## [4.0.0] - 2026-08-24 (Wibsite 2.0 Glacier UI - Consolidación Frontend)
 
 ### Added

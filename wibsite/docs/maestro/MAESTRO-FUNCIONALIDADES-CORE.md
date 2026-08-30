@@ -35,7 +35,7 @@
 
 | ID | Funcionalidad | Path | Funciones/Componentes | Cómo se abarca | Estado | Refs |
 |---|---|---|---|---|---|---|
-| RAG-G1-01 | Reverse proxy + Hub | `nginx.conf`, `hub/index.html` | 2 servers (:8080, :3003), rate zones api/llm/webhooks, security headers, resolver DNS runtime | Nginx como única puerta; hub estático como centro de control | ✅ | ADR-014, TEC-01 §2 |
+| RAG-G1-01 | Reverse proxy + Frontend unificado | `nginx.conf`, `frontend/` | 2 servers (:8080, :3003), rate zones api/llm/webhooks, security headers, resolver DNS runtime | Nginx como única puerta; el frontend Next.js (vista unificada) es el centro de control; hub estático eliminado | ✅ | ADR-014, TEC-01 §2 |
 | RAG-G1-02 | Orquestación de contenedores | `docker-compose.yml` | 20 servicios, healthchecks, volúmenes, red `wibsite_default` | Compose hoy; Swarm/K8s según umbrales (5-10/10-100/100+ tenants) | ✅ | CTX-01 §4, OPS §3 |
 | RAG-G1-03 | Persistencia relacional | `scripts/init-db.sql`, `scripts/campaigns-schema.sql` | 5 BD (chatwoot, dify, n8n, twenty, wibsite), 6 tablas campañas con FK/índices/triggers, pgvector | PG compartido; schema campañas creado pero no cableado al helper (deuda D1) | ⚠️ | TEC-01 §3, TEC-04 D1 |
 | RAG-G1-04 | Schema multi-tenant Lumi | `lumi/backend/src/config/migrations/` (referencia), diseño en DATA-MASTER §2 | 16-19 tablas UUID, FKs CASCADE, CHECKs, UNIQUE compuestos, RLS 10-12 tablas | Modelo Pool (compartido + `organization_id` + RLS); migración 3 fases | 🔴 | CTX-06 §8, OT-02 |
@@ -137,11 +137,15 @@
 
 ## G13 — UX / Dashboard / Portal
 
+> **Actualización 30/08/2026:** decisión técnica — el frontend se consolidó en **una sola vista unificada Next.js**
+> (`frontend/`), reemplazando al hub estático y al Dashboard SPA embebido. Los módulos externos (n8n, Dify, Chatwoot,
+> Twenty) se usan como **motores** (solo sus APIs/backends), sin exponer sus interfaces gráficas como frontera.
+
 | ID | Funcionalidad | Path | Componentes | Cómo se abarca | Estado | Refs |
 |---|---|---|---|---|---|---|
-| RAG-G13-01 | Dashboard SPA | `helper-node/public/index.html` | 5 tabs (Dashboard, Campañas, Leads, Plantillas, Canales), 6 acciones globales, import drag&drop, auto-refresh 15s | Monitoreo y operación sin framework (ADR-008) | ✅ | TEC-02 §G13 |
-| RAG-G13-02 | Hub central | `hub/index.html` | Portal visual de módulos + documentación interactiva | Una puerta a todos los módulos | ✅ | CTX-02 M1 |
-| RAG-G13-03 | Portal Shell unificado | Diseño: UI-UX-MASTER | sidebar+topbar+iframes+postMessage, búsqueda global Ctrl+K, Lead Context Panel, AI Insights | Micro-frontends sin reemplazar UIs | 🔴 | UX-1..UX-4 |
+| RAG-G13-01 | Frontend unificado Next.js (vista única) | `frontend/src/app/` (15 páginas) | dashboard, chat (inbox), leads, pipeline, campaigns, templates, reports, automation, settings, sidebar+statusbar+theme, ui/ (shadcn) | La UI consolida todos los módulos; llama al helper vía proxy `/api/*` (next.config) | ✅ | TEC-02 §G13, ADR-008 |
+| RAG-G13-02 | Frontend de prueba/legacy | `frontend/e2e/` | specs Playwright por vista (capture_all_views, dashboard, pipeline, verify_all_routes) | Validación visual y de rutas del frontend | ✅ | e2e/frontend |
+| RAG-G13-03 | (legacy) Hub estático | `hub/index.html`, `hub/portal/index.html`, `hub/control-center.html` | **ELIMINADO** en commit `d17b09c` — sustituido por el frontend Next.js | ❌ removido | ❌ | ADR-008, CTX-02 M1 |
 
 ## G14 — Observabilidad
 
