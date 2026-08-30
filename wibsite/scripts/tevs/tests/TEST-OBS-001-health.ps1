@@ -14,13 +14,13 @@ try {
     $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("elastic:wibsite_elastic_pass_2026"))
     $esHeaders = @{ Authorization = "Basic $auth" }
     
-    $esResponse = Invoke-RestMethod -Uri "http://localhost:9200/_cluster/health" -Headers $esHeaders
+    $esResponse = Invoke-RestMethod -Uri "$env:ELASTIC_URL/_cluster/health" -Headers $esHeaders
     if ($esResponse.status -ne "green" -and $esResponse.status -ne "yellow") {
         throw "Elasticsearch is $($esResponse.status)"
     }
 
     # Check Kibana
-    $kbResponse = Invoke-RestMethod -Uri "http://localhost:5601/kibana/api/status" -Headers $esHeaders
+    $kbResponse = Invoke-RestMethod -Uri "$env:KIBANA_URL/api/status" -Headers $esHeaders
     $actualStatus = $kbResponse.status.overall.level
     
     if ($actualStatus -eq $expectedStatus) {

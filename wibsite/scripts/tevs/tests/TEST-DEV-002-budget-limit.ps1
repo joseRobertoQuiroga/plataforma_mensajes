@@ -20,7 +20,7 @@ try {
     # Payload literal: ConvertTo-Json de PS 5.1 rompe hashtables con claves '@...'
     $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"exists":{"field":"attributes.llm.usage.total_tokens"}}]}},"aggs":{"total_tokens":{"sum":{"field":"attributes.llm.usage.total_tokens"}}},"size":0}'
     
-    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
+    $esResponse = Invoke-RestMethod -Method Post -Uri "$env:ELASTIC_URL/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
     
     $actualTokens = $esResponse.aggregations.total_tokens.value
     

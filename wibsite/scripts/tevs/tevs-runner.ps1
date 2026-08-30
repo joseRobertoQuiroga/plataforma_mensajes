@@ -16,6 +16,15 @@ $correlationId  = "CORR-" + [System.Guid]::NewGuid().ToString("N").Substring(0,1
 Write-Host "Starting TEVS Runner..." -ForegroundColor Cyan
 Write-Host "Execution ID: $executionId" -ForegroundColor Cyan
 
+# Exportar endpoints/credenciales a los subprocesos de test (CI pasa nombres de
+# servicio via parametros; local queda el fallback localhost de tevs-env.ps1)
+$env:ELASTIC_URL = $ElasticUrl
+$env:ELASTIC_USER = $ElasticUser
+$env:ELASTIC_PASSWORD = $ElasticPass
+if (-not $env:KIBANA_URL) { $env:KIBANA_URL = "http://localhost:5601/kibana" }
+if (-not $env:HELPER_URL) { $env:HELPER_URL = "http://localhost:3100" }
+if (-not $env:GATEWAY_URL) { $env:GATEWAY_URL = "https://localhost:8080" }
+
 # Find all test scripts
 $testScripts = Get-ChildItem -Path $TestFolder -Filter "*.ps1" -Recurse
 

@@ -29,7 +29,7 @@ try {
     }
     
     $payload = $query | ConvertTo-Json -Depth 5 -Compress
-    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_count" -Headers $esHeaders -Body $payload
+    $esResponse = Invoke-RestMethod -Method Post -Uri "$env:ELASTIC_URL/traces-doags.otel-*/_count" -Headers $esHeaders -Body $payload
     
     $actualDocs = $esResponse.count
     

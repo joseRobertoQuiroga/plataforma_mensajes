@@ -17,11 +17,11 @@ try {
     }
     
     # Check if recent traces have a trace_id (formato OTel del ES exporter)
-    # Nota: payload literal — ConvertTo-Json de PS 5.1 serializa mal hashtables
+    # Nota: payload literal â€” ConvertTo-Json de PS 5.1 serializa mal hashtables
     # anidados bajo claves '@...' (bug conocido: "System.Collections.Hashtable").
     $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"exists":{"field":"trace_id"}}]}},"size":1}'
     
-    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
+    $esResponse = Invoke-RestMethod -Method Post -Uri "$env:ELASTIC_URL/traces-doags.otel-*/_search" -Headers $esHeaders -Body $payload
     
     if ($esResponse.hits.total.value -gt 0) {
         $actualFieldFound = $true

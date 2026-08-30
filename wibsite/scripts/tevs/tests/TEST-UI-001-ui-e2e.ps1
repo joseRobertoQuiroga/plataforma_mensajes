@@ -17,10 +17,10 @@ try {
         "Content-Type" = "application/json"
     }
 
-    # Verifica que los resultados de UI E2E (Playwright) llegaron al SOAC (ES) en las últimas 24h
+    # Verifica que los resultados de UI E2E (Playwright) llegaron al SOAC (ES) en las Ãºltimas 24h
     $payload = '{"query":{"bool":{"must":[{"range":{"@timestamp":{"gte":"now-24h","lte":"now"}}},{"match":{"attributes.event.type":"e2e_ui"}}]}},"size":100,"aggs":{"by_action":{"terms":{"field":"attributes.wibsite.action"}}}}'
 
-    $esResponse = Invoke-RestMethod -Method Post -Uri "http://localhost:9200/logs-doags.otel-production/_search" -Headers $esHeaders -Body $payload
+    $esResponse = Invoke-RestMethod -Method Post -Uri "$env:ELASTIC_URL/logs-doags.otel-production/_search" -Headers $esHeaders -Body $payload
 
     $e2eEvents = $esResponse.hits.total.value
     if ($e2eEvents -gt 0) {

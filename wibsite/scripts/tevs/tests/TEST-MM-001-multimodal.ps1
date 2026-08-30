@@ -9,15 +9,15 @@ $errorMessage = $null
 
 try {
     # 1. El helper expone el estado multimodal en /health
-    $health = Invoke-RestMethod -Uri "http://localhost:3100/health" -TimeoutSec 10
+    $health = Invoke-RestMethod -Uri "$env:HELPER_URL/health" -TimeoutSec 10
     if (-not $health.modules.multimodal) {
         throw "health.modules.multimodal ausente"
     }
     $mm = $health.modules.multimodal
 
-    # 2. Degradación elegante: sin STT configurado, la transcripción devuelve null sin lanzar
-    # (se verifica vía el contrato del pipeline: el agente sigue respondiendo con media no procesado)
-    $agentUrl = "http://localhost:3100/api/agent/chat"
+    # 2. DegradaciÃ³n elegante: sin STT configurado, la transcripciÃ³n devuelve null sin lanzar
+    # (se verifica vÃ­a el contrato del pipeline: el agente sigue respondiendo con media no procesado)
+    $agentUrl = "$env:HELPER_URL/api/agent/chat"
     $key = $env:HELPER_API_KEY
     if (-not $key) {
         $envLine = Get-Content (Join-Path $PSScriptRoot "../../../.env") | Where-Object { $_ -match "^HELPER_API_KEY=" } | Select-Object -First 1
@@ -27,7 +27,7 @@ try {
     $body = @{ conversationId = "tevs-mm-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"; message = "Hola, tengo una consulta" } | ConvertTo-Json
     $agent = Invoke-RestMethod -Method Post -Uri $agentUrl -Headers @{ "x-api-key" = $key } -ContentType "application/json" -Body $body -TimeoutSec 60
     if (-not $agent.response) {
-        throw "Agente no respondió en prueba multimodal"
+        throw "Agente no respondiÃ³ en prueba multimodal"
     }
 
     $exitCode = 0

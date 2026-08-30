@@ -17,7 +17,7 @@ try {
     }
     
     # Query Elasticsearch index template settings for tevs-results
-    $esResponse = Invoke-RestMethod -Method Get -Uri "http://localhost:9200/_index_template/tevs-results-template" -Headers $esHeaders
+    $esResponse = Invoke-RestMethod -Method Get -Uri "$env:ELASTIC_URL/_index_template/tevs-results-template" -Headers $esHeaders
     
     $settings = $esResponse.index_templates[0].index_template.template.settings
     if ($settings.index -and $settings.index.lifecycle) {

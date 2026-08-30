@@ -10,7 +10,7 @@ $errorCode = $null
 $errorMessage = $null
 
 try {
-    $resp = Invoke-RestMethod -Uri "http://localhost:3100/health" -TimeoutSec 10
+    $resp = Invoke-RestMethod -Uri "$env:HELPER_URL/health" -TimeoutSec 10
     $channels = $resp.modules.channels
     if (-not $channels) {
         throw "health.modules.channels ausente"

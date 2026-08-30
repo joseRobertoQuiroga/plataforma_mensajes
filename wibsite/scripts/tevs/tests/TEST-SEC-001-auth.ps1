@@ -13,7 +13,7 @@ try {
     # Request Kibana through Nginx without auth headers
     # Nginx should return 401 because Authelia intercepts it.
     try {
-        $curlOut = & curl.exe -s -o /dev/null -w "%{http_code}" -k -L --max-redirs 0 "https://localhost:8080/kibana/"
+        $curlOut = & curl.exe -s -o /dev/null -w "%{http_code}" -k -L --max-redirs 0 "$env:GATEWAY_URL/kibana/"
         $actualStatusCode = [int]$curlOut
     } catch {
         throw $_
