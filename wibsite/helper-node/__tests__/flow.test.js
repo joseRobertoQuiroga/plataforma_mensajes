@@ -6,6 +6,9 @@ process.env.STORE_PATH = path.join(os.tmpdir(), `wibsite-store-test-${process.pi
 process.env.REDIS_URL = 'redis://127.0.0.1:6379';
 process.env.PG_HOST = '127.0.0.1';
 process.env.PG_PORT = '5433';
+// Puerto único por proceso: evita colisión EADDRINUSE con otros jobs de tests
+// (unit/smoke/flow) que arrancan la app en paralelo en el mismo runner de CI.
+process.env.PORT = String(3100 + (process.pid % 2000));
 process.env.TWILIO_ACCOUNT_SID = 'AC-test';
 
 const request = require('supertest');
