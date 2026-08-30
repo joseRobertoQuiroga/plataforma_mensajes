@@ -39,7 +39,9 @@ foreach ($script in $testScripts) {
         # Run the script capturing STDOUT and STDERR separately (critical: avoid JSON contamination)
         $tmpStdOut = [System.IO.Path]::GetTempFileName()
         $tmpStdErr = [System.IO.Path]::GetTempFileName()
-        $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", $script.FullName `
+        # Ejecutar el test con pwsh (Linux/CI) o powershell.exe (Windows local)
+        $shellPath = if (Get-Command pwsh -ErrorAction SilentlyContinue) { (Get-Command pwsh).Source } else { "powershell.exe" }
+        $proc = Start-Process -FilePath $shellPath -ArgumentList "-ExecutionPolicy", "Bypass", "-File", $script.FullName `
             -RedirectStandardOutput $tmpStdOut -RedirectStandardError $tmpStdErr -Wait -PassThru -NoNewWindow
         $exitCode = $proc.ExitCode
         $rawOut = Get-Content $tmpStdOut -Raw
