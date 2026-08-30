@@ -22,8 +22,8 @@
       curl -s http://localhost:3100/api/llm/health
       curl -s http://localhost:3100/api/twenty/health
       ```
-- [ ] Verificar que el dashboard carga en `http://localhost:3100`
-- [ ] Verificar nginx hub en `http://localhost:8080/hub/`
+- [ ] Verificar que el frontend unificado carga (raíz `https://localhost:8080/` → frontend Next.js)
+- [ ] Verificar health del helper en `http://localhost:3100/health`
 
 ### Base de Datos
 - [ ] Backup de PostgreSQL:

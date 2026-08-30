@@ -45,8 +45,8 @@ curl http://localhost:8080/health
 
 ### Verificar Nginx (rutas hub)
 ```bash
-# Hub principal
-curl -o /dev/null -sw '%{http_code}' http://localhost:8080/hub/
+# Frontend unificado (raíz)
+curl -o /dev/null -sw '%{http_code}' https://localhost:8080/
 # Esperado: 200
 
 # Admin dashboard (vía nginx)
@@ -194,8 +194,7 @@ docker compose up -d
 ## 8. Datos Útiles
 
 ### URLs vía Nginx (recomendado)
-- **Hub central**: http://localhost:8080/ → redirect a /hub/
-- **Hub principal (cards)**: http://localhost:8080/hub/
+- **Frontend unificado (raíz)**: https://localhost:8080/ → frontend Next.js (15 vistas)
 - **Dashboard monitoreo**: http://localhost:8080/admin/
 - **Dify Web**: http://localhost:8080/dify/
 - **n8n**: http://localhost:8080/n8n/

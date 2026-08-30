@@ -2,7 +2,7 @@
 
 > **Propósito:** Encontrar rápidamente el archivo que necesitas según lo que buscas.
 > **Archivos totales:** ~100+ documentos | **Última actualización:** Agosto 2026
-> **📖 Hub Visual:** Abre `hub/index.html` en navegador para versión interactiva.
+> **Frontend unificado (Next.js, 15 vistas):** `frontend/` — la interfaz consolidada del sistema; hub estatico eliminado (CHANGELOG 4.0.0) Abre `hub/index.html` en navegador para versión interactiva.
 > **📌 Documentos maestros:** `ROADMAP-MULTI-AGENT-MEMORY-CONTEXT.md` · `SECURITY-MASTER.md` · `UI-UX-MASTER.md` · `OPS-MASTER.md` · `DATA-MASTER.md` · `BUSINESS-MASTER.md`
 > **⭐ Estructura consolidada (punto de entrada):** `docs/contextual/` (QUÉ/POR QUÉ — 7 bloques CTX) · `docs/tecnica/` (CÓMO/ESTADO — 6 bloques TEC) · `docs/maestro/` (mapa RAG de funcionalidades core G1-G18). Ver `docs/INDEX.md`.
 
@@ -134,11 +134,10 @@
 | `COMPLETE_ARCHITECTURE.md` | 1,032 | Documento maestro: visión del producto, mercado, 8 fases de roadmap (F0-F7), matriz de riesgos, configuración | Documento fundacional del proyecto |
 | `SETUP_GUIDE.md` | 200 | Setup Fase 1: prerrequisitos, .env, configuración servicio por servicio (Chatwoot, Dify, n8n, Twenty, Meta) | Guía de configuración inicial |
 
-### 📁 `hub/` — Portal Visual de Documentación (1 archivo)
+### `frontend/` — Frontend Unificado (interfaz consolidada)
 
-| Archivo | Líneas | ¿Qué contiene? | ¿Para qué sirve? |
-|---------|--------|----------------|-------------------|
-| `index.html` | 710 | Diccionario visual interactivo con sidebar, buscador, 7 tabs (Dashboard, Módulos, Flujos, Objetivos, Verificación, Impacto), LEDs de estado | Navegar la documentación visualmente sin leer archivos .md |
+> El hub estatico fue eliminado (commit d17b09c / CHANGELOG 4.0.0). La interfaz unica es Next.js (15 vistas).
+
 
 ### 📁 `scripts/` — Automatización, Auditoría y Pruebas (4 scripts + SQL + suites)
 
@@ -197,7 +196,7 @@
 | Archivo | Líneas | ¿Qué contiene? | ¿Para qué sirve? |
 |---------|--------|----------------|-------------------|
 | `docker-compose.yml` | 669 | Orquestación de **20 servicios** con health checks, redes, volúmenes (incl. Elasticsearch, Kibana, OTel Collector, MinIO) | Levantar todo el sistema |
-| `nginx.conf` | 624 | Proxy reverso: rutas /hub/, /chatwoot/, /dify/, /n8n/, /crm/, /kibana/, /minio-console/, /admin/, /api/, /webhooks/ + auth_request Authelia | Unificar acceso a todos los servicios |
+| `nginx.conf` | 624 | Proxy reverso: rutas /, /chatwoot/, /dify/, /n8n/, /crm/, /kibana/, /minio-console/, /admin/, /api/, /webhooks/ + auth_request Authelia (raiz -> frontend:4000) | Unificar acceso a todos los servicios |
 | `.env` | 90 | Variables de entorno activas (DB, API keys, secretos, Elastic Stack) | Configurar servicios |
 | `.env.example` | 93 | Template de variables con placeholders (sincronizado con el compose) | Guía para generar .env |
 | `recovery-nginx.md` | 321 | Diagnóstico de redirect loops, configuración de referencia, recuperación paso a paso | Recuperar Nginx si falla |
@@ -255,7 +254,7 @@
 | **Referencia rápida de APIs/endpoints** | `docs/rag/ENDPOINTS.md` |
 | **Credenciales de todos los servicios** | `docs/rag/CREDENTIALS-REFERENCE.md` |
 | **Variables de entorno** | `docs/rag/ENVIRONMENT-VARIABLES.md` |
-| **Navegación visual sin leer MDs** | `hub/index.html` (abrir en navegador) |
+| **Interfaz unificada (frontend Next.js)** | `frontend/` (dashboard, chat, leads, pipeline, campañas, plantillas)
 | **Plan de memoria multi-agente (nuevo)** | `ROADMAP-MULTI-AGENT-MEMORY-CONTEXT.md` |
 | **Auditoría de seguridad (nuevo)** | `SECURITY-MASTER.md` |
 | **Unificación de UI/UX (nuevo)** | `UI-UX-MASTER.md` |
@@ -296,7 +295,7 @@
 🤖 DATOS PARA IA       → docs/rag/ (6 archivos)
 🔬 INVESTIGACIÓN       → Organizar_Estructurar/ (9 archivos — fuentes originales)
 📐 ESPECIFICACIONES    → specs/ (3 archivos)
-🖥️ PORTAL VISUAL       → hub/index.html
+├─ FRONTEND UNIFICADO  ├─ frontend/ (Next.js, 15 vistas)
 ⚙️ CONFIGURACIÓN       → docker-compose.yml · nginx.conf · .env
 📜 SCRIPTS             → scripts/ (*.sql, *.js, *.ps1)
 ⚡ WORKFLOWS n8n       → n8n/workflows/ (2 JSON)
@@ -306,4 +305,4 @@
 
 ---
 
-> 💡 **Consejo:** Si no sabes por dónde empezar, abre `Avances/ESTADO-GENERAL.md` para ver el estado actual, o abre `hub/index.html` en tu navegador para explorar visualmente.
+> 💡 **Consejo:** Si no sabes por dónde empezar, abre `Avances/ESTADO-GENERAL.md` para ver el estado actual, o abre el frontend unificado (`frontend/`) para la interfaz visual.

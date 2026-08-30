@@ -10,7 +10,7 @@
 | Entrega | - | Estado de un mensaje enviado a un contacto | Tracking de campañas |
 | Gateway | - | Punto de entrada unificado que centraliza autenticación, routing y seguridad | Nginx + Authelia |
 | Helper Node | - | Servicio Express.js con lógica de integración personalizada | Campañas, tracking, webhooks, scoring |
-| Hub | - | Centro de control unificado visual con estado de servicios y documentación interactiva | `hub/index.html` |
+| Hub | - | Centro de control unificado visual con estado de servicios y documentación interactiva | `frontend/` (Next.js) |
 | Lead | - | Cliente potencial identificado y clasificado por IA | CRM, scoring, campañas |
 | LED | - | Indicador visual de estado de canal (verde/rojo/amarillo) | Dashboard de monitoreo |
 | Namespace | - | Espacio de nombres global en Twenty CRM para campos custom | Twenty CRM, custom fields |

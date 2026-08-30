@@ -1,6 +1,6 @@
 # Wibsite Business — Índice del Código Fuente
 
-> 🆕 Documentación viva en `Avances/` y hub visual interactivo en `hub/index.html`
+> 🆕 Documentación viva en `Avances/` y hub visual interactivo en `frontend/` (Next.js)
 
 ## Raíz del Proyecto
 | Ruta | Propósito |
@@ -29,7 +29,7 @@
 ## hub/ (Hub Visual)
 | Ruta | Propósito |
 |------|-----------|
-| `hub/index.html` | 🆕 **Diccionario visual interactivo** — buscador de módulos, flujos paso a paso, guías de verificación, objetivos del proyecto |
+| `frontend/` (Next.js) | 🆕 **Diccionario visual interactivo** — buscador de módulos, flujos paso a paso, guías de verificación, objetivos del proyecto |
 
 ## Certs, Authelia, Backups
 | Ruta | Propósito |

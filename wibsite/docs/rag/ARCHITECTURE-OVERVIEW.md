@@ -41,7 +41,7 @@
 - Kibana: http://localhost:8080/kibana/ (y :5601)
 - MinIO Consola: http://localhost:8080/minio-console/ (y :9001)
 - Helper API: http://localhost:8080/api/helper/
-- Portal de control (hub): http://localhost:8080/hub/
+- Portal de control (hub): https://localhost:8080/
 
 ## Data Flow: Inbound Message (Twilio — canal real vigente)
 WhatsApp → Twilio → helper `POST /webhooks/whatsapp` → lead+delivery en store → forward n8n `/webhook/chatwoot-inbound` → Dify Workflow (clasificación) → respuesta vía Twilio / escalado → upsert Twenty CRM. (F-05, TEC-06)

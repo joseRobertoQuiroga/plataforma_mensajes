@@ -30,7 +30,7 @@ Usuario → Nginx Hub (:8080) → Helper API (:3100) → JSON Store
 ### Mapa de Puertos
 | Servicio | Puerto Interno | Puerto Externo | URL vía Nginx |
 |----------|---------------|----------------|---------------|
-| Hub Central | - | 8080 | http://localhost:8080/hub/ |
+| Hub Central | - | 8080 | https://localhost:8080/ |
 | Helper API | 3100 | 3100 | http://localhost:8080/admin/ |
 | Twenty CRM | 3000 | 3001 | http://localhost:8080/crm/ |
 | n8n | 5678 | 5679 | http://localhost:8080/n8n/ |
@@ -57,7 +57,7 @@ Usuario → Nginx Hub (:8080) → Helper API (:3100) → JSON Store
 Página de aterrizaje tipo Odoo con acceso a todas las plataformas.
 
 ### URL
-`http://localhost:8080/hub/`
+`https://localhost:8080/`
 
 ### Funcionalidad
 - Mosaico con tarjetas para cada plataforma
@@ -72,7 +72,7 @@ Página de aterrizaje tipo Odoo con acceso a todas las plataformas.
 
 ### Verificación Rápida
 ```powershell
-curl.exe -s -o nul -w "%{http_code}" http://localhost:8080/hub/
+curl.exe -s -o nul -w "%{http_code}" https://localhost:8080/
 # Debe retornar: 200
 ```
 

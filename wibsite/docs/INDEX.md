@@ -1,7 +1,7 @@
 # Wibsite Business — Índice de Documentación
 
 > Este documento organiza toda la documentación del proyecto por categorías.  
-> 📖 **Hub Visual**: Abrir [`/hub/`](../hub/index.html) en navegador para el diccionario visual interactivo del proyecto.
+> 🔗 **Frontend unificado**: [`frontend/`](../frontend/) (Next.js, 15 vistas) es la interfaz consolidada del sistema; el hub estático fue eliminado (CHANGELOG 4.0.0).
 
 ---
 
@@ -24,7 +24,7 @@
 - `Avances/COMPONENTES.md` — Matriz de salud de cada servicio y endpoint
 - `Avances/PROCEDIMIENTOS.md` — Comandos y pasos operativos esenciales
 - `Avances/ROADMAP.md` — Hoja de ruta con fases, milestones y dependencias
-- `hub/index.html` — 🆕 **Diccionario visual interactivo** con buscador, flujos y guías
+- `frontend/` — 🆕 **Frontend unificado** (Next.js, 15 vistas): dashboard, chat, leads, pipeline, campañas, plantillas, reports, automation, settings
 
 ## 1. Operaciones y Cambios
 - `docs/PLAYBOOK-CAMBIOS.md` — Cómo hacer cambios en cada componente (helper, docker, dify, n8n, docs)

@@ -1,5 +1,19 @@
 # Wibsite Business — Historial de Cambios
 
+## [4.1.1] - 2026-08-30 (Auditoría de gobernanza — docs alineados al estado real)
+
+### Changed
+- **02-ESTANDARES-GOBERNANZA**: labels 34→**48 reales** (15 area, 5 roadmap, 11 type), ramas protegidas main+dev, CI/CD actualizado (4 jobs, pipeline #58), TeVS 14, E2E por alcance, SOAC bajo demanda, backups por git history.
+- **01-METODOLOGIA-OPERATIVA**: flujo actualizado a **rama corta → MR → dev → prevalidación → main**; CI gates 4 jobs; checklist MR obligatorio.
+- **Refs al hub eliminadas de docs activos**: INDEX.md raíz, docs/INDEX.md, RUNBOOK, MANUAL-TECNICO, MANUAL-USUARIO, PLAYBOOK-CAMBIOS, SOURCE_INDEX, GLOSSARY, PRUEBAS-COMPLETAS, ARCHITECTURE-OVERVIEW, TEC-05, CHECKLIST-MANTENIMIENTO → sustituidas por el frontend Next.js unificado.
+- **INDEX-GAPS §3**: +discrepancias cerradas (labels 48, flujo dev, hub en índices).
+- Docs históricos (auditorías con fecha, checklists SSO pasados, CHANGELOG anterior, TEC-02) se conservan como registro de verificación.
+
+### Verified
+- GitLab: 48 labels, 11 milestones (SPRINT + Oleadas 0-8 + Pospuestos), 94 issues (84 backlog · 5 blocked · 4 ready · 1 done #94 línea base).
+- 17 issues transversales (V/P/T/F6/DOC) sin milestone — deuda/validación fuera de oleadas (documentado).
+- nginx.conf: raíz → `frontend:4000` (hub ya no se sirve).
+
 ## [4.1.0] - 2026-08-30 (Auditoría de prevalidación — alineación docs↔código + estándar MR)
 
 ### Added

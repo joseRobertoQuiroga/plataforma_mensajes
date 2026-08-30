@@ -398,7 +398,7 @@
 echo "=== Wibsite Quick Verify ==="
 
 curl -sf http://localhost:3100/health && echo "✅ Helper" || echo "❌ Helper"
-curl -sf http://localhost:8080/hub/ && echo "✅ Hub" || echo "❌ Hub"
+curl -sf https://localhost:8080/ && echo "✅ Hub" || echo "❌ Hub"
 curl -sf http://localhost:5679/health && echo "✅ n8n" || echo "❌ n8n"
 curl -sf http://localhost:3001 && echo "✅ Twenty" || echo "❌ Twenty"
 curl -sf http://localhost:3003 && echo "✅ Dify" || echo "❌ Dify"

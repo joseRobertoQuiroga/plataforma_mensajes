@@ -21,7 +21,7 @@
 
 ### URL de acceso
 ```
-http://localhost:8080/hub/
+https://localhost:8080/
 ```
 
 ### Login Único (SSO)
@@ -50,7 +50,7 @@ Todo el acceso a la plataforma está protegido por un sistema de **Single Sign-O
 
 ## 2. Hub Central
 
-**URL**: `http://localhost:8080/hub/`
+**URL**: `https://localhost:8080/`
 
 Es la página de inicio de Wibsite. Muestra una cuadrícula de tarjetas con acceso rápido a cada módulo.
 

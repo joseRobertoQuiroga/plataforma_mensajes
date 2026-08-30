@@ -395,7 +395,7 @@ curl -s http://localhost:3002/health
 curl -s http://localhost:8194/health
 
 # 2. Servicios vía nginx (SPA HTML + assets clave)
-curl -s -o /dev/null -w "hub=%{http_code} " http://localhost:8080/hub/
+curl -s -o /dev/null -w "hub=%{http_code} " https://localhost:8080/
 curl -s -o /dev/null -w "dify=%{http_code} " http://localhost:8080/dify/
 curl -s -o /dev/null -w "n8n=%{http_code} " http://localhost:8080/n8n/
 curl -s -o /dev/null -w "n8n-asset=%{http_code} " http://localhost:8080/n8n/assets/index-BQ3Sn2Ox.js

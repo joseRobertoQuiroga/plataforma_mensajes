@@ -92,14 +92,18 @@ Resumen de estado de las 68 funcionalidades RAG:
 
 ---
 
-## 3. Discrepancias doc vs código — cerradas por verificación (28/08)
+## 3. Discrepancias doc vs código — cerradas por verificación (28/08 y 30/08)
 
 | Ítem | Resolución |
 |---|---|
 | Telegram "sin token" | Código confirma `configured=true` → solo validación real pendiente (P8) |
 | "~120-130 rutas" | **136 rutas** en `index.js` |
-| TeVS 11/13 → 14/14 | Pipeline #50 es la verdad (helper-tests + validate_tevs success) |
+| TeVS 11/13 → 14/14 | **14 tests** (10/14 CI dev + 4 entorno informativos) — pipeline #58 |
 | Twenty health 404 | Módulo reorganizado → V2 |
+| "Hub central / Dashboard SPA" | **Hub eliminado** (d17b09c); frontend Next.js unificado — docs/índices corregidos 30/08 |
+| "22 suites · 176 tests" | **24 suites** — TESTING-INDEX actualizado |
+| "Labels 34" (02-ESTANDARES) | **48 labels reales** (15 area, 5 roadmap, 11 type) — actualizado 30/08 |
+| Flujo "rama → main" (01-METODOLOGIA) | Flujo real **rama → dev → main** (prevalidación en dev) — actualizado 30/08 |
 
 ---
 

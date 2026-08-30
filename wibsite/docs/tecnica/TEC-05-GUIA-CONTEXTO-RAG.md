@@ -21,7 +21,7 @@
 | Manuales | `MANUAL-TECNICO`, `MANUAL-USUARIO` | Usuario/Dev | Paso a paso | 520-620 líneas |
 | Decisiones | `docs/MEMORY.md` | Dev | ADR-001…021 | 162 líneas |
 | Investigación nueva | `Organizar_Estructurar/` | — | Fuentes originales de CTX-01/04/05 (9 archivos) | — |
-| Hub visual | `hub/index.html` | Todos | Navegación interactiva | — |
+| Frontend | `frontend/` (Next.js, 15 vistas) | Todos | Interfaz unificada del sistema | — |
 
 ## 2. Ruta de lectura según la tarea (tabla de decisión)
 
@@ -38,7 +38,7 @@
 | **Agregar un rubro/cliente nuevo** | ① CTX-05 §7 ② `esquema-config-plantilla.md` ③ JSON de ejemplo | TEC-01 |
 | **Planificar la próxima iteración** | ① TEC-03 ② CTX-07 ③ `FASE1-MVP-CRUZADO.md` | Manuales |
 | **Operar/troubleshoot** | ① `RUNBOOK.md` ② `Avances/PROCEDIMIENTOS.md` ③ `recovery-nginx.md` (si nginx) | CTX-* |
-| **Capacitar usuario** | ① `MANUAL-USUARIO.md` ② `hub/index.html` | Toda la técnica |
+| **Capacitar usuario** | ① `MANUAL-USUARIO.md` ② `frontend/` (interfaz unificada) | Toda la técnica |
 | **Buscar una funcionalidad concreta** | ① `docs/maestro/MAESTRO-FUNCIONALIDADES-CORE.md` (índice RAG) → te lleva al doc exacto | — |
 
 ## 3. Reglas para trabajo asistido por IA (heredadas + nuevas)
