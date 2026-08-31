@@ -40,7 +40,7 @@
 | **Vista única** | `frontend/` Next.js standalone con **15 páginas** en `src/app/` (dashboard, chat, leads, pipeline, campaigns, templates, reports, automation, settings, …) |
 | Comunicación | Proxy en `next.config.ts`: `/api/*` y `/webhooks/*` → helper (o vía nginx en prod) |
 | Hub estático | `hub/` **ELIMINADO** (commit `d17b09c`) — sustituido por el frontend |
-| Módulos externos | n8n, Dify, Chatwoot, Twenty se usan como **motores** (APIs/backends) sin exponer sus UI como frontera |
+| Módulos externos | n8n, Dify, Chatwoot se usan como **motores** (APIs/backends) sin exponer sus UI como frontera. **Twenty CRM FUERA DE ALCANCE (ADR-010, 31/08)**: no está en el compose ni tiene rutas en el helper; la frontera única es el frontend unificado y el resto de contenedores son motores internos del backend |
 
 ## 4. IA y automatización
 
@@ -48,7 +48,7 @@
 |------------|-------------------|
 | Dify | Workflow clasificador con OpenRouter (7 modelos); fallback + circuit breaker en agentCore |
 | n8n | 3 workflows importados; healthz ok; activación UI pendiente |
-| Twenty CRM | Sync 10 campos custom (verificación directa pendiente: endpoint `twenty` no localizado en index.js → código reorganizado) |
+| Twenty CRM | **FUERA DE ALCANCE (ADR-010, 31/08)** — no está en `docker-compose.yml` (18 servicios sin Twenty), no hay rutas `/api/twenty/*` en `index.js`, 404 en runtime con API key válida. `contact_id` queda como referencia genérica de CRM |
 | OpenRouter | API key presente en `.env`; LLM real en flujo (doc 15/08) |
 
 ## 5. Calidad y CI/CD (verificado 30/08)

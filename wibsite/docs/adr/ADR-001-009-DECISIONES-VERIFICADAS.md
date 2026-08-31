@@ -111,3 +111,17 @@
 **Alternatives:** usar `uvx mcp-gitlab` directo (falla con opencode), upgrade SDK MCP (no disponible).
 
 **Consequences:** (+) MCP estable con cualquier cliente. (−) puente a mantener en `C:\proyectos\MCP\gitlab-mcp\`.
+
+---
+
+# ADR-010 — Twenty CRM fuera del proyecto: frontera única = frontend unificado
+
+**Status:** Accepted (2026-08-31)
+
+**Context:** Twenty CRM no se usará más en este proyecto por decisión técnica. El frontend Next.js unificado es la única frontera (UI) del sistema, y los contenedores restantes (Chatwoot, Dify, n8n, Elastic Stack, MinIO, etc.) operan únicamente como **motores de backend** (sin UI propia como frontera), accedidos vía sus APIs. Verificado 31/08: Twenty no está en `docker-compose.yml` (18 servicios sin Twenty), el helper no expone rutas `/api/twenty/*` (404 en runtime con API key válida), y no hay dependencia de código activa.
+
+**Decision:** Eliminar Twenty CRM del alcance del proyecto. No se desarrollará integración nueva con Twenty (endpoints, sync, empresas). El campo `contact_id` en leads queda como referencia genérica de CRM (no Twenty). Toda la UI vive en `wibsite/frontend/`; el resto de contenedores son motores internos del backend.
+
+**Alternatives:** mantener Twenty como CRM externo (rechazado: duplica esfuerzo, sin valor de negocio para PYMEs vs. el perfil de lead propio del helper), Frappe/ERPNext como futuro CRM (diferido, decisión de negocio posterior — F-28/F-29).
+
+**Consequences:** (+) menos dependencias, menos superficie de integración, sincronización de estado 100% interna (helper como fuente de verdad), UI única coherente. (−) issues pospuestos que dependían de Twenty (K2/K3) quedan sin base externa; documentación histórica que menciona Twenty queda obsoleta (no se reescribe, se referencia este ADR); `TWENTY_*` en `.env` son inertes (se pueden limpiar en deploy).
