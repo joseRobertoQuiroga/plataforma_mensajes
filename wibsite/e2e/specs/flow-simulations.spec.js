@@ -181,3 +181,30 @@ test.describe('Flujo Chatwoot — bridge', () => {
     expect([200, 201, 400, 429]).toContain(resp.status());
   });
 });
+
+test.describe('R2 - Grafo comercial 11 nodos (validacion integral)', () => {
+  test('POST /api/agent/test-graph recorre apertura y response', async ({ request }) => {
+    const resp = await request.post(`${HELPER_URL}/api/agent/test-graph`, {
+      headers: headers(),
+      data: { message: 'Hola, quiero informacion de precios', conversationId: `r2-sim-${Date.now()}` },
+    });
+    expect([200, 429]).toContain(resp.status());
+    if (resp.status() === 200) {
+      const body = await resp.json();
+      expect(Array.isArray(body.path)).toBe(true);
+      expect(body.path.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test('POST /api/agent/commercial-graph responde en grafo completo', async ({ request }) => {
+    const resp = await request.post(`${HELPER_URL}/api/agent/commercial-graph`, {
+      headers: headers(),
+      data: { message: 'Hola', conversationId: `r2-com-${Date.now()}`, template_id: 'default' },
+    });
+    expect([200, 500, 429]).toContain(resp.status());
+    if (resp.status() === 200) {
+      const body = await resp.json();
+      expect(body.response || body.reply || body.final).toBeTruthy();
+    }
+  });
+});

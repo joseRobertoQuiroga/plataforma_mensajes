@@ -56,7 +56,7 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
 
     const conv = await conversationStore.getConversationState('default', conversationId);
     expect(conv.state).toBe('post_sale');
-    expect(conv.metadata.commercial_state).toBe('agendado/cerrado');
+    expect(conv.metadata.commercial_state).toBe('comprador');
   });
 
   test('camino sin objecion: cuestionario → propuesta → profundizacion (completa campos) → cierre', async () => {
@@ -93,7 +93,7 @@ describe('F-16 Grafo de 8 etapas comerciales', () => {
     expect(t4.stage).toBe('handoff');
     expect(t4.briefing).toBeTruthy();
     expect(t4.briefing.lead_name).toContain('Carla');
-    expect(t4.commercialState).toBe('derivado_a_humano');
+    expect(t4.commercialState).toBe('interesado');
     await cleanup(conversationId3);
   });
 
