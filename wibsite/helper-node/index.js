@@ -32,6 +32,7 @@ const {
   initConvArchivePool, runArchiveJob, getArchivedByPhone, getArchivedByLeadId,
 } = require('./services/conversationStore');
 const chatGroups = require('./services/chatGroups');
+const { runScheduledDeduplication } = require('./services/deduplicator');
 const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
 const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
@@ -240,6 +241,12 @@ if (pool) {
   }, ARCHIVE_INTERVAL_MS).unref();
 }
 
+
+// K1: Deduplicacion programada (cada 24h)
+const DEDUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+setInterval(async () => {
+  try { await runScheduledDeduplication(); } catch (e) { console.error('[Dedup] job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
 
 
 
@@ -1514,6 +1521,16 @@ app.post('/api/leads', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// --- DEDUPLICACION K1 ---
+app.post('/api/leads/deduplicate', async (req, res) => {
+  try {
+    const result = await runScheduledDeduplication();
+    res.json(result);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/leads/search', async (req, res) => {
   try {
     const { q, limit = 20 } = req.query;
