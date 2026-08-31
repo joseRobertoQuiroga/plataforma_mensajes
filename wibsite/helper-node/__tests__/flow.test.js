@@ -284,4 +284,65 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     const hit = resRun.body.triggered.find(t => t.campaign_id === resCamp.body.id);
     expect(hit).toBeUndefined();
   });
+
+  // C4: campañas de reactivación automática
+  test('C4: audiencia de reactivación coincide con la regla (score>=40 + sin reply en 14d)', async () => {
+    const store = storeFacade.getStore();
+    const oldDate = new Date(Date.now() - 20 * 86400000).toISOString();
+    storeFacade.updateStore(s => {
+      s.leads.push(
+        { id: 'C4-warm-stale', name: 'Warm Stale', phone: '+591C4000001', email: 'c4s@example.com', status: 'active', score: 65 },
+        { id: 'C4-warm-replied', name: 'Warm Replied', phone: '+591C4000002', email: 'c4r@example.com', status: 'active', score: 60 },
+        { id: 'C4-cold', name: 'Cold', phone: '+591C4000003', email: 'c4c@example.com', status: 'active', score: 20 }
+      );
+      s.deliveries.push(
+        { id: 'D-C4-1', campaign_id: 'c4', contact_id: 'C4-warm-stale', status: 'delivered', created_at: oldDate },
+        { id: 'D-C4-2', campaign_id: 'c4', contact_id: 'C4-warm-replied', status: 'replied', created_at: oldDate },
+        { id: 'D-C4-3', campaign_id: 'c4', contact_id: 'C4-cold', status: 'delivered', created_at: oldDate }
+      );
+    });
+    await new Promise(r => setTimeout(r, 250));
+
+    const res = await request(app)
+      .post('/api/campaigns/reactivation/audience')
+      .set('x-api-key', API_KEY)
+      .send({ min_score: 40, days_without_reply: 14 });
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.leads[0].id).toBe('C4-warm-stale');
+  });
+
+  test('C4: campaña de reactivación dispara sobre la audiencia', async () => {
+    const oldDate = new Date(Date.now() - 20 * 86400000).toISOString();
+    storeFacade.updateStore(s => {
+      s.leads.push(
+        { id: 'C4-run-1', name: 'Run Warm', phone: '+591C4000005', email: 'c4run@example.com', status: 'active', score: 70 }
+      );
+      s.deliveries.push(
+        { id: 'D-C4-run-1', campaign_id: 'c4', contact_id: 'C4-run-1', status: 'delivered', created_at: oldDate }
+      );
+    });
+    await new Promise(r => setTimeout(r, 250));
+
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({
+        name: 'C4-reactivation',
+        message_template: 'Hola {{name}}, ¿seguís interesado?',
+        campaign_type: 'reactivation',
+        reactivation_rule: { min_score: 40, days_without_reply: 14 },
+      });
+    expect(resCamp.status).toBe(201);
+    expect(resCamp.body.campaign_type).toBe('reactivation');
+
+    const resRun = await request(app)
+      .post('/api/campaigns/reactivation/run')
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resRun.status).toBe(200);
+    const hit = resRun.body.triggered.find(t => t.campaign_id === resCamp.body.id);
+    expect(hit).toBeDefined();
+    expect(hit.audience).toBe(1);
+  });
 });
