@@ -1557,7 +1557,7 @@ app.get('/api/leads/search', async (req, res) => {
 
 app.patch('/api/leads/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id'];
+    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id', 'is_favorite']; // K6: is_favorite added
     let updated = null;
     let transitionError = null;
     let oldStatus = null;
