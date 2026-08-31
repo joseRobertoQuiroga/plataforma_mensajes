@@ -1,95 +1,485 @@
 {
-  "meta": {
-    "version": "1.0.0",
-    "name": "Consultoria de Software",
-    "industry": "software_consulting",
-    "description": "Servicios de desarrollo y consultoria de software B2B"
-  },
-  "lead_temperature": {
-    "hot_threshold": 70,
-    "warm_threshold": 40,
-    "decay_percentage": 20,
-    "decay_days": 5
-  },
-  "followup": {
-    "sequence": [
-      { "delay_days": 0, "message_type": "confirmation", "message_template": "Gracias por tu interes {{name}}. Quedo atento a tus comentarios." },
-      { "delay_days": 1, "message_type": "value", "message_template": "{{name}}, como te comentaba, nuestro diferencial es la integracion sin friccion con tu infraestructura actual." },
-      { "delay_days": 3, "message_type": "low_friction", "message_template": "{{name}}, ¿que tal si agendamos una llamada de 15 min para conocer tu proyecto?" },
-      { "delay_days": 6, "message_type": "summary", "message_template": "{{name}}, te comparto un resumen de lo que hemos conversado por si quieres revisarlo con calma." },
-      { "delay_days": 10, "message_type": "content", "message_template": "{{name}}, encontre este caso de exito similar a tu proyecto que podria interesarte." },
-      { "delay_days": 20, "message_type": "nurture", "message_template": "{{name}}, seguimos disponibles para cuando necesites ayuda con tu proyecto." },
-      { "delay_days": 30, "message_type": "nurture", "message_template": "{{name}}, ¿como van tus proyectos? Recuerda que estamos a tu disposicion." },
-      { "delay_days": 45, "message_type": "nurture", "message_template": "{{name}}, ha pasado un tiempo. Si surge algo nuevo, aqui estamos." }
-    ],
-    "lost_threshold": 50,
-    "business_hours_only": true,
-    "timezone": "America/Mexico_City"
-  },
-  "objections": [
-    { "trigger_patterns": ["muy caro", "no hay algo mas barato", "precio alto"], "response_pattern": "Entiendo {{name}}. Antes de hablar de numeros, ¿con que lo estas comparando? Asi te muestro justo lo que cubre el alcance.", "triggers_followup": false },
-    { "trigger_patterns": ["comparar", "viendo otras opciones", "otras cotizaciones"], "response_pattern": "Me parece bien que compares. Un diferencial nuestro es la integracion con tu infraestructura actual. ¿Te sirve una llamada corta para resolver dudas?", "triggers_followup": false },
-    { "trigger_patterns": ["no se si lo necesito", "no se si vale la pena"], "response_pattern": "Cuentame un poco mas del problema que estas teniendo hoy. Asi te cuento como lo resolvimos en un caso parecido.", "triggers_followup": false },
-    { "trigger_patterns": ["consulte con mi socio", "lo vemos en equipo"], "response_pattern": "Totalmente entendible. ¿Les sirve una llamada con ambos presentes o prefieres un resumen escrito facil de reenviar?", "triggers_followup": true },
-    { "trigger_patterns": ["cuanto tiempo tarda", "cuanto tiempo toma"], "response_pattern": "¿Hay alguna fecha puntual que este empujando esto? Me ayuda a ajustar la propuesta a tu prioridad.", "triggers_followup": false },
-    { "trigger_patterns": ["por que ustedes", "que los diferencia"], "response_pattern": "Nos especializamos en integracion de plataformas. Te puedo mostrar 1-2 casos parecidos al tuyo si te sirve.", "triggers_followup": false },
-    { "trigger_patterns": ["manda la cotizacion", "envia la cotizacion", "ya lo vemos"], "response_pattern": "Te dejo el resumen por escrito para que lo revises con calma. Cualquier duda, seguimos por aca.", "triggers_followup": true },
-    { "trigger_patterns": ["fuera de mi presupuesto", "no tengo presupuesto ahora"], "response_pattern": "¿Es tema de monto total o de forma de pago? Podemos arrancar con una etapa mas chica, como una auditoria primero.", "triggers_followup": true }
-  ],
-  "handoff": {
-    "required_fields": ["name", "phone", "score", "intent", "service_type", "urgency", "objections_log", "summary"],
-    "next_action": "agendar_llamada",
-    "notify_target": "chatwoot_note"
-  },
-  "autonomy_zones": {
-    "green": { "can_quote": false, "can_commit": false, "can_share_pricing": false, "description": "Califica, responde preguntas, agenda reuniones" },
-    "yellow": { "can_quote": false, "can_commit": false, "can_share_pricing": true, "description": "Comparte rangos de precio, requiere supervision" },
-    "red": { "can_quote": true, "can_commit": true, "can_share_pricing": true, "description": "Solo humano puede cotizar y cerrar" }
-  },
-  "products": [
-    { "name": "Integracion de plataformas", "description": "Conexion de sistemas via API", "min_price": 5000, "max_price": 15000, "typical_time": "2-6 semanas",
-      "questionnaire": [
-        { "field": "systems", "question": "¿Qué sistemas o plataformas necesitas conectar?", "options": { "crm": { "f": 1.1, "label": "CRM" }, "erp": { "f": 1.2, "label": "ERP" }, "whatsapp": { "f": 1.0, "label": "WhatsApp" }, "pagos": { "f": 1.2, "label": "Pasarela de pagos" } } },
-        { "field": "volume", "question": "¿Cuántas operaciones/transacciones diarias aproximadas manejaría la integración?", "options": { "pocas": { "f": 0.9, "label": "Menos de 100" }, "medias": { "f": 1.1, "label": "Cientos" }, "muchas": { "f": 1.4, "label": "Miles" } } }
-      ] },
-    { "name": "Modulo nuevo", "description": "Desarrollo de modulo especifico", "min_price": 8000, "max_price": 25000, "typical_time": "3-8 semanas",
-      "questionnaire": [
-        { "field": "module_type", "question": "¿Qué tipo de módulo necesitas desarrollar?", "options": { "reportes": { "f": 0.8, "label": "Reportes/analítica" }, "gestion": { "f": 1.0, "label": "Gestión interna" }, "clientes": { "f": 1.2, "label": "Portal de clientes" } } },
-        { "field": "users", "question": "¿Cuántos usuarios usarán el módulo?", "options": { "pocos": { "f": 0.9, "label": "Menos de 10" }, "equipo": { "f": 1.0, "label": "10-50" }, "muchos": { "f": 1.3, "label": "Más de 50" } } }
-      ] },
-    { "name": "Desarrollo a medida", "description": "Soluciones personalizadas", "min_price": 15000, "max_price": 50000, "typical_time": "2-4 meses",
-      "questionnaire": [
-        { "field": "scope", "question": "¿Qué tan amplio es el alcance del proyecto?", "options": { "mvp": { "f": 0.7, "label": "MVP para validar" }, "producto": { "f": 1.0, "label": "Producto completo" }, "enterprise": { "f": 1.6, "label": "Nivel enterprise" } } },
-        { "field": "integrations", "question": "¿Necesita conectarse con sistemas externos (pagos, CRM, ERPs)?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.3, "label": "Sí" } } }
-      ] },
-    { "name": "Auditoria y consultoria", "description": "Revision de arquitectura y procesos", "min_price": 3000, "max_price": 10000, "typical_time": "1-3 semanas",
-      "questionnaire": [
-        { "field": "audit_type", "question": "¿Qué necesitas auditar?", "options": { "codigo": { "f": 1.0, "label": "Código/arquitectura" }, "seguridad": { "f": 1.3, "label": "Seguridad" }, "procesos": { "f": 0.9, "label": "Procesos" } } }
-      ] },
-    { "name": "Desarrollo web", "description": "Landings, tiendas en linea y paneles de gestion", "min_price": 800, "max_price": 6000, "typical_time": "2-6 semanas",
-      "questionnaire": [
-        { "field": "web_type", "question": "¿Buscas una landing, una tienda en línea o un panel de gestión?", "options": { "landing": { "f": 0.5, "label": "Landing" }, "tienda": { "f": 1.4, "label": "Tienda en línea" }, "panel": { "f": 1.0, "label": "Panel de gestión" } } },
-        { "field": "payments", "question": "¿Necesitas pasarela de pagos integrada?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.3, "label": "Sí" } } }
-      ] },
-    { "name": "Desarrollo movil", "description": "Aplicaciones iOS/Android", "min_price": 5000, "max_price": 20000, "typical_time": "1-3 meses",
-      "questionnaire": [
-        { "field": "platform", "question": "¿Para qué plataformas necesitas la app?", "options": { "android": { "f": 0.8, "label": "Solo Android" }, "ios": { "f": 0.8, "label": "Solo iOS" }, "ambas": { "f": 1.5, "label": "Android + iOS" } } },
-        { "field": "backend", "question": "¿La app necesita backend propio (usuarios, datos, notificaciones)?", "options": { "no": { "f": 1.0, "label": "No" }, "si": { "f": 1.4, "label": "Sí" } } }
-      ] },
-    { "name": "Full stack", "description": "Desarrollo web + movil + backend completo", "min_price": 10000, "max_price": 40000, "typical_time": "2-5 meses",
-      "questionnaire": [
-        { "field": "stack", "question": "¿Qué capas necesita el proyecto?", "options": { "web": { "f": 0.7, "label": "Solo web+backend" }, "movil": { "f": 0.9, "label": "Móvil+backend" }, "todo": { "f": 1.5, "label": "Web + móvil + backend" } } }
-      ] },
-    { "name": "Plataformas", "description": "Sistemas multi-usuario con panel y APIs", "min_price": 20000, "max_price": 60000, "typical_time": "3-6 meses",
-      "questionnaire": [
-        { "field": "users", "question": "¿Cuántos usuarios concurrentes esperas?", "options": { "pocos": { "f": 0.8, "label": "Menos de 100" }, "cientos": { "f": 1.0, "label": "Cientos" }, "miles": { "f": 1.4, "label": "Miles" } } }
-      ] }
-  ],
-  "industry_knowledge": [
-    "Integracion de CRMs y ERPs",
-    "Automatizacion de procesos",
-    "APIs y microservicios",
-    "Migracion a la nube"
-  ],
-  "forbidden_topics": ["competitors_pricing", "internal_cost_structure", "profit_margins", "source_code"]
+    "meta":  {
+                 "version":  "1.0.0",
+                 "name":  "Consultoria de Software",
+                 "industry":  "software_consulting",
+                 "description":  "Servicios de desarrollo y consultoria de software B2B"
+             },
+    "lead_temperature":  {
+                             "hot_threshold":  70,
+                             "warm_threshold":  40,
+                             "decay_percentage":  20,
+                             "decay_days":  5
+                         },
+    "followup":  {
+                     "sequence":  [
+                                      {
+                                          "delay_days":  0,
+                                          "message_type":  "confirmation",
+                                          "message_template":  "Gracias por tu interes {{name}}. Quedo atento a tus comentarios."
+                                      },
+                                      {
+                                          "delay_days":  1,
+                                          "message_type":  "value",
+                                          "message_template":  "{{name}}, como te comentaba, nuestro diferencial es la integracion sin friccion con tu infraestructura actual."
+                                      },
+                                      {
+                                          "delay_days":  3,
+                                          "message_type":  "low_friction",
+                                          "message_template":  "{{name}}, Â¿que tal si agendamos una llamada de 15 min para conocer tu proyecto?"
+                                      },
+                                      {
+                                          "delay_days":  6,
+                                          "message_type":  "summary",
+                                          "message_template":  "{{name}}, te comparto un resumen de lo que hemos conversado por si quieres revisarlo con calma."
+                                      },
+                                      {
+                                          "delay_days":  10,
+                                          "message_type":  "content",
+                                          "message_template":  "{{name}}, encontre este caso de exito similar a tu proyecto que podria interesarte."
+                                      },
+                                      {
+                                          "delay_days":  20,
+                                          "message_type":  "nurture",
+                                          "message_template":  "{{name}}, seguimos disponibles para cuando necesites ayuda con tu proyecto."
+                                      },
+                                      {
+                                          "delay_days":  30,
+                                          "message_type":  "nurture",
+                                          "message_template":  "{{name}}, Â¿como van tus proyectos? Recuerda que estamos a tu disposicion."
+                                      },
+                                      {
+                                          "delay_days":  45,
+                                          "message_type":  "nurture",
+                                          "message_template":  "{{name}}, ha pasado un tiempo. Si surge algo nuevo, aqui estamos."
+                                      }
+                                  ],
+                     "lost_threshold":  50,
+                     "business_hours_only":  true,
+                     "timezone":  "America/Mexico_City"
+                 },
+    "objections":  [
+                       {
+                           "trigger_patterns":  [
+                                                    "muy caro",
+                                                    "no hay algo mas barato",
+                                                    "precio alto"
+                                                ],
+                           "response_pattern":  "Entiendo {{name}}. Antes de hablar de numeros, Â¿con que lo estas comparando? Asi te muestro justo lo que cubre el alcance.",
+                           "triggers_followup":  false
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "comparar",
+                                                    "viendo otras opciones",
+                                                    "otras cotizaciones"
+                                                ],
+                           "response_pattern":  "Me parece bien que compares. Un diferencial nuestro es la integracion con tu infraestructura actual. Â¿Te sirve una llamada corta para resolver dudas?",
+                           "triggers_followup":  false
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "no se si lo necesito",
+                                                    "no se si vale la pena"
+                                                ],
+                           "response_pattern":  "Cuentame un poco mas del problema que estas teniendo hoy. Asi te cuento como lo resolvimos en un caso parecido.",
+                           "triggers_followup":  false
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "consulte con mi socio",
+                                                    "lo vemos en equipo"
+                                                ],
+                           "response_pattern":  "Totalmente entendible. Â¿Les sirve una llamada con ambos presentes o prefieres un resumen escrito facil de reenviar?",
+                           "triggers_followup":  true
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "cuanto tiempo tarda",
+                                                    "cuanto tiempo toma"
+                                                ],
+                           "response_pattern":  "Â¿Hay alguna fecha puntual que este empujando esto? Me ayuda a ajustar la propuesta a tu prioridad.",
+                           "triggers_followup":  false
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "por que ustedes",
+                                                    "que los diferencia"
+                                                ],
+                           "response_pattern":  "Nos especializamos en integracion de plataformas. Te puedo mostrar 1-2 casos parecidos al tuyo si te sirve.",
+                           "triggers_followup":  false
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "manda la cotizacion",
+                                                    "envia la cotizacion",
+                                                    "ya lo vemos"
+                                                ],
+                           "response_pattern":  "Te dejo el resumen por escrito para que lo revises con calma. Cualquier duda, seguimos por aca.",
+                           "triggers_followup":  true
+                       },
+                       {
+                           "trigger_patterns":  [
+                                                    "fuera de mi presupuesto",
+                                                    "no tengo presupuesto ahora"
+                                                ],
+                           "response_pattern":  "Â¿Es tema de monto total o de forma de pago? Podemos arrancar con una etapa mas chica, como una auditoria primero.",
+                           "triggers_followup":  true
+                       }
+                   ],
+    "handoff":  {
+                    "required_fields":  [
+                                            "name",
+                                            "phone",
+                                            "score",
+                                            "intent",
+                                            "service_type",
+                                            "urgency",
+                                            "objections_log",
+                                            "summary"
+                                        ],
+                    "next_action":  "agendar_llamada",
+                    "notify_target":  "chatwoot_note"
+                },
+    "autonomy_zones":  {
+                           "green":  {
+                                         "can_quote":  false,
+                                         "can_commit":  false,
+                                         "can_share_pricing":  false,
+                                         "description":  "Califica, responde preguntas, agenda reuniones"
+                                     },
+                           "yellow":  {
+                                          "can_quote":  false,
+                                          "can_commit":  false,
+                                          "can_share_pricing":  true,
+                                          "description":  "Comparte rangos de precio, requiere supervision"
+                                      },
+                           "red":  {
+                                       "can_quote":  true,
+                                       "can_commit":  true,
+                                       "can_share_pricing":  true,
+                                       "description":  "Solo humano puede cotizar y cerrar"
+                                   }
+                       },
+    "products":  [
+                     {
+                         "name":  "Integracion de plataformas",
+                         "description":  "Conexion de sistemas via API",
+                         "min_price":  5000,
+                         "max_price":  15000,
+                         "typical_time":  "2-6 semanas",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "systems",
+                                                   "question":  "Â¿QuÃ© sistemas o plataformas necesitas conectar?",
+                                                   "options":  {
+                                                                   "crm":  {
+                                                                               "f":  1.1,
+                                                                               "label":  "CRM"
+                                                                           },
+                                                                   "erp":  {
+                                                                               "f":  1.2,
+                                                                               "label":  "ERP"
+                                                                           },
+                                                                   "whatsapp":  {
+                                                                                    "f":  1.0,
+                                                                                    "label":  "WhatsApp"
+                                                                                },
+                                                                   "pagos":  {
+                                                                                 "f":  1.2,
+                                                                                 "label":  "Pasarela de pagos"
+                                                                             }
+                                                               }
+                                               },
+                                               {
+                                                   "field":  "volume",
+                                                   "question":  "Â¿CuÃ¡ntas operaciones/transacciones diarias aproximadas manejarÃ­a la integraciÃ³n?",
+                                                   "options":  {
+                                                                   "pocas":  {
+                                                                                 "f":  0.9,
+                                                                                 "label":  "Menos de 100"
+                                                                             },
+                                                                   "medias":  {
+                                                                                  "f":  1.1,
+                                                                                  "label":  "Cientos"
+                                                                              },
+                                                                   "muchas":  {
+                                                                                  "f":  1.4,
+                                                                                  "label":  "Miles"
+                                                                              }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Modulo nuevo",
+                         "description":  "Desarrollo de modulo especifico",
+                         "min_price":  8000,
+                         "max_price":  25000,
+                         "typical_time":  "3-8 semanas",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "module_type",
+                                                   "question":  "Â¿QuÃ© tipo de mÃ³dulo necesitas desarrollar?",
+                                                   "options":  {
+                                                                   "reportes":  {
+                                                                                    "f":  0.8,
+                                                                                    "label":  "Reportes/analÃ­tica"
+                                                                                },
+                                                                   "gestion":  {
+                                                                                   "f":  1.0,
+                                                                                   "label":  "GestiÃ³n interna"
+                                                                               },
+                                                                   "clientes":  {
+                                                                                    "f":  1.2,
+                                                                                    "label":  "Portal de clientes"
+                                                                                }
+                                                               }
+                                               },
+                                               {
+                                                   "field":  "users",
+                                                   "question":  "Â¿CuÃ¡ntos usuarios usarÃ¡n el mÃ³dulo?",
+                                                   "options":  {
+                                                                   "pocos":  {
+                                                                                 "f":  0.9,
+                                                                                 "label":  "Menos de 10"
+                                                                             },
+                                                                   "equipo":  {
+                                                                                  "f":  1.0,
+                                                                                  "label":  "10-50"
+                                                                              },
+                                                                   "muchos":  {
+                                                                                  "f":  1.3,
+                                                                                  "label":  "MÃ¡s de 50"
+                                                                              }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Desarrollo a medida",
+                         "description":  "Soluciones personalizadas",
+                         "min_price":  15000,
+                         "max_price":  50000,
+                         "typical_time":  "2-4 meses",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "scope",
+                                                   "question":  "Â¿QuÃ© tan amplio es el alcance del proyecto?",
+                                                   "options":  {
+                                                                   "mvp":  {
+                                                                               "f":  0.7,
+                                                                               "label":  "MVP para validar"
+                                                                           },
+                                                                   "producto":  {
+                                                                                    "f":  1.0,
+                                                                                    "label":  "Producto completo"
+                                                                                },
+                                                                   "enterprise":  {
+                                                                                      "f":  1.6,
+                                                                                      "label":  "Nivel enterprise"
+                                                                                  }
+                                                               }
+                                               },
+                                               {
+                                                   "field":  "integrations",
+                                                   "question":  "Â¿Necesita conectarse con sistemas externos (pagos, CRM, ERPs)?",
+                                                   "options":  {
+                                                                   "no":  {
+                                                                              "f":  1.0,
+                                                                              "label":  "No"
+                                                                          },
+                                                                   "si":  {
+                                                                              "f":  1.3,
+                                                                              "label":  "SÃ­"
+                                                                          }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Auditoria y consultoria",
+                         "description":  "Revision de arquitectura y procesos",
+                         "min_price":  3000,
+                         "max_price":  10000,
+                         "typical_time":  "1-3 semanas",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "audit_type",
+                                                   "question":  "Â¿QuÃ© necesitas auditar?",
+                                                   "options":  {
+                                                                   "codigo":  {
+                                                                                  "f":  1.0,
+                                                                                  "label":  "CÃ³digo/arquitectura"
+                                                                              },
+                                                                   "seguridad":  {
+                                                                                     "f":  1.3,
+                                                                                     "label":  "Seguridad"
+                                                                                 },
+                                                                   "procesos":  {
+                                                                                    "f":  0.9,
+                                                                                    "label":  "Procesos"
+                                                                                }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Desarrollo web",
+                         "description":  "Landings, tiendas en linea y paneles de gestion",
+                         "min_price":  800,
+                         "max_price":  6000,
+                         "typical_time":  "2-6 semanas",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "web_type",
+                                                   "question":  "Â¿Buscas una landing, una tienda en lÃ­nea o un panel de gestiÃ³n?",
+                                                   "options":  {
+                                                                   "landing":  {
+                                                                                   "f":  0.5,
+                                                                                   "label":  "Landing"
+                                                                               },
+                                                                   "tienda":  {
+                                                                                  "f":  1.4,
+                                                                                  "label":  "Tienda en lÃ­nea"
+                                                                              },
+                                                                   "panel":  {
+                                                                                 "f":  1.0,
+                                                                                 "label":  "Panel de gestiÃ³n"
+                                                                             }
+                                                               }
+                                               },
+                                               {
+                                                   "field":  "payments",
+                                                   "question":  "Â¿Necesitas pasarela de pagos integrada?",
+                                                   "options":  {
+                                                                   "no":  {
+                                                                              "f":  1.0,
+                                                                              "label":  "No"
+                                                                          },
+                                                                   "si":  {
+                                                                              "f":  1.3,
+                                                                              "label":  "SÃ­"
+                                                                          }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Desarrollo movil",
+                         "description":  "Aplicaciones iOS/Android",
+                         "min_price":  5000,
+                         "max_price":  20000,
+                         "typical_time":  "1-3 meses",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "platform",
+                                                   "question":  "Â¿Para quÃ© plataformas necesitas la app?",
+                                                   "options":  {
+                                                                   "android":  {
+                                                                                   "f":  0.8,
+                                                                                   "label":  "Solo Android"
+                                                                               },
+                                                                   "ios":  {
+                                                                               "f":  0.8,
+                                                                               "label":  "Solo iOS"
+                                                                           },
+                                                                   "ambas":  {
+                                                                                 "f":  1.5,
+                                                                                 "label":  "Android + iOS"
+                                                                             }
+                                                               }
+                                               },
+                                               {
+                                                   "field":  "backend",
+                                                   "question":  "Â¿La app necesita backend propio (usuarios, datos, notificaciones)?",
+                                                   "options":  {
+                                                                   "no":  {
+                                                                              "f":  1.0,
+                                                                              "label":  "No"
+                                                                          },
+                                                                   "si":  {
+                                                                              "f":  1.4,
+                                                                              "label":  "SÃ­"
+                                                                          }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Full stack",
+                         "description":  "Desarrollo web + movil + backend completo",
+                         "min_price":  10000,
+                         "max_price":  40000,
+                         "typical_time":  "2-5 meses",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "stack",
+                                                   "question":  "Â¿QuÃ© capas necesita el proyecto?",
+                                                   "options":  {
+                                                                   "web":  {
+                                                                               "f":  0.7,
+                                                                               "label":  "Solo web+backend"
+                                                                           },
+                                                                   "movil":  {
+                                                                                 "f":  0.9,
+                                                                                 "label":  "MÃ³vil+backend"
+                                                                             },
+                                                                   "todo":  {
+                                                                                "f":  1.5,
+                                                                                "label":  "Web + mÃ³vil + backend"
+                                                                            }
+                                                               }
+                                               }
+                                           ]
+                     },
+                     {
+                         "name":  "Plataformas",
+                         "description":  "Sistemas multi-usuario con panel y APIs",
+                         "min_price":  20000,
+                         "max_price":  60000,
+                         "typical_time":  "3-6 meses",
+                         "questionnaire":  [
+                                               {
+                                                   "field":  "users",
+                                                   "question":  "Â¿CuÃ¡ntos usuarios concurrentes esperas?",
+                                                   "options":  {
+                                                                   "pocos":  {
+                                                                                 "f":  0.8,
+                                                                                 "label":  "Menos de 100"
+                                                                             },
+                                                                   "cientos":  {
+                                                                                   "f":  1.0,
+                                                                                   "label":  "Cientos"
+                                                                               },
+                                                                   "miles":  {
+                                                                                 "f":  1.4,
+                                                                                 "label":  "Miles"
+                                                                             }
+                                                               }
+                                               }
+                                           ]
+                     }
+                 ],
+    "industry_knowledge":  [
+                               "Integracion de CRMs y ERPs",
+                               "Automatizacion de procesos",
+                               "APIs y microservicios",
+                               "Migracion a la nube"
+                           ],
+    "forbidden_topics":  [
+                             "competitors_pricing",
+                             "internal_cost_structure",
+                             "profit_margins",
+                             "source_code"
+                         ],
+    "scoring":  {
+                    "weights":  {
+                                    "interest_match":  0.2,
+                                    "engagement":  0.4,
+                                    "channel_affinity":  0.1,
+                                    "profile_completeness":  0.1,
+                                    "recency":  0.2
+                                }
+                }
 }
