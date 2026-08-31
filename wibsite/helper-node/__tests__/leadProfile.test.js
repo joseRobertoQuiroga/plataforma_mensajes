@@ -112,4 +112,43 @@ describe('Lead Profile - MVP-03: Extracción y actualización de leads', () => {
     expect(profile.deliveryStats.lastStatus).toBeNull();
     expect(profile.nextAction.action).toBe('send_first_message');
   });
+
+  // A9: nextAction enriquecido con etapa + grupo/segmento
+  test('A9: nextAction cambia segun etapa interesado -> send_offer', () => {
+    const store = createMockStore();
+    store.leads[0].status = 'interesado';
+    const profile = buildLeadProfile('lead-1', store);
+    expect(profile.stage).toBe('interesado');
+    expect(profile.nextAction.action).toBe('send_offer');
+  });
+
+  test('A9: nextAction cambia segun etapa posible_comprador -> try_to_close', () => {
+    const store = createMockStore();
+    store.leads[0].status = 'posible_comprador';
+    const profile = buildLeadProfile('lead-1', store);
+    expect(profile.stage).toBe('posible_comprador');
+    expect(profile.nextAction.action).toBe('try_to_close');
+  });
+
+  test('A9: nextAction cambia segun etapa comprador -> ask_for_referral', () => {
+    const store = createMockStore();
+    store.leads[0].status = 'comprador';
+    const profile = buildLeadProfile('lead-1', store);
+    expect(profile.stage).toBe('comprador');
+    expect(profile.nextAction.action).toBe('ask_for_referral');
+  });
+
+  test('A9: nextAction incluye grupos del lead en la razon', () => {
+    const store = createMockStore();
+    const profile = buildLeadProfile('lead-1', store);
+    expect(Array.isArray(profile.groups)).toBe(true);
+  });
+
+  test('A9: suggestNextAction con grupos agrega hint al reason', () => {
+    const lead = { id: 'lead-9', status: 'interesado', score: 60, contact_id: 'twenty-1' };
+    const deliveryStats = { total: 2, replied: 1, delivered: 1, read: 1, failed: 0, daysSinceContact: 3, lastStatus: 'replied' };
+    const action = suggestNextAction(lead, deliveryStats, 70, 50, ['Compradores', 'Premium']);
+    expect(action.action).toBe('send_offer');
+    expect(action.reason).toContain('Compradores');
+  });
 });
