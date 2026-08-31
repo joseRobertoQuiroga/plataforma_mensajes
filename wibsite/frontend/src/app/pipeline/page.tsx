@@ -87,6 +87,32 @@ export default function PipelinePage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newLead, setNewLead] = useState({ name: "", phone: "", email: "" });
+  const [duplicateSuggestions, setDuplicateSuggestions] = useState<any[]>([]);
+
+  // Detección de duplicados en vivo (K13)
+  useEffect(() => {
+    const q = newLead.phone.trim() || newLead.name.trim();
+    if (q.length < 4) {
+      setDuplicateSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${HELPER_URL}/api/leads/search?q=${encodeURIComponent(q)}`, {
+          headers: { "x-api-key": HELPER_API_KEY },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // el endpoint de search retorna { data: items, total: number }
+          const items = Array.isArray(data) ? data : data.data || [];
+          setDuplicateSuggestions(items.slice(0, 3));
+        }
+      } catch (e) {
+        // Ignorar errores de red en la búsqueda interactiva
+      }
+    }, 400); // debounce
+    return () => clearTimeout(timer);
+  }, [newLead.phone, newLead.name]);
 
   const createLead = async () => {
     if (!newLead.name.trim() && !newLead.phone.trim()) return toast("error", "Nombre o teléfono requeridos");
@@ -100,6 +126,7 @@ export default function PipelinePage() {
       if (!res.ok) throw new Error("Error");
       toast("success", "Lead creado", newLead.name || newLead.phone);
       setNewLead({ name: "", phone: "", email: "" });
+      setDuplicateSuggestions([]);
       setCreateOpen(false);
       load();
     } catch (e: any) {
@@ -297,6 +324,31 @@ const grouped = STAGES.map((stage) => {
                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
             </div>
           </div>
+          {/* Sugerencias de duplicados K13 */}
+          {duplicateSuggestions.length > 0 && (
+            <div className="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-2 animate-in fade-in">
+              <p className="text-xs font-semibold text-warning mb-2">Posibles duplicados detectados:</p>
+              <div className="space-y-2">
+                {duplicateSuggestions.map(sugg => (
+                  <div key={sugg.id} className="flex items-center justify-between bg-surface-container-highest p-2 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-white">{sugg.name}</p>
+                      <p className="text-xs text-on-surface-variant">{sugg.phone || sugg.email}</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setDetailLead(sugg);
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-container hover:bg-white/10 text-white transition-colors"
+                    >
+                      Ver existente
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 pt-1">
             <button onClick={createLead} disabled={creating}
               className="flex-1 px-4 py-2.5 rounded-xl bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-semibold disabled:opacity-50">
