@@ -1962,9 +1962,16 @@ function evaluateSegmentRule(lead, rule) {
   }
 }
 
-function resolveSegmentAudience(rules, leads) {
+function resolveSegmentAudience(rules, leads, store) {
   if (!rules || rules.length === 0) return leads;
-  return leads.filter(lead => rules.every(rule => evaluateSegmentRule(lead, rule)));
+  const optOuts = store ? store.optOuts || [] : [];
+  return leads.filter(lead => {
+    // C1: excluir opt-outs al resolver audiencia (start/programación)
+    const opted = (lead.opt_out || lead.status === 'opted_out') ||
+      optOuts.some(o => (o.phone && o.phone === lead.phone) || (o.email && o.email === lead.email));
+    if (opted) return false;
+    return rules.every(rule => evaluateSegmentRule(lead, rule));
+  });
 }
 
 // GET /api/segments — list all saved segments
@@ -2007,7 +2014,7 @@ app.get('/api/segments/:id/resolve', (req, res) => {
     return res.json({ segment_id: seg.id, from_cache: true, leads: cached.leads, total: cached.leads.length });
   }
 
-  const leads = resolveSegmentAudience(seg.rules, store.leads);
+  const leads = resolveSegmentAudience(seg.rules, store.leads, store);
   const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
   segmentCache.set(cacheKey, { leads: result, resolvedAt: Date.now() });
   res.json({ segment_id: seg.id, from_cache: false, leads: result, total: result.length });
@@ -2018,7 +2025,7 @@ app.post('/api/segments/resolve', (req, res) => {
   const store = getStore();
   const { rules } = req.body;
   if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules[] required' });
-  const leads = resolveSegmentAudience(rules, store.leads);
+  const leads = resolveSegmentAudience(rules, store.leads, store);
   const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
   res.json({ leads: result, total: result.length });
 });
@@ -3325,18 +3332,54 @@ app.post('/api/channels/broadcast', async (req, res) => {
     if (!adapter) return res.status(400).json({ error: `Canal no soportado: ${channel}` });
 
     const store = getStore();
-    let targets = audience.phones || [];
-    if (!targets.length) {
-      targets = store.leads
-        .filter(l => !l.opt_out && l.status !== 'opted_out')
+    // C1: filtro de opt-outs centralizado (store.optOuts + flags del lead)
+    const isOptedOut = (target) => {
+      if (typeof target === 'string') {
+        const inOptOuts = store.optOuts.some(o => (o.phone && o.phone === target) || (o.email && o.email === target));
+        if (inOptOuts) return true;
+        const lead = store.leads.find(l => (l.phone && l.phone === target) || (l.email && l.email === target));
+        return !!(lead && (lead.opt_out || lead.status === 'opted_out'));
+      }
+      const t = target || {};
+      const inOptOuts = store.optOuts.some(o =>
+        (o.phone && t.phone && o.phone === t.phone) || (o.email && t.email && o.email === t.email));
+      return inOptOuts || !!(t.opt_out || t.status === 'opted_out');
+    };
+
+    let targets;
+    let blockedByOptOut = 0;
+    if (audience.phones && audience.phones.length) {
+      const blocked = audience.phones.filter(to => isOptedOut(to));
+      blockedByOptOut = blocked.length;
+      targets = audience.phones.filter(to => !isOptedOut(to));
+    } else {
+      const eligible = store.leads
+        .filter(l => !isOptedOut(l))
         .filter(l => {
           if (audience.all) return true;
           if (audience.channel) return l.custom_fields?.channel === audience.channel || l.source?.includes(audience.channel);
           return true;
-        })
+        });
+      blockedByOptOut = store.leads.filter(l => isOptedOut(l)).length;
+      targets = eligible
         .map(l => (channel === 'email' ? l.email : l.phone))
         .filter(Boolean)
         .slice(0, audience.limit || 100);
+    }
+
+    // C1: log de bloqueo por opt-out en audit_logs (KPI: 0 envios a opt-outs)
+    if (blockedByOptOut > 0) {
+      await logEvent('state_transition', {
+        level: 'warn',
+        message: `envio_bloqueado_optout ${channel} → ${blockedByOptOut} leads excluidos por opt-out`,
+        tenantId: req.tenantId || 'default',
+        module: 'channels',
+        flow: 'multicanal.broadcast',
+        action: 'broadcast.optout_blocked',
+        severity: 'low',
+        dependency: `${channel}-api`,
+        data: { channel, reason: 'opt_out', excluded: blockedByOptOut },
+      });
     }
 
     const results = [];
@@ -3365,6 +3408,7 @@ app.post('/api/channels/broadcast', async (req, res) => {
       total: results.length,
       sent: okCount,
       failed: results.length - okCount,
+      blocked_opt_out: blockedByOptOut,
       results,
     });
   } catch (e) {
