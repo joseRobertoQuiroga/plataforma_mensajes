@@ -1,4 +1,4 @@
-﻿# Wibsite Business Ã¢â‚¬â€ Estado General del Proyecto
+# Wibsite Business Ã¢â‚¬â€ Estado General del Proyecto
 
 > Documento vivo de desarrollo Ã¢â‚¬â€ Refleja el estado actual del proyecto en tiempo real
 
@@ -12,13 +12,13 @@
 | **PropÃƒÂ³sito** | Plataforma de mensajerÃƒÂ­a omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email, Telegram) |
 | **Stack** | Chatwoot + Dify + n8n + Twenty CRM + Helper Node + PostgreSQL + Redis + Weaviate + Elastic Stack (Elasticsearch + Kibana + OTel Collector) + MinIO |
 | **OrquestaciÃƒÂ³n** | Docker Compose (20 servicios) |
-| **Estado General** | ðŸŸ¢ **Oleada 1 completada, iniciando Oleada 2 (SegmentaciÃ³n y Grupos)** |
-| **Ãšltima actualizaciÃ³n** | 2026-08-30 (verificaciÃ³n en vivo: Oleada 1 completada. Ciclo de vida F1, pipeline configurable, timeline unificada. Tests 83/83 en dev) |
-| **Helper Node** | v2.2.0 Ã¢â‚¬â€ ~130 rutas, 176 tests (22 suites) |
+| **Estado General** | 🟢 **Oleada 2 COMPLETADA — K4, K10, K12, L2, L6, C3, O2 cerrados. Listo para Oleada 3** |
+| **Última actualización** | 2026-08-31 (Oleada 2 cerrada: Tags multi-valor, Campos custom, Listas manuales leads, Recalificación automática, Ponderación por rubro, Segmentos dinámicos. Tests 83/83 ✅) |
+| **Helper Node** | v2.3.0 — ~140+ rutas, 83 tests (8 suites unit), Oleada 2 fully live |
 
 ---
 
-## Barra de Progreso por ÃƒÂrea
+## Barra de Progreso por ÃƒÂ rea
 
 ```
 Infraestructura         Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë† 100%  Ã¢Å“â€¦  +Authelia, Elastic Stack, MinIO (compose 20 servicios)
