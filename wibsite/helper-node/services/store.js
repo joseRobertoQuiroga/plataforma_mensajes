@@ -22,11 +22,12 @@ async function loadPgSnapshot() {
   if (pgSnapshotLoading) return pgSnapshotLoading;
   pgSnapshotLoading = (async () => {
     try {
-      const [campaigns, leads, scores, optOuts] = await Promise.all([
+      const [campaigns, leads, scores, optOuts, companies] = await Promise.all([
         pgStore.CampaignStore.findAll({ limit: 500 }),
         pgStore.LeadStore.findAll ? pgStore.LeadStore.findAll({ limit: 500 }) : Promise.resolve([]),
         pgStore.ScoreStore.findAll ? pgStore.ScoreStore.findAll({ limit: 500 }) : Promise.resolve([]),
         pgStore.OptOutStore.findAll ? pgStore.OptOutStore.findAll({ limit: 500 }) : Promise.resolve([]),
+        pgStore.CompanyStore && pgStore.CompanyStore.findAll ? pgStore.CompanyStore.findAll({ limit: 500 }) : Promise.resolve([]),
       ]);
       pgSnapshot = {
         campaigns: campaigns || [],
@@ -34,7 +35,7 @@ async function loadPgSnapshot() {
         optOuts: optOuts || [],
         leads: leads || [],
         scores: scores || [],
-        companies: [],
+        companies: companies || [],
         channels: [],
       };
       pgSnapshotTime = now;
@@ -100,6 +101,9 @@ async function writeToPg(storeType, operation, data) {
       case 'optout':
         if (operation === 'create') await pgStore.OptOutStore.create(data);
         break;
+      case 'company':
+        if (operation === 'create') await pgStore.CompanyStore.create(data);
+        break;
     }
   } catch (e) {
     console.error(`PG write failed (${storeType}/${operation}):`, e.message);
@@ -153,6 +157,13 @@ module.exports = {
   },
   async writeOptOutToPg(data) {
     if (STORE_MODE !== 'json') await writeToPg('optout', 'create', data);
+  },
+  async writeCompany(data) {
+    if (STORE_MODE !== 'json') await writeToPg('company', 'create', data);
+    if (STORE_MODE !== 'pg') await updateJsonStore(store => store.companies.push(data));
+  },
+  async writeCompanyToPg(data) {
+    if (STORE_MODE !== 'json') await writeToPg('company', 'create', data);
   },
   getStoreMode() { return STORE_MODE; },
   initPgStore(pool) {
