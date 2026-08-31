@@ -59,6 +59,6 @@
 | Ítem | Resolución |
 |------|------------|
 | Telegram "sin token" | **Código confirma configured=true** → solo validación real pendiente (#P8) |
-| "~120-130 rutas" | **136 rutas** en index.js |
+| "~120-130 rutas" | **153 rutas** en index.js (123 únicas, 31/08) |
 | TeVS 11/13 → 14/14 | Pipeline #23 es la verdad |
 | Twenty health 404 | Módulo reorganizado → #V2 |
