@@ -14,6 +14,7 @@ process.env.TWILIO_ACCOUNT_SID = 'AC-test';
 const request = require('supertest');
 const app = require('../index');
 const storeFacade = require('../services/store');
+const pickVariant = app.pickVariant;
 
 // En CI la variable protegida HELPER_API_KEY se inyecta; el header debe usar esa
 // key real. Localmente (sin la variable) se usa la key de test.
@@ -344,5 +345,64 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     const hit = resRun.body.triggered.find(t => t.campaign_id === resCamp.body.id);
     expect(hit).toBeDefined();
     expect(hit.audience).toBe(1);
+  });
+
+  // C5: A/B testing de plantillas
+  test('C5: split 50/50 determinístico asigna variantes consistentes', async () => {
+    const store = storeFacade.getStore();
+    const variants = [
+      { name: 'A', message_template: 'Hola {{name}}, oferta A' },
+      { name: 'B', message_template: 'Hola {{name}}, oferta B' },
+    ];
+    const phones = Array.from({ length: 20 }, (_, i) => `+591C5${String(i).padStart(6, '0')}`);
+    const firstPass = phones.map(to => {
+      const v = pickVariant(to, variants);
+      return v.name;
+    });
+    const secondPass = phones.map(to => {
+      const v = pickVariant(to, variants);
+      return v.name;
+    });
+    expect(firstPass).toEqual(secondPass); // determinístico
+    const countA = firstPass.filter(n => n === 'A').length;
+    const countB = firstPass.filter(n => n === 'B').length;
+    expect(countA + countB).toBe(20);
+    expect(Math.abs(countA - countB)).toBeLessThanOrEqual(4); // ~50/50
+  });
+
+  test('C5: ab-report separa métricas por variante y declara ganadora', async () => {
+    const store = storeFacade.getStore();
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({
+        name: 'C5-ab',
+        message_template: 'Hola {{name}}',
+        variants: [
+          { name: 'A', message_template: 'Oferta A {{name}}' },
+          { name: 'B', message_template: 'Oferta B {{name}}' },
+        ],
+      });
+    expect(resCamp.status).toBe(201);
+    const campId = resCamp.body.id;
+
+    store.deliveries.push(
+      { id: 'D-AB-1', campaign_id: campId, contact_id: 'x1', status: 'replied', variant: 'A' },
+      { id: 'D-AB-2', campaign_id: campId, contact_id: 'x2', status: 'sent', variant: 'A' },
+      { id: 'D-AB-3', campaign_id: campId, contact_id: 'x3', status: 'sent', variant: 'B' },
+      { id: 'D-AB-4', campaign_id: campId, contact_id: 'x4', status: 'sent', variant: 'B' }
+    );
+
+    const res = await request(app)
+      .get(`/api/campaigns/${campId}/ab-report`)
+      .set('x-api-key', API_KEY);
+    expect(res.status).toBe(200);
+    const a = res.body.variants.find(v => v.name === 'A');
+    const b = res.body.variants.find(v => v.name === 'B');
+    expect(a.stats.sent).toBe(2);
+    expect(a.stats.replied).toBe(1);
+    expect(b.stats.sent).toBe(2);
+    expect(b.stats.replied).toBe(0);
+    expect(res.body.winner).toBe('A');
   });
 });
