@@ -119,13 +119,58 @@ function CampaignDetail({ campaign, onClose, onChanged }: { campaign: any; onClo
     return () => clearInterval(t);
   }, [load]);
 
+  const [dryRun, setDryRun] = useState<any>(null);
+  const [dryRunning, setDryRunning] = useState(false);
+
+  // C9: dry-run resuelve audiencia + costo estimado antes de enviar
+  const runDryRun = async () => {
+    setDryRunning(true);
+    try {
+      const res = await fetch(`${HELPER_URL}/api/campaigns/${campaign.id}/dry-run`, {
+        method: "POST",
+        headers: { "x-api-key": HELPER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "dry-run falló");
+      setDryRun(d);
+      toast("success", "Dry-run OK", `${d.audience_total} destinatarios · $${d.cost_estimate_usd} estimado`);
+    } catch (e: any) {
+      toast("error", "Dry-run fallido", e.message);
+    } finally {
+      setDryRunning(false);
+    }
+  };
+
+  const confirmDryRunAndStart = async () => {
+    try {
+      const res = await fetch(`${HELPER_URL}/api/campaigns/${campaign.id}/dry-run/confirm`, {
+        method: "POST",
+        headers: { "x-api-key": HELPER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error("Confirmación fallida");
+      await action(`/api/campaigns/${campaign.id}/start`, "POST", "Campaña iniciada", { dry_run_confirmed: true });
+      setDryRun(null);
+    } catch (e: any) {
+      toast("error", "No se pudo iniciar", e.message);
+    }
+  };
+
   const action = async (path: string, method: string, successMsg: string, body?: any) => {
     try {
       const res = await fetch(`${HELPER_URL}${path}`, {
         method, headers: { "x-api-key": HELPER_API_KEY, "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined,
       });
-      if (!res.ok) throw new Error("Request failed");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 428 && d.error === "dry_run_required") {
+          toast("warning", "Dry-run requerido", "Ejecuta el dry-run y confirma la audiencia antes de iniciar");
+          return;
+        }
+        throw new Error(d.error || "Request failed");
+      }
       toast("success", successMsg);
       onChanged();
       load();
@@ -171,6 +216,12 @@ function CampaignDetail({ campaign, onClose, onChanged }: { campaign: any; onClo
         {/* Acciones */}
         <div className="flex flex-wrap gap-2">
           {campaign.status !== "sending" && campaign.status !== "completed" && (
+            <button onClick={runDryRun} disabled={dryRunning}
+              className="px-4 py-2 rounded-lg bg-warning/20 text-warning border border-warning/30 hover:bg-warning/30 transition-colors text-sm font-semibold disabled:opacity-50">
+              {dryRunning ? "Calculando..." : "🔍 Dry-run (preview + costo)"}
+            </button>
+          )}
+          {campaign.status !== "sending" && campaign.status !== "completed" && (
             <button onClick={() => action(`/api/campaigns/${campaign.id}/start`, "POST", "Campaña iniciada")}
               className="px-4 py-2 rounded-lg bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-semibold">
               ▶ Iniciar ahora
@@ -197,6 +248,45 @@ function CampaignDetail({ campaign, onClose, onChanged }: { campaign: any; onClo
             ⬇ Exportar CSV
           </a>
         </div>
+
+        {/* C9: panel de confirmacion del dry-run */}
+        {dryRun && (
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-warning">Dry-run — confirmar antes de enviar</p>
+              <button onClick={() => setDryRun(null)} className="text-xs text-on-surface-variant hover:text-white">✕ Cerrar</button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="bg-surface-container rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-white">{dryRun.audience_total}</p>
+                <p className="text-[11px] text-on-surface-variant mt-0.5">Destinatarios</p>
+              </div>
+              <div className="bg-surface-container rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-success">${dryRun.cost_estimate_usd}</p>
+                <p className="text-[11px] text-on-surface-variant mt-0.5">Costo estimado</p>
+              </div>
+              <div className="bg-surface-container rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-primary">{channelLabel(dryRun.channel)}</p>
+                <p className="text-[11px] text-on-surface-variant mt-0.5">Canal</p>
+              </div>
+            </div>
+            {dryRun.leads_preview?.length > 0 && (
+              <div className="text-xs text-on-surface-variant">
+                <p className="mb-1 font-medium">Vista previa (primeros {dryRun.leads_preview.length}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {dryRun.leads_preview.slice(0, 8).map((l: any) => (
+                    <span key={l.id} className="px-2 py-0.5 rounded-md bg-surface-container border border-outline-variant">{l.name || l.phone || l.email}</span>
+                  ))}
+                  {dryRun.audience_total > 8 && <span className="px-2 py-0.5 text-on-surface-variant">+{dryRun.audience_total - 8} más</span>}
+                </div>
+              </div>
+            )}
+            <button onClick={confirmDryRunAndStart}
+              className="w-full px-4 py-2.5 rounded-lg bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-bold">
+              ✓ Confirmar dry-run e iniciar campaña
+            </button>
+          </div>
+        )}
 
         {/* Métricas */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

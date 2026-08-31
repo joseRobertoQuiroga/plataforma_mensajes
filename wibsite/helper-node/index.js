@@ -354,11 +354,96 @@ app.post('/api/campaigns/:id/schedule', async (req, res) => {
 
 app.post('/api/campaigns/:id/start', async (req, res) => {
   try {
+    const { dry_run_confirmed } = req.body || {};
+    const campaign = getStore().campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    // C9: bloqueo de envio si el dry-run no fue confirmado (KPI: 0 envios sin dry-run confirmado)
+    if (!dry_run_confirmed && !campaign.dry_run_confirmed) {
+      return res.status(428).json({
+        error: 'dry_run_required',
+        message: 'Debe ejecutar y confirmar el dry-run antes de iniciar el envio',
+      });
+    }
+
     updateStore(s => {
       const c = s.campaigns.find(c => c.id === req.params.id);
       if (c) { c.status = 'sending'; c.started_at = new Date().toISOString(); c.updated_at = new Date().toISOString(); }
     });
     res.json({ status: 'sending' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C9: dry-run de campana — resuelve audiencia y estima costo SIN enviar
+app.post('/api/campaigns/:id/dry-run', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    const audience = campaign.audience_filter || {};
+    let leads = [];
+    if (audience.segment_id && (store.segments || []).some(s => s.id === audience.segment_id)) {
+      const seg = store.segments.find(s => s.id === audience.segment_id);
+      leads = resolveSegmentAudience(seg.rules, store.leads, store);
+    } else if (audience.rules && audience.rules.length) {
+      leads = resolveSegmentAudience(audience.rules, store.leads, store);
+    } else if (audience.all || audience.channel || audience.phones) {
+      const isOptedOut = (target) => {
+        if (typeof target === 'string') {
+          if (store.optOuts.some(o => (o.phone && o.phone === target) || (o.email && o.email === target))) return true;
+          const lead = store.leads.find(l => (l.phone && l.phone === target) || (l.email && l.email === target));
+          return !!(lead && (lead.opt_out || lead.status === 'opted_out'));
+        }
+        return store.optOuts.some(o =>
+          (o.phone && target.phone && o.phone === target.phone) || (o.email && target.email && o.email === target.email)) ||
+          !!(target.opt_out || target.status === 'opted_out');
+      };
+      if (audience.phones && audience.phones.length) {
+        leads = audience.phones.filter(to => !isOptedOut(to)).map(phone => {
+          const lead = store.leads.find(l => l.phone === phone || l.email === phone);
+          return { id: lead?.id || phone, name: lead?.name || null, phone, email: lead?.email || null, status: lead?.status || 'active' };
+        });
+      } else {
+        leads = store.leads
+          .filter(l => !isOptedOut(l))
+          .filter(l => {
+            if (audience.all) return true;
+            if (audience.channel) return l.custom_fields?.channel === audience.channel || l.source?.includes(audience.channel);
+            return true;
+          });
+      }
+    }
+
+    // Estimacion de costo por canal (USD por mensaje aproximado)
+    const COST_PER_MSG = { whatsapp: 0.0055, telegram: 0, email: 0.0002, messenger: 0.004, sms: 0.02, tiktok: 0.004 };
+    const channel = campaign.channel || 'whatsapp';
+    const unitCost = COST_PER_MSG[channel] ?? 0.0055;
+    const estimatedCost = +(leads.length * unitCost).toFixed(4);
+
+    res.json({
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      channel,
+      audience_total: leads.length,
+      leads_preview: leads.slice(0, 20).map(l => ({ id: l.id, name: l.name, phone: l.phone, email: l.email, status: l.status, score: l.score })),
+      cost_estimate_usd: estimatedCost,
+      cost_per_message_usd: unitCost,
+      dry_run_at: new Date().toISOString(),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C9: confirmacion del dry-run (marca la campana como lista para enviar)
+app.post('/api/campaigns/:id/dry-run/confirm', async (req, res) => {
+  try {
+    updateStore(s => {
+      const c = s.campaigns.find(c => c.id === req.params.id);
+      if (c) { c.dry_run_confirmed = true; c.dry_run_confirmed_at = new Date().toISOString(); c.updated_at = new Date().toISOString(); }
+    });
+    const c = getStore().campaigns.find(c => c.id === req.params.id);
+    if (!c) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ status: 'dry_run_confirmed', campaign_id: c.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
