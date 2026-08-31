@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "02 - Campaign Broadcast WhatsApp",
   "nodes": [
     {
@@ -54,12 +54,12 @@
     },
     {
       "id": "get-audience",
-      "name": "Get Audience from Twenty CRM",
+      "name": "Get Audience from Helper Segments",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [750, 300],
       "parameters": {
-        "url": "=http://twenty-server:3000/rest/people?filter=leadSource[contains]:WhatsApp&limit=100",
+        "url": "=http://helper:3100/api/segments/resolve",
         "method": "GET",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -67,8 +67,8 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.TWENTY_API_KEY }}"
+              "name": "x-api-key",
+              "value": "=Bearer {{ $env.HELPER_API_KEY }}"
             }
           ]
         },
@@ -116,7 +116,7 @@
       "typeVersion": 3,
       "position": [1500, 200],
       "parameters": {
-        "url": "=http://dify-api:5001/v1/workflows/run",
+"url": "=http://dify-api:5001/v1/workflows/run",
         "method": "POST",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -167,7 +167,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
+"name": "Authorization",
               "value": "=Bearer {{ $env.META_APP_ACCESS_TOKEN }}"
             }
           ]
@@ -311,3 +311,4 @@
   "tags": ["wibsite", "campaigns", "whatsapp", "broadcast"],
   "pinData": {}
 }
+

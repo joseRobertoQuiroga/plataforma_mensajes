@@ -115,4 +115,61 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.some(l => l.phone === '+59170000003')).toBe(true);
   });
+
+  // C1: el motor de campañas debe excluir opt-outs en todo envío
+  test('C1: broadcast excluye leads opt-out y registra envio_bloqueado_optout', async () => {
+    const store = storeFacade.getStore();
+    const optLead = { id: 'C1-opt-1', name: 'Opt Out Lead', phone: '+591C1000001', email: 'opt1@example.com', status: 'opted_out', opt_out: true };
+    const activeLead = { id: 'C1-active-1', name: 'Active Lead', phone: '+591C1000002', email: 'active1@example.com', status: 'active', opt_out: false };
+    store.leads.push(optLead, activeLead);
+    store.optOuts.push({ id: 'C1-oo-1', phone: '+591C1000001', email: 'opt1@example.com', reason: 'STOP', created_at: new Date().toISOString() });
+
+    const res = await request(app)
+      .post('/api/channels/broadcast')
+      .set('x-api-key', API_KEY)
+      .send({ channel: 'email', message_template: 'Hola {{name}}, oferta especial', audience: { all: true } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked_opt_out).toBe(1);
+    expect(res.body.results.some(r => r.to === 'opt1@example.com')).toBe(false);
+    expect(res.body.results.some(r => r.to === 'active1@example.com')).toBe(true);
+  });
+
+  test('C1: broadcast con phones explicitos filtra opt-outs', async () => {
+    const store = storeFacade.getStore();
+    if (!store.leads.some(l => l.phone === '+591C1000001')) {
+      store.leads.push({ id: 'C1-opt-2', name: 'Opt2', phone: '+591C1000001', email: 'opt1@example.com', status: 'opted_out', opt_out: true });
+    }
+
+    const res = await request(app)
+      .post('/api/channels/broadcast')
+      .set('x-api-key', API_KEY)
+      .send({
+        channel: 'email',
+        message_template: 'Hola {{name}}',
+        audience: { phones: ['opt1@example.com', 'active1@example.com'] },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.blocked_opt_out).toBe(1);
+    expect(res.body.results.some(r => r.to === 'opt1@example.com')).toBe(false);
+  });
+
+  test('C1: resolveSegmentAudience excluye leads opted_out', async () => {
+    const store = storeFacade.getStore();
+    const res = await request(app)
+      .post('/api/segments')
+      .set('x-api-key', API_KEY)
+      .send({ name: 'C1-segment-test', description: 'test', rules: [{ field: 'score', op: 'gte', value: 0 }] });
+
+    expect(res.status).toBe(201);
+    const segId = res.body.id;
+
+    const resolveRes = await request(app)
+      .get(`/api/segments/${segId}/resolve`)
+      .set('x-api-key', API_KEY);
+
+    expect(resolveRes.status).toBe(200);
+    expect(resolveRes.body.leads.some(l => l.status === 'opted_out')).toBe(false);
+  });
 });
