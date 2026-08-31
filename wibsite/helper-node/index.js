@@ -254,6 +254,64 @@ setInterval(async () => {
   try { await runScheduledScoreDecay(); } catch (e) { console.error('[Decay] job error:', e.message); }
 }, DEDUP_INTERVAL_MS).unref();
 
+// C6: Campañas por evento de fecha (aniversario, cumpleaños, post-compra MVP)
+// Detecta leads cuyo custom_fields[field] coincide con hoy±offset y dispara la campaña configurada.
+async function runDateEventCampaigns() {
+  const store = getStore();
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  const triggered = [];
+
+  for (const campaign of store.campaigns || []) {
+    const trigger = campaign.event_trigger;
+    if (!trigger || !trigger.field) continue;
+    if (campaign.status === 'completed' || campaign.status === 'sending') continue;
+
+    const offset = Number(trigger.offset_days) || 0;
+    const target = new Date(today.getTime() + offset * 86400000);
+    const targetStr = target.toISOString().slice(0, 10);
+
+    const matches = store.leads.filter(l => {
+      if (l.status === 'opted_out' || l.opt_out) return false;
+      const fieldVal = l.custom_fields?.[trigger.field];
+      if (!fieldVal) return false;
+      // Soporta YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss y timestamps
+      const valStr = String(fieldVal).slice(0, 10);
+      return valStr === targetStr;
+    });
+
+    if (matches.length === 0) continue;
+
+    const text = String(campaign.message_template || '')
+      .replace(/\{\{name\}\}/g, (m) => { const l = matches.find(x => x.phone === m); return l?.name || ''; });
+    const sent = await sendToChannel(campaign.channel, matches[0]?.phone, text || campaign.message_template || '', {});
+    triggered.push({ campaign_id: campaign.id, campaign_name: campaign.name, date: targetStr, matches: matches.length, sent_ok: sent.ok });
+    await logEvent(sent.ok ? 'campaign_sent' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Campaña por evento ${campaign.name} → ${matches.length} lead(s) (${trigger.field}=${targetStr})`,
+      tenantId: 'default',
+      module: 'campaigns',
+      flow: 'campaign.date_event',
+      action: 'campaign.trigger_date',
+      severity: sent.ok ? null : 'medium',
+      data: { campaign_id: campaign.id, field: trigger.field, date: targetStr, matches: matches.length },
+    });
+  }
+  return triggered;
+}
+
+// C6: job programado cada 24h + endpoint manual para forzar/verificar
+setInterval(async () => {
+  try { await runDateEventCampaigns(); } catch (e) { console.error('[C6] date-event job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
+
+app.post('/api/campaigns/events/run', async (req, res) => {
+  try {
+    const triggered = await runDateEventCampaigns();
+    res.json({ ok: true, triggered, total: triggered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Multi-Tenant Context Middleware (FASE 8) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -274,7 +332,7 @@ function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
 app.post('/api/campaigns', async (req, res) => {
   try {
-    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at } = req.body;
+    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger } = req.body;
     const store = getStore();
     if (store.campaigns.some(c => c.name === name)) return res.status(409).json({ error: 'Campaign name already exists' });
     const c = {
@@ -284,6 +342,7 @@ app.post('/api/campaigns', async (req, res) => {
       message_template: message_template || null,
       template_name: template_name || null,
       audience_filter: audience_filter || {},
+      event_trigger: event_trigger || null, // C6: { field, offset_days } — triggers por fecha del contacto
       status: scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: scheduled_at || null,
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,

@@ -229,4 +229,59 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     expect(resStart.status).toBe(200);
     expect(resStart.body.status).toBe('sending');
   });
+
+  // C6: campañas por evento de fecha (aniversario/cumpleaños)
+  test('C6: trigger de fecha dispara la campaña para leads del día', async () => {
+    const store = storeFacade.getStore();
+    const today = new Date().toISOString().slice(0, 10);
+    store.leads.push({ id: 'C6-bday-1', name: 'Cumpleañero', phone: '+591C6000001', email: 'bday1@example.com', status: 'active', custom_fields: { birthday: today } });
+    store.leads.push({ id: 'C6-nobday-1', name: 'Sin Cumple', phone: '+591C6000002', email: 'nobday1@example.com', status: 'active', custom_fields: { birthday: '1990-01-01' } });
+
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({
+        name: 'C6-birthday-campaign',
+        message_template: 'Hola {{name}}, feliz cumpleaños 🎉',
+        audience_filter: { all: true },
+        event_trigger: { field: 'birthday', offset_days: 0 },
+      });
+    expect(resCamp.status).toBe(201);
+    expect(resCamp.body.event_trigger).toEqual({ field: 'birthday', offset_days: 0 });
+
+    const resRun = await request(app)
+      .post('/api/campaigns/events/run')
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resRun.status).toBe(200);
+    const hit = resRun.body.triggered.find(t => t.campaign_id === resCamp.body.id);
+    expect(hit).toBeDefined();
+    expect(hit.matches).toBe(1);
+    expect(hit.date).toBe(today);
+  });
+
+  test('C6: campaña por evento excluye leads opted_out', async () => {
+    const store = storeFacade.getStore();
+    const today = new Date().toISOString().slice(0, 10);
+    store.leads.push({ id: 'C6-opt-1', name: 'Opted', phone: '+591C6000003', email: 'opt6@example.com', status: 'opted_out', opt_out: true, custom_fields: { birthday: today } });
+
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({
+        name: 'C6-birthday-optout',
+        message_template: 'Hola {{name}}',
+        audience_filter: { all: true },
+        event_trigger: { field: 'birthday', offset_days: 0 },
+      });
+    expect(resCamp.status).toBe(201);
+
+    const resRun = await request(app)
+      .post('/api/campaigns/events/run')
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resRun.status).toBe(200);
+    const hit = resRun.body.triggered.find(t => t.campaign_id === resCamp.body.id);
+    expect(hit).toBeUndefined();
+  });
 });
