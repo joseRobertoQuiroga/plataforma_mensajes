@@ -1,5 +1,22 @@
 # Wibsite Business — Historial de Cambios
 
+## [4.2.0] - 2026-08-31 (Oleada 3 completa — Campañas inteligentes + deuda operativa)
+
+### Added
+- **C1 (crítico)**: bloqueo de envíos a leads opt-out en todo el motor de campañas — `isOptedOut` centralizado (store.optOuts + flags), exclusión en audiencia resuelta y `audience.phones` explícitos, log `envio_bloqueado_optout`, campo `blocked_opt_out` en broadcast. Workflow n8n 02-broadcast usa `/api/segments/resolve` del helper (sin Twenty, ADR-010).
+- **C4**: campañas de reactivación automática — `campaign_type: 'reactivation'` + `reactivation_rule {min_score, days_without_reply}`, `resolveReactivationAudience` (score≥40 + sin reply en N días), job 24h + `POST /api/campaigns/reactivation/run` + preview de audiencia.
+- **C5**: A/B testing de plantillas — `variants[]` en campaña, `pickVariant` hash estable (split 50/50 determinístico), `GET /api/campaigns/:id/ab-report` con métricas por variante y ganadora.
+- **C6**: campañas por evento de fecha (aniversario/cumpleaños MVP) — `event_trigger {field, offset_days}`, job 24h + `POST /api/campaigns/events/run`.
+- **C8**: rate-limit inteligente por canal — `sendToChannel` con reintentos (max 3) y backoff exponencial ante 429/rate/limit, respeta `rate_limit_reset_at`, log `backoff_aplicado`.
+- **C9**: dry-run de campaña — `POST /api/campaigns/:id/dry-run` (audiencia + costo estimado + preview), `dry-run/confirm`, bloqueo de `start` con 428 `dry_run_required`; botón Dry-run en UI de campañas con panel de confirmación.
+- **C10**: atribución MVP — `GET /api/campaigns/:id/attribution` (replies, avance de etapa F1, conversion_rate).
+- **C12**: validación de plantillas por canal (HSM vs sesión) — `requires_approval`, `GET /api/templates/validate/:id?channel=`, rechazo 400 en broadcast con template HSM en WhatsApp.
+
+### Verified (deuda operativa cerrada)
+- V1 unit tests, V2 Twenty (ADR-010), V4 dashboards Kibana (5 dashboards + 13 searches + 7 data views + 3 datastreams con datos), P5 (8 reglas de alerta activas), V8 backup+restauración (conteos idénticos), P8 Telegram real (bot válido + webhook + E2E previo), T3 password otel-collector (env var).
+- **ADR-010**: Twenty CRM fuera de alcance (frontera única = frontend unificado; contenedores = motores de backend).
+- Tests: unit 88 (8 suites), flow 17, smoke 2, channels 21, frontend 9. Pipelines dev verdes (MR !10…!17).
+
 ## [4.1.1] - 2026-08-30 (Auditoría de gobernanza — docs alineados al estado real)
 
 ### Changed
