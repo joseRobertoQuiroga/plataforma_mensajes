@@ -13,8 +13,8 @@ mkdir -p "$BACKUP_DIR"
 
 echo "=== Wibsite Backup $TIMESTAMP ==="
 
-# PostgreSQL backups
-for db in wibsite chatwoot dify n8n twenty; do
+# PostgreSQL backups (ADR-010: twenty fuera de alcance, ya no se respalda)
+for db in wibsite chatwoot dify n8n; do
   echo "  Backing up $db..."
   PGPASSWORD=$PG_PASSWORD pg_dump -h $PG_HOST -U $PG_USER -d $db -F c > "$BACKUP_DIR/${db}_${TIMESTAMP}.dump"
   if [ $? -eq 0 ]; then
