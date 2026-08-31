@@ -1905,6 +1905,34 @@ app.get('/api/chat-groups', (req, res) => {
   }
 });
 
+app.get('/api/leads/:id/groups', (req, res) => {
+  try {
+    const groups = chatGroups.getLeadGroups(req.params.id);
+    res.json({ groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/leads/:id/groups', (req, res) => {
+  try {
+    const { groupId } = req.body;
+    const groups = chatGroups.assignLead(req.params.id, groupId);
+    res.json({ success: true, groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/leads/:id/groups/:groupId', (req, res) => {
+  try {
+    const groups = chatGroups.removeLeadFromGroup(req.params.id, req.params.groupId);
+    res.json({ success: true, groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/chat-groups', async (req, res) => {
   try {
     const group = await chatGroups.createGroup(req.body || {});

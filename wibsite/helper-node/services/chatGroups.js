@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -22,12 +22,13 @@ function now() {
 
 function load() {
   if (memory) return memory;
-  memory = { groups: [], conversations: {} };
+  memory = { groups: [], conversations: {}, leads: {} };
   try {
     if (fs.existsSync(STORE_PATH)) {
       const data = JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8'));
       memory.groups = Array.isArray(data.groups) ? data.groups : [];
       memory.conversations = (data.conversations && typeof data.conversations === 'object') ? data.conversations : {};
+      memory.leads = (data.leads && typeof data.leads === 'object') ? data.leads : {};
     }
   } catch (e) {
     logEvent('error', { message: `chatGroups load error: ${e.message}` });
@@ -53,9 +54,9 @@ function ensureSystemGroup() {
   if (!memory.groups.some((g) => g.id === PENDING_GROUP_ID)) {
     memory.groups.unshift({
       id: PENDING_GROUP_ID,
-      name: 'Pendiente de revisión',
-      description: 'Conversaciones que aún no se asignaron a un grupo y esperan el análisis del agente IA.',
-      criteria: 'Conversaciones sin grupo asignado que requieren clasificación automática por el agente.',
+      name: 'Pendiente de revisiÃ³n',
+      description: 'Conversaciones que aÃºn no se asignaron a un grupo y esperan el anÃ¡lisis del agente IA.',
+      criteria: 'Conversaciones sin grupo asignado que requieren clasificaciÃ³n automÃ¡tica por el agente.',
       color: 'warning',
       isSystem: true,
       createdAt: now(),
@@ -186,7 +187,7 @@ async function assignConversation(tenantId, conversationId, groupId, { source = 
   }).catch(() => {});
   await logEvent('api_call', {
     level: 'info',
-    message: isPending ? 'Conversación enviada a revisión' : 'Conversación asignada a grupo',
+    message: isPending ? 'ConversaciÃ³n enviada a revisiÃ³n' : 'ConversaciÃ³n asignada a grupo',
     tenantId, conversationId, module: 'chatGroups', flow: 'group.assign',
     data: { groupId, source },
   });
@@ -244,9 +245,40 @@ async function reviewPending({ tenantId } = {}) {
   return { total: pending.length, reviewed: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results };
 }
 
+
+// K12: Assign a lead to a manual group
+function assignLead(leadId, groupId) {
+  load();
+  if (!memory.leads[leadId]) memory.leads[leadId] = [];
+  
+  if (groupId && !memory.leads[leadId].includes(groupId)) {
+    memory.leads[leadId].push(groupId);
+  }
+  
+  persist();
+  return memory.leads[leadId];
+}
+
+function removeLeadFromGroup(leadId, groupId) {
+  load();
+  if (!memory.leads[leadId]) return [];
+  memory.leads[leadId] = memory.leads[leadId].filter(id => id !== groupId);
+  persist();
+  return memory.leads[leadId];
+}
+
+function getLeadGroups(leadId) {
+  load();
+  return memory.leads[leadId] || [];
+}
+
+function getGroupLeads(groupId) {
+  load();
+  return Object.keys(memory.leads).filter(leadId => memory.leads[leadId].includes(groupId));
+}
 module.exports = {
   PENDING_GROUP_ID,
   GROUP_COLORS,
   listGroups, getGroup, createGroup, updateGroup, deleteGroup,
-  getConversationGroup, assignConversation, reviewConversation, reviewPending,
+  getConversationGroup, assignConversation, reviewConversation, reviewPending, assignLead, removeLeadFromGroup, getLeadGroups, getGroupLeads,
 };

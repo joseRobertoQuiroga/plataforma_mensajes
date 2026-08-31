@@ -1,4 +1,4 @@
-function buildLeadProfile(leadId, store) {
+﻿function buildLeadProfile(leadId, store) {
   const lead = store.leads.find(l => l.id === leadId);
   if (!lead) return null;
 
@@ -6,7 +6,7 @@ function buildLeadProfile(leadId, store) {
   const scores = store.scores.filter(s => s.lead_id === leadId);
   const campaign = lead.campaign_id ? store.campaigns.find(c => c.id === lead.campaign_id) : null;
   
-  // K5: Todas las campañas donde participó (no solo la principal)
+  // K5: Todas las campaÃ±as donde participÃ³ (no solo la principal)
   const allCampaigns = store.campaigns ? store.campaigns.filter(c => {
     if (c.id === lead.campaign_id) return true;
     const hasDelivery = deliveries.some(d => d.campaign_id === c.id);
@@ -40,7 +40,7 @@ function buildLeadProfile(leadId, store) {
   const engagementScore = lead.score_data?.engagement || 0;
   const recencyScore = lead.score_data?.recency || 0;
 
-  // K7: Timeline unificada — mensajes + cambios de etapa + scores + notas
+  // K7: Timeline unificada â€” mensajes + cambios de etapa + scores + notas
   const timeline = buildTimeline(lead, deliveries, scores);
 
   return {
@@ -90,7 +90,7 @@ function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore) {
   if (lead.status === 'opted_out') return { action: 'remove_from_campaigns', reason: 'Lead opt-out' };
   if (deliveryStats.total === 0) return { action: 'send_first_message', reason: 'Lead sin contacto inicial' };
   if (deliveryStats.daysSinceContact !== null && deliveryStats.daysSinceContact > 14 && deliveryStats.replied === 0) {
-    return { action: 'send_followup', reason: `Sin respuesta en ${deliveryStats.daysSinceContact} días` };
+    return { action: 'send_followup', reason: `Sin respuesta en ${deliveryStats.daysSinceContact} dÃ­as` };
   }
   if (deliveryStats.replied > 0 && lead.score < 70) {
     return { action: 'try_to_close', reason: `Lead ha respondido, score ${lead.score}/100` };
@@ -99,9 +99,9 @@ function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore) {
     return { action: 'sync_to_crm', reason: 'Lead caliente (score alto) sin CRM: sincronizar con Twenty primero' };
   }
   if (deliveryStats.daysSinceContact !== null && deliveryStats.daysSinceContact < 3 && lead.score < 40) {
-    return { action: 'send_nurturing', reason: 'Lead reciente pero frío, enviar contenido educativo' };
+    return { action: 'send_nurturing', reason: 'Lead reciente pero frÃ­o, enviar contenido educativo' };
   }
-  return { action: 'monitor', reason: 'Esperar interacción del lead' };
+  return { action: 'monitor', reason: 'Esperar interacciÃ³n del lead' };
 }
 
 // K7: Timeline unificada por contacto
@@ -120,12 +120,12 @@ function buildTimeline(lead, deliveries, scores) {
     });
   }
 
-  // Cambios de puntuación
+  // Cambios de puntuaciÃ³n
   for (const s of scores) {
     events.push({
       type: 'score',
       at: s.classified_at,
-      label: `Score: ${s.score} (${s.category || '—'})`,
+      label: `Score: ${s.score} (${s.category || 'â€”'})`,
       detail: s.llm_reasoning || null,
       icon: 'score',
     });
@@ -147,7 +147,7 @@ function buildTimeline(lead, deliveries, scores) {
     }
   }
 
-  // Creación del lead
+  // CreaciÃ³n del lead
   events.push({
     type: 'created',
     at: lead.created_at,
@@ -155,7 +155,7 @@ function buildTimeline(lead, deliveries, scores) {
     icon: 'created',
   });
 
-  // Ordenar cronológicamente descendente (más reciente primero)
+  // Ordenar cronolÃ³gicamente descendente (mÃ¡s reciente primero)
   return events.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
 }
 

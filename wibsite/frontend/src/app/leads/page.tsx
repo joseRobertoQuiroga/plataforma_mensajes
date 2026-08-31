@@ -89,7 +89,66 @@ function UserTagsEditor({ leadId, tags, onSaved }: { leadId: string; tags?: { la
   );
 }
 
-function LeadDetail({ lead, onClose, onChanged, config }: { lead: any; onClose: () => void; onChanged: () => void; config?: any }) {
+// K12: Manual Lead Groups Editor
+function LeadGroupsEditor({ leadId, currentGroupIds, allGroups, onSaved }: { leadId: string; currentGroupIds?: string[]; allGroups?: any[]; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleGroup = async (gId: string, isMember: boolean) => {
+    const ep = isMember ? "/api/leads/" + leadId + "/groups/" + gId : "/api/leads/" + leadId + "/groups";
+    await fetch(HELPER_URL + ep, {
+      method: isMember ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": HELPER_API_KEY },
+      body: isMember ? undefined : JSON.stringify({ groupId: gId }),
+    });
+    onSaved();
+  };
+
+  const assigned = (allGroups || []).filter(g => (currentGroupIds || []).includes(g.id));
+
+  return (
+    <div className="relative mt-2" ref={ref}>
+      <div className="flex flex-wrap gap-1 items-center">
+        {assigned.map((g, i) => (
+          <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", groupBadge(g.color || "primary"))}>
+            {g.name}
+            <button onClick={() => toggleGroup(g.id, true)} className="opacity-60 hover:opacity-100 leading-none">&times;</button>
+          </span>
+        ))}
+        <button onClick={() => setOpen(o => !o)} className="text-[10px] px-1.5 py-0.5 rounded border border-dashed border-white/20 text-on-surface-variant hover:text-white hover:border-white/40 transition-colors">
+          + Lista
+        </button>
+      </div>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 w-52 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl p-2 z-50 max-h-48 overflow-y-auto">
+          {!(allGroups && allGroups.length > 0) && <div className="text-xs text-on-surface-variant p-2 text-center">No hay listas creadas</div>}
+          {(allGroups || []).map((g: any) => {
+            const isM = (currentGroupIds || []).includes(g.id);
+            return (
+              <button key={g.id} onClick={() => toggleGroup(g.id, isM)} className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/5 flex items-center justify-between text-xs text-white">
+                <span className="flex items-center gap-2">
+                  <span className={cn("w-2 h-2 rounded-full", groupDot(g.color || "primary"))} />
+                  {g.name}
+                </span>
+                {isM && <span className="text-primary">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeadDetail({ lead, onClose, onChanged, config, groups }: { lead: any; onClose: () => void; onChanged: () => void; config?: any; groups?: any[] }) {
   const { toast } = useToast();
   const [profile, setProfile] = useState<any>(null);
   const [note, setNote] = useState("");
@@ -203,6 +262,8 @@ function LeadDetail({ lead, onClose, onChanged, config }: { lead: any; onClose: 
               </div>
               {/* K4: Tags multi-valor con colores */}
               <UserTagsEditor leadId={p.id} tags={p.user_tags} onSaved={onChanged} />
+              {/* K12: Listas manuales de leads */}
+              <LeadGroupsEditor leadId={p.id} currentGroupIds={p.group_ids} allGroups={groups} onSaved={() => { onChanged(); loadProfile(); }} />
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
@@ -470,6 +531,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [showFavorites, setShowFavorites] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
@@ -478,6 +540,7 @@ export default function LeadsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [config, setConfig] = useState<any>(null);
+  const [groups, setGroups] = useState<any[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -720,7 +783,7 @@ export default function LeadsPage() {
       </Dialog>
 
       <Sheet open={!!detailLead} onClose={() => setDetailLead(null)} className="w-[540px]">
-        {detailLead && <LeadDetail lead={detailLead} onClose={() => setDetailLead(null)} onChanged={load} config={config} />}
+        {detailLead && <LeadDetail lead={detailLead} onClose={() => setDetailLead(null)} onChanged={load} config={config} groups={groups} />}
       </Sheet>
     </div>
   );
