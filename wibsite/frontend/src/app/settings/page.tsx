@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Select, Textarea, Switch } from "@/components/ui/form-controls";
@@ -14,8 +14,8 @@ const TYPE_META: Record<string, { label: string; cls: string }> = {
   producto: { label: "Producto / Oferta", cls: "bg-primary/10 text-primary border-primary/30" },
   faq: { label: "Pregunta frecuente", cls: "bg-secondary/10 text-secondary border-secondary/30" },
   contexto: { label: "Contexto de negocio", cls: "bg-tertiary/10 text-tertiary border-tertiary/30" },
-  estandar: { label: "Estándar / Seguimiento", cls: "bg-warning/10 text-warning border-warning/30" },
-  analisis: { label: "Análisis / Mercado", cls: "bg-danger/10 text-danger border-danger/30" },
+  estandar: { label: "EstÃ¡ndar / Seguimiento", cls: "bg-warning/10 text-warning border-warning/30" },
+  analisis: { label: "AnÃ¡lisis / Mercado", cls: "bg-danger/10 text-danger border-danger/30" },
   objetivo: { label: "Objetivo / Expectativa", cls: "bg-success/10 text-success border-success/30" },
 };
 
@@ -36,7 +36,7 @@ function KnowledgeForm({ initial, onSaved, onClose }: { initial?: any; onSaved: 
   };
 
   const submit = async () => {
-    if (!form.title.trim()) return toast("error", "El título es obligatorio");
+    if (!form.title.trim()) return toast("error", "El tÃ­tulo es obligatorio");
     setSaving(true);
     try {
       const body = { ...form, items: form.items.map((i: string) => i.trim()).filter(Boolean) };
@@ -49,7 +49,7 @@ function KnowledgeForm({ initial, onSaved, onClose }: { initial?: any; onSaved: 
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Error");
       }
-      toast("success", initial ? "Lote actualizado" : "Información cargada al agente", form.title);
+      toast("success", initial ? "Lote actualizado" : "InformaciÃ³n cargada al agente", form.title);
       onSaved();
       onClose();
     } catch (e: any) {
@@ -62,19 +62,19 @@ function KnowledgeForm({ initial, onSaved, onClose }: { initial?: any; onSaved: 
   return (
     <div className="space-y-4">
       <Select
-        label="Tipo de información"
+        label="Tipo de informaciÃ³n"
         value={form.type}
         onChange={(v) => setForm({ ...form, type: v })}
         options={Object.entries(TYPE_META).map(([value, m]) => ({ value, label: m.label }))}
       />
       <div>
-        <label className="text-xs font-medium text-on-surface-variant">Título del lote *</label>
+        <label className="text-xs font-medium text-on-surface-variant">TÃ­tulo del lote *</label>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-          placeholder="Ej: Plan ProMax — precios y variaciones 2026"
+          placeholder="Ej: Plan ProMax â€” precios y variaciones 2026"
           className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
       </div>
       <Textarea label="Detalle / contexto" value={form.content} onChange={(v) => setForm({ ...form, content: v })} rows={3}
-        placeholder="Información detallada que el agente debe conocer y usar en las conversaciones..." />
+        placeholder="InformaciÃ³n detallada que el agente debe conocer y usar en las conversaciones..." />
       <div>
         <label className="text-xs font-medium text-on-surface-variant">Puntos clave (opcional)</label>
         <div className="space-y-2 mt-1.5">
@@ -105,7 +105,7 @@ function KnowledgeForm({ initial, onSaved, onClose }: { initial?: any; onSaved: 
       <div className="flex gap-2 pt-1">
         <button onClick={submit} disabled={saving}
           className="flex-1 px-4 py-2.5 rounded-xl bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-semibold disabled:opacity-50">
-          {saving ? "Guardando..." : initial ? "Guardar cambios" : "Cargar información"}
+          {saving ? "Guardando..." : initial ? "Guardar cambios" : "Cargar informaciÃ³n"}
         </button>
         <button onClick={onClose}
           className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant border border-outline-variant hover:text-white transition-colors text-sm">Cancelar</button>
@@ -165,7 +165,7 @@ function AgentForm({ initial, onSaved, onClose, personalities, businessTypes }: 
       </div>
       <Select label="Tipo de negocio" value={form.business_type} onChange={(v) => setForm({ ...form, business_type: v })}
         options={businessTypes.map((b) => ({ value: b.id, label: b.label }))} />
-      <Textarea label="Rol / descripción" value={form.description} onChange={(v) => setForm({ ...form, description: v })} rows={2}
+      <Textarea label="Rol / descripciÃ³n" value={form.description} onChange={(v) => setForm({ ...form, description: v })} rows={2}
         placeholder="Ej: Asesor de ventas enfocado en cierres y propuestas..." />
       <div className="flex gap-2 pt-1">
         <button onClick={submit} disabled={saving}
@@ -189,7 +189,7 @@ export default function SettingsPage() {
   const [knowledgeTotal, setKnowledgeTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<"general" | "conocimiento" | "productos" | "horario" | "prueba">("general");
+  const [tab, setTab] = useState<"general" | "conocimiento" | "productos" | "horario" | "campos" | "prueba">("general");
   const [products, setProducts] = useState<any[]>([]);
   const [faqs, setFaqs] = useState<any[]>([]);
   const [testMessage, setTestMessage] = useState("");
@@ -242,7 +242,7 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error("Error");
       const updated = await res.json();
       setConfig(updated);
-      toast("success", "Configuración del agente guardada");
+      toast("success", "ConfiguraciÃ³n del agente guardada");
     } catch (e: any) {
       toast("error", "No se pudo guardar", e.message);
     } finally {
@@ -265,7 +265,7 @@ export default function SettingsPage() {
   };
 
   const removeAgent = async (a: any) => {
-    if (!confirm(`¿Eliminar al agente "${a.name}"?`)) return;
+    if (!confirm(`Â¿Eliminar al agente "${a.name}"?`)) return;
     try {
       const res = await fetch(`${HELPER_URL}/api/agents/${a.id}`, { method: "DELETE", headers: { "x-api-key": HELPER_API_KEY } });
       if (!res.ok) throw new Error("Error");
@@ -277,7 +277,7 @@ export default function SettingsPage() {
   };
 
   const removeKnowledge = async (k: any) => {
-    if (!confirm(`¿Eliminar el lote "${k.title}"?`)) return;
+    if (!confirm(`Â¿Eliminar el lote "${k.title}"?`)) return;
     try {
       const res = await fetch(`${HELPER_URL}/api/agent/knowledge/${k.id}`, { method: "DELETE", headers: { "x-api-key": HELPER_API_KEY } });
       if (!res.ok) throw new Error("Error");
@@ -326,8 +326,8 @@ export default function SettingsPage() {
       const raw = d.reply || d.message || d.error || JSON.stringify(d);
       try {
         const parsed = JSON.parse(raw);
-        const agentName = d.agent?.name ? `${d.agent.name} · ` : "";
-        setTestResult(`${agentName}${parsed.response || raw}${parsed.stage ? `\n\n[Etapa: ${parsed.stage} · Intención: ${parsed.intent || "—"} · Autonomía: ${parsed.autonomyZone || "—"} · Siguiente: ${parsed.nextAction || "—"}]` : ""}`);
+        const agentName = d.agent?.name ? `${d.agent.name} Â· ` : "";
+        setTestResult(`${agentName}${parsed.response || raw}${parsed.stage ? `\n\n[Etapa: ${parsed.stage} Â· IntenciÃ³n: ${parsed.intent || "â€”"} Â· AutonomÃ­a: ${parsed.autonomyZone || "â€”"} Â· Siguiente: ${parsed.nextAction || "â€”"}]` : ""}`);
       } catch {
         setTestResult(raw);
       }
@@ -377,7 +377,7 @@ export default function SettingsPage() {
       recordTimerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
       setTimeout(() => recorder.stop(), 60000);
     } catch {
-      toast("error", "Micrófono no disponible", "No se pudo acceder al micrófono para grabar audio");
+      toast("error", "MicrÃ³fono no disponible", "No se pudo acceder al micrÃ³fono para grabar audio");
     }
   };
 
@@ -399,8 +399,8 @@ export default function SettingsPage() {
     return (
       <div className="p-8">
         <div className="glass-panel rounded-2xl p-10 text-center border border-white/10">
-          <p className="text-white font-medium mb-1">No se pudo cargar la configuración del agente</p>
-          <p className="text-sm text-on-surface-variant mb-4">Verifica que el Helper Node esté activo.</p>
+          <p className="text-white font-medium mb-1">No se pudo cargar la configuraciÃ³n del agente</p>
+          <p className="text-sm text-on-surface-variant mb-4">Verifica que el Helper Node estÃ© activo.</p>
           <button onClick={load} className="px-4 py-2 rounded-lg bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors text-sm">Reintentar</button>
         </div>
       </div>
@@ -424,7 +424,7 @@ export default function SettingsPage() {
           <Switch checked={config.auto_reply_enabled} onChange={(v) => set("auto_reply_enabled", v)} label="Auto-reply" description={config.auto_reply_enabled ? "El agente responde solo" : "Respuestas manuales"} />
           <button onClick={() => save()} disabled={saving}
             className="px-5 py-2.5 rounded-lg bg-tertiary/20 text-tertiary border border-tertiary/30 hover:bg-tertiary/30 transition-all font-medium text-sm shadow-[0_0_20px_rgba(167,139,250,0.1)] disabled:opacity-50">
-            {saving ? "Guardando..." : "Guardar configuración"}
+            {saving ? "Guardando..." : "Guardar configuraciÃ³n"}
           </button>
         </div>
       </header>
@@ -433,7 +433,7 @@ export default function SettingsPage() {
       <div className="px-4 sm:px-8 py-3 border-b border-white/5 flex items-center gap-2 overflow-x-auto z-10">
         <span className="text-xs text-on-surface-variant uppercase tracking-wide mr-1 shrink-0">Agentes:</span>
         {agents.length === 0 && (
-          <span className="text-xs text-on-surface-variant italic">No hay agentes creados todavía.</span>
+          <span className="text-xs text-on-surface-variant italic">No hay agentes creados todavÃ­a.</span>
         )}
         {agents.map((a) => (
           <div key={a.id} className="flex items-center gap-1 shrink-0">
@@ -474,7 +474,7 @@ export default function SettingsPage() {
         </button>
         {activeAgent && (
           <span className="ml-auto text-[11px] text-on-surface-variant shrink-0 hidden sm:inline">
-            Activo: <span className="text-success font-semibold">{activeAgent.name}</span> · {catalog.personalities.find((p) => p.id === activeAgent.personality)?.label || activeAgent.personality}
+            Activo: <span className="text-success font-semibold">{activeAgent.name}</span> Â· {catalog.personalities.find((p) => p.id === activeAgent.personality)?.label || activeAgent.personality}
           </span>
         )}
       </div>
@@ -494,7 +494,7 @@ export default function SettingsPage() {
         {tab === "general" && (
           <div className="space-y-6">
             <div className="glass-panel rounded-2xl p-6 border border-white/10">
-              <h3 className="text-lg font-bold text-white mb-1">Identidad del agente {activeAgent && <span className="text-success">· {activeAgent.name}</span>}</h3>
+              <h3 className="text-lg font-bold text-white mb-1">Identidad del agente {activeAgent && <span className="text-success">Â· {activeAgent.name}</span>}</h3>
               <p className="text-xs text-on-surface-variant mb-4">Los datos base se aplican al perfil activo; cada agente conserva su nombre, tono y personalidad.</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -513,7 +513,7 @@ export default function SettingsPage() {
                   options={catalog.personalities.map((p) => ({ value: p.id, label: p.label }))} />
               </div>
               <div className="mt-4">
-                <label className="text-xs font-medium text-on-surface-variant">Descripción del negocio</label>
+                <label className="text-xs font-medium text-on-surface-variant">DescripciÃ³n del negocio</label>
                 <Textarea value={config.description} onChange={(v) => set("description", v)} rows={2} className="mt-1.5" />
               </div>
               <div className="mt-4">
@@ -531,22 +531,22 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-lg font-bold text-white">Conocimiento del Agente</h3>
                   <p className="text-sm text-on-surface-variant mt-0.5">
-                    Toda la información que le cargues se agrupa por fecha y hora; el agente la usa como contexto en sus conversaciones.
+                    Toda la informaciÃ³n que le cargues se agrupa por fecha y hora; el agente la usa como contexto en sus conversaciones.
                   </p>
                 </div>
                 <button onClick={() => { setEditingKnowledge(null); setKnowledgeOpen(true); }}
                   className="px-4 py-2 rounded-lg bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-semibold shrink-0">
-                  + Agregar información
+                  + Agregar informaciÃ³n
                 </button>
               </div>
 
               {knowledge.length === 0 ? (
                 <div className="border-2 border-dashed border-outline-variant rounded-xl p-10 text-center">
-                  <p className="text-sm text-on-surface-variant mb-1">Aún no has cargado información al agente.</p>
-                  <p className="text-xs text-on-surface-variant mb-4">Carga productos, contexto de negocio, estándares de seguimiento, análisis de mercado u objetivos.</p>
+                  <p className="text-sm text-on-surface-variant mb-1">AÃºn no has cargado informaciÃ³n al agente.</p>
+                  <p className="text-xs text-on-surface-variant mb-4">Carga productos, contexto de negocio, estÃ¡ndares de seguimiento, anÃ¡lisis de mercado u objetivos.</p>
                   <button onClick={() => { setEditingKnowledge(null); setKnowledgeOpen(true); }}
                     className="px-4 py-2 rounded-lg bg-success/20 text-success border border-success/30 hover:bg-success/30 transition-colors text-sm font-semibold">
-                    + Cargar mi primer lote de información
+                    + Cargar mi primer lote de informaciÃ³n
                   </button>
                 </div>
               ) : (
@@ -615,7 +615,7 @@ export default function SettingsPage() {
                   className="px-3 py-1.5 rounded-lg bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors text-xs font-semibold">+ Agregar</button>
               </div>
               {products.length === 0 ? (
-                <p className="text-sm text-on-surface-variant text-center py-6">Sin productos configurados. El agente responderá "consulta por lista de productos".</p>
+                <p className="text-sm text-on-surface-variant text-center py-6">Sin productos configurados. El agente responderÃ¡ "consulta por lista de productos".</p>
               ) : (
                 <div className="space-y-3">
                   {products.map((p, i) => (
@@ -623,7 +623,7 @@ export default function SettingsPage() {
                       <input value={p.name} onChange={(e) => { const np = [...products]; np[i] = { ...p, name: e.target.value }; setProducts(np); }}
                         placeholder="Nombre" className="bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       <input value={p.description} onChange={(e) => { const np = [...products]; np[i] = { ...p, description: e.target.value }; setProducts(np); }}
-                        placeholder="Descripción" className="bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
+                        placeholder="DescripciÃ³n" className="bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       <input value={p.price} onChange={(e) => { const np = [...products]; np[i] = { ...p, price: e.target.value }; setProducts(np); }}
                         placeholder="Precio" className="bg-surface-container-highest border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       <button onClick={() => setProducts(products.filter((_, j) => j !== i))}
@@ -668,7 +668,7 @@ export default function SettingsPage() {
 
         {tab === "horario" && (
           <div className="glass-panel rounded-2xl p-6 border border-white/10">
-            <h3 className="text-lg font-bold text-white mb-4">Horario de atención</h3>
+            <h3 className="text-lg font-bold text-white mb-4">Horario de atenciÃ³n</h3>
             <div className="space-y-3">
               {DAYS.map((d) => {
                 const slot = config.business_hours?.[d];
@@ -701,11 +701,98 @@ export default function SettingsPage() {
           </div>
         )}
 
+                {tab === "campos" && (
+          <div className="space-y-6">
+            <div className="glass-panel rounded-2xl p-6 border border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1">Campos Personalizados (Leads)</h3>
+                  <p className="text-xs text-on-surface-variant">Configura los campos custom para el formulario de prospectos y reglas de segmentacin.</p>
+                </div>
+                <button onClick={() => {
+                  const current = config.custom_fields || [];
+                  set("custom_fields", [...current, { name: "", label: "", type: "text", required: false }]);
+                }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-all font-medium text-sm">
+                  + Nuevo Campo
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {!(config.custom_fields?.length > 0) && (
+                  <div className="text-center py-8 text-on-surface-variant text-sm bg-surface-container/50 rounded-xl border border-white/5">
+                    No hay campos configurados
+                  </div>
+                )}
+                {(config.custom_fields || []).map((cf: any, i: number) => (
+                  <div key={i} className="flex flex-wrap md:flex-nowrap gap-3 p-4 rounded-xl bg-surface-container-highest border border-white/5 items-start">
+                    <div className="flex-1 space-y-3 min-w-[200px]">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-on-surface-variant mb-1 block">Label (Visible UI)</label>
+                          <input value={cf.label} onChange={(e) => {
+                            const clone = [...config.custom_fields];
+                            clone[i].label = e.target.value;
+                            if(!clone[i].name) clone[i].name = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                            set("custom_fields", clone);
+                          }}
+                            placeholder="Ej: Presupuesto"
+                            className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-on-surface-variant mb-1 block">Key (Backend/API)</label>
+                          <input value={cf.name} onChange={(e) => {
+                            const clone = [...config.custom_fields];
+                            clone[i].name = e.target.value;
+                            set("custom_fields", clone);
+                          }}
+                            placeholder="ej: presupuesto_usd"
+                            className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary font-mono text-[11px]" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
+                          <input type="checkbox" checked={cf.required || false} onChange={e => {
+                            const clone = [...config.custom_fields];
+                            clone[i].required = e.target.checked;
+                            set("custom_fields", clone);
+                          }} className="rounded bg-surface border-white/20 text-primary focus:ring-primary focus:ring-offset-surface-container" />
+                          Obligatorio
+                        </label>
+                        <div className="flex-1">
+                          <select value={cf.type || "text"} onChange={e => {
+                            const clone = [...config.custom_fields];
+                            clone[i].type = e.target.value;
+                            set("custom_fields", clone);
+                          }} className="bg-surface border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary">
+                            <option value="text">Texto corto</option>
+                            <option value="number">Nmero</option>
+                            <option value="boolean">Si / No</option>
+                            <option value="date">Fecha</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => {
+                      const clone = [...config.custom_fields];
+                      clone.splice(i, 1);
+                      set("custom_fields", clone);
+                    }}
+                      className="p-2 text-on-surface-variant hover:text-danger hover:bg-danger/10 rounded-lg transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "prueba" && (
           <div className="glass-panel rounded-2xl p-6 border border-white/10">
             <h3 className="text-lg font-bold text-white mb-1">Probar el agente</h3>
             <p className="text-sm text-on-surface-variant mb-4">
-              Conversa, envía imágenes o graba audios. Todo responde con el contexto e información cargada{activeAgent ? ` por ${activeAgent.name}` : ""}.
+              Conversa, envÃ­a imÃ¡genes o graba audios. Todo responde con el contexto e informaciÃ³n cargada{activeAgent ? ` por ${activeAgent.name}` : ""}.
             </p>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
               onChange={async (e) => {
@@ -714,7 +801,7 @@ export default function SettingsPage() {
                 const url = await uploadMedia(f);
                 if (url) {
                   setTestMedia({ url, type: f.type });
-                  toast("success", "Imagen cargada", "Se enviará como contexto visual al agente");
+                  toast("success", "Imagen cargada", "Se enviarÃ¡ como contexto visual al agente");
                 }
               }} />
             {testMedia && (
@@ -732,7 +819,7 @@ export default function SettingsPage() {
                 </button>
               </div>
             )}
-            <Textarea value={testMessage} onChange={setTestMessage} rows={3} placeholder="Ej: Hola, quiero información sobre sus precios y planes" />
+            <Textarea value={testMessage} onChange={setTestMessage} rows={3} placeholder="Ej: Hola, quiero informaciÃ³n sobre sus precios y planes" />
             <div className="flex flex-wrap gap-2 mt-3">
               <button onClick={() => testChat()} disabled={testLoading || (!testMessage.trim() && !testMedia)}
                 className="px-5 py-2.5 rounded-xl bg-tertiary/20 text-tertiary border border-tertiary/30 hover:bg-tertiary/30 transition-colors text-sm font-semibold disabled:opacity-50">
@@ -740,11 +827,11 @@ export default function SettingsPage() {
               </button>
               <button onClick={() => fileInputRef.current?.click()} disabled={testLoading}
                 className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant border border-outline-variant hover:text-white transition-colors text-sm font-medium disabled:opacity-50">
-                🖼 Enviar imagen
+                ðŸ–¼ Enviar imagen
               </button>
               <button onClick={recording ? stopRecording : startRecording} disabled={testLoading}
                 className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant border border-outline-variant hover:text-white transition-colors text-sm font-medium disabled:opacity-50">
-                {recording ? "⏹ Detener grabación" : "🎤 Grabar audio"}
+                {recording ? "â¹ Detener grabaciÃ³n" : "ðŸŽ¤ Grabar audio"}
               </button>
             </div>
             {testResult && (
@@ -760,8 +847,8 @@ export default function SettingsPage() {
       </main>
 
       <Dialog open={knowledgeOpen} onClose={() => setKnowledgeOpen(false)}
-        title={editingKnowledge ? "Editar lote de información" : "Cargar información al agente"}
-        description="Se agrupará automáticamente por la fecha y hora actual. Tipos: productos, FAQs, contexto, estándares, análisis y objetivos." className="max-w-xl">
+        title={editingKnowledge ? "Editar lote de informaciÃ³n" : "Cargar informaciÃ³n al agente"}
+        description="Se agruparÃ¡ automÃ¡ticamente por la fecha y hora actual. Tipos: productos, FAQs, contexto, estÃ¡ndares, anÃ¡lisis y objetivos." className="max-w-xl">
         <KnowledgeForm initial={editingKnowledge} onSaved={load} onClose={() => setKnowledgeOpen(false)} />
       </Dialog>
 

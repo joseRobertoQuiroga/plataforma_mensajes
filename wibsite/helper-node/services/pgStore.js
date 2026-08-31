@@ -103,9 +103,9 @@ const LeadStore = {
     const campaignCheck = await query('SELECT 1 FROM campaigns WHERE id = $1', [campaignId]);
     if (!campaignCheck.rows.length) return null;
     const result = await query(
-      `INSERT INTO campaign_leads (id, campaign_id, name, phone, email, facebook_id, tiktok_id, custom_fields, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [data.id, campaignId, data.name, data.phone, data.email, data.facebook_id,
+      `INSERT INTO campaign_leads (id, campaign_id, company_id, name, phone, email, facebook_id, tiktok_id, custom_fields, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [data.id, campaignId, data.company_id || null, data.name, data.phone, data.email, data.facebook_id,
        data.tiktok_id, JSON.stringify(data.custom_fields || {}), data.status || 'pending']
     );
     return result.rows[0];
@@ -134,9 +134,9 @@ const LeadStore = {
       const created = [];
       for (const lead of leads) {
         const result = await client.query(
-          `INSERT INTO campaign_leads (campaign_id, name, phone, email, custom_fields, status)
-           VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING RETURNING *`,
-          [campaignId, lead.name, lead.phone, lead.email,
+          `INSERT INTO campaign_leads (campaign_id, company_id, name, phone, email, custom_fields, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING RETURNING *`,
+          [campaignId, lead.company_id || null, lead.name, lead.phone, lead.email,
            JSON.stringify(lead.custom_fields || {}), lead.status || 'pending']
         );
         if (result.rows[0]) created.push(result.rows[0]);
@@ -237,6 +237,47 @@ const ChannelStore = {
   }
 };
 
+const CompanyStore = {
+  async findAll(filters = {}) {
+    let sql = 'SELECT * FROM companies';
+    const params = [];
+    if (filters.limit) { sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`; params.push(filters.limit); }
+    else sql += ' ORDER BY created_at DESC';
+    const result = await query(sql, params);
+    return result.rows;
+  },
+
+  async findById(id) {
+    const result = await query('SELECT * FROM companies WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(
+      `INSERT INTO companies (id, name, domain, industry)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [data.id, data.name, data.domain, data.industry]
+    );
+    return result.rows[0];
+  },
+
+  async update(id, data) {
+    const fields = [];
+    const params = [];
+    let idx = 1;
+    for (const [key, value] of Object.entries(data)) {
+      if (key === 'id') continue;
+      fields.push(`${key} = $${idx++}`);
+      params.push(value);
+    }
+    params.push(id);
+    const result = await query(
+      `UPDATE companies SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params
+    );
+    return result.rows[0] || null;
+  }
+};
+
 module.exports = {
-  initPgStore, CampaignStore, LeadStore, ScoreStore, OptOutStore, ChannelStore
+  initPgStore, CampaignStore, LeadStore, ScoreStore, OptOutStore, ChannelStore, CompanyStore
 };

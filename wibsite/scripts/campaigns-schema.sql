@@ -28,11 +28,22 @@ CREATE TABLE IF NOT EXISTS campaigns (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Companies (B2B Context) ───────────────────────────
+CREATE TABLE IF NOT EXISTS companies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    domain VARCHAR(255),
+    industry VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Campaign Leads (destinatarios) ─────────────────────
 CREATE TABLE IF NOT EXISTS campaign_leads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
     contact_id VARCHAR(255),
+    company_id UUID REFERENCES companies(id) ON DELETE SET NULL,
     -- Lead info (denormalized from CRM for snapshot consistency)
     name VARCHAR(255),
     phone VARCHAR(50),
@@ -126,6 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_campaign_scheduled ON campaigns(scheduled_at) WHE
 CREATE INDEX IF NOT EXISTS idx_campaign_leads_campaign ON campaign_leads(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_leads_status ON campaign_leads(status);
 CREATE INDEX IF NOT EXISTS idx_campaign_leads_phone ON campaign_leads(phone);
+CREATE INDEX IF NOT EXISTS idx_campaign_leads_company ON campaign_leads(company_id);
 CREATE INDEX IF NOT EXISTS idx_lead_scores_lead ON lead_scores(lead_id);
 CREATE INDEX IF NOT EXISTS idx_lead_scores_score ON lead_scores(score);
 CREATE INDEX IF NOT EXISTS idx_opt_outs_phone ON opt_outs(phone);
@@ -161,6 +173,11 @@ BEGIN
             BEFORE UPDATE ON campaign_leads
             FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_companies_updated_at') THEN
+        CREATE TRIGGER update_companies_updated_at
+            BEFORE UPDATE ON companies
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_channel_status_updated_at') THEN
         CREATE TRIGGER update_channel_status_updated_at
             BEFORE UPDATE ON channel_status
@@ -168,3 +185,7 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Oleada 1 and 2 updates
+ALTER TABLE campaign_leads ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT false;
+ALTER TABLE campaign_leads ADD COLUMN IF NOT EXISTS user_tags JSONB DEFAULT '[]'::jsonb;

@@ -2,13 +2,119 @@ const crypto = require('crypto');
 
 let redisClient = null;
 let redisAvailable = false;
+let pgPool = null;  // D11: injected by index.js after pool init
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
 const CONV_TTL = Number(process.env.CONVERSATION_TTL_SECONDS) || 604800;
+// Archive before TTL expires — run when remaining TTL < ARCHIVE_THRESHOLD
+const ARCHIVE_THRESHOLD = Number(process.env.CONV_ARCHIVE_THRESHOLD_SECONDS) || 86400; // 1 day
 const MAX_MESSAGES = 100;
 const MAX_RETRY = 3;
 
 const postTransitionHooks = new Set();
+
+/** D11: inject pool after DB is ready */
+function initConvArchivePool(pool) { pgPool = pool; }
+
+/** D11: archive a single conversation to PostgreSQL */
+async function archiveConversationToPg(conv) {
+  if (!pgPool) return;
+  try {
+    await pgPool.query(
+      `INSERT INTO conversation_archive
+         (tenant_id, conversation_id, lead_phone, lead_email, lead_id,
+          state, messages, message_count, metadata, started_at, ended_at, archived_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,NOW())
+       ON CONFLICT (tenant_id, conversation_id)
+       DO UPDATE SET
+         messages = EXCLUDED.messages,
+         message_count = EXCLUDED.message_count,
+         state = EXCLUDED.state,
+         metadata = EXCLUDED.metadata,
+         ended_at = EXCLUDED.ended_at,
+         archived_at = NOW()`,
+      [
+        conv.tenantId || 'default',
+        conv.conversationId || conv.id,
+        conv.leadPhone || conv.metadata?.phone || null,
+        conv.leadEmail || conv.metadata?.email || null,
+        conv.leadId || conv.metadata?.lead_id || null,
+        conv.state || null,
+        JSON.stringify(conv.messages || []),
+        conv.messageCount || 0,
+        JSON.stringify(conv.metadata || {}),
+        conv.createdAt || conv.startedAt || null,
+        conv.updatedAt || null,
+      ]
+    );
+  } catch (e) {
+    console.error('[ConvStore] archiveConversationToPg error:', e.message);
+  }
+}
+
+/** D11: scan all Redis/memory conversations and archive those nearing TTL expiry */
+async function runArchiveJob() {
+  const prefix = redisAvailable ? 'conv:*:*' : null;
+  let candidates = [];
+
+  if (redisAvailable) {
+    try {
+      const keys = await redisClient.keys('conv:*');
+      if (keys.length === 0) return { archived: 0 };
+      // Check TTL and archive those with TTL < ARCHIVE_THRESHOLD
+      for (const key of keys) {
+        const ttl = await redisClient.ttl(key);
+        if (ttl > 0 && ttl < ARCHIVE_THRESHOLD) {
+          const raw = await redisClient.get(key);
+          if (raw) candidates.push(JSON.parse(raw));
+        } else if (ttl === -1) {
+          // No TTL set — archive it too
+          const raw = await redisClient.get(key);
+          if (raw) candidates.push(JSON.parse(raw));
+        }
+      }
+    } catch (e) {
+      console.error('[ConvStore] runArchiveJob Redis scan error:', e.message);
+    }
+  } else {
+    // In-memory: archive all (no TTL tracking in memory)
+    for (const [key, val] of memoryStore.entries()) {
+      if (key.startsWith('conv:')) candidates.push(val);
+    }
+  }
+
+  let archived = 0;
+  for (const conv of candidates) {
+    await archiveConversationToPg(conv);
+    archived++;
+  }
+  if (archived > 0) console.log(`[ConvStore] D11 archive job: ${archived} conversaciones archivadas en PG`);
+  return { archived };
+}
+
+/** D11: query archived conversations by lead phone */
+async function getArchivedByPhone(phone, limit = 20) {
+  if (!pgPool) return [];
+  try {
+    const res = await pgPool.query(
+      `SELECT * FROM conversation_archive WHERE lead_phone = $1 ORDER BY archived_at DESC LIMIT $2`,
+      [phone, limit]
+    );
+    return res.rows;
+  } catch (e) { return []; }
+}
+
+/** D11: query archived conversations by lead_id */
+async function getArchivedByLeadId(leadId, limit = 20) {
+  if (!pgPool) return [];
+  try {
+    const res = await pgPool.query(
+      `SELECT * FROM conversation_archive WHERE lead_id = $1 ORDER BY archived_at DESC LIMIT $2`,
+      [leadId, limit]
+    );
+    return res.rows;
+  } catch (e) { return []; }
+}
 
 async function initRedis() {
   if (redisClient) return;
@@ -295,4 +401,7 @@ module.exports = {
   saveCheckpoint, loadCheckpoint, deleteCheckpoint, onTransition,
   isValidTransition, CONVERSATION_STATES, VALID_TRANSITIONS, STATE_LABELS,
   CONV_TTL, MAX_MESSAGES,
+  // D11: archive conversaciones Redis → PostgreSQL
+  initConvArchivePool, archiveConversationToPg, runArchiveJob,
+  getArchivedByPhone, getArchivedByLeadId,
 };

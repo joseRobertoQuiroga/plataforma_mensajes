@@ -1,14 +1,14 @@
-"use client";
-import { useState, useEffect, useCallback } from "react";
+﻿"use client";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatDate, channelLabel, channelClasses, scoreClasses, scoreLabel, initials, stateDot, STATE_LABELS } from "@/lib/format";
+import { cn, formatDate, channelLabel, channelClasses, scoreClasses, scoreLabel, initials, stateDot, STATE_LABELS, groupBadge, groupDot } from "@/lib/format";
 
 const HELPER_URL = (process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100") === "/api" ? "" : process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100";
 const HELPER_API_KEY = process.env.NEXT_PUBLIC_HELPER_API_KEY || "";
 
-const PIPELINE_STAGES = ["nuevo", "calificado", "oportunidad", "propuesta", "cerrado", "opt_out"];
+const PIPELINE_STAGES = ["primer_contacto", "primer_mensaje", "interesado", "cotizacion_pendiente", "posible_comprador", "comprador", "descartado", "opt_out"];
 
 function StatusProgress({ status }: { status: string }) {
   const idx = PIPELINE_STAGES.indexOf(status?.toLowerCase() || "nuevo");
@@ -19,19 +19,160 @@ function StatusProgress({ status }: { status: string }) {
           <div key={step} className={cn("w-6 h-1.5 rounded-full transition-colors", i <= (idx < 0 ? 0 : idx) ? "bg-primary shadow-[0_0_5px_rgba(125,211,252,0.5)]" : "bg-surface-container-high")} />
         ))}
       </div>
-      <span className="text-xs text-on-surface-variant ml-1 capitalize">{status || "nuevo"}</span>
+      <span className="text-xs text-on-surface-variant ml-1 capitalize">{status || "primer_contacto"}</span>
     </div>
   );
 }
 
-function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => void; onChanged: () => void }) {
+// K4: Tags multi-valor con colores por lead
+function UserTagsEditor({ leadId, tags, onSaved }: { leadId: string; tags?: { label: string; color: string }[]; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState("primary");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const save = async (next: { label: string; color: string }[]) => {
+    await fetch(`${HELPER_URL}/api/leads/${leadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-api-key": HELPER_API_KEY },
+      body: JSON.stringify({ user_tags: next }),
+    });
+    onSaved();
+  };
+
+  const addTag = () => {
+    if (!newLabel.trim()) return;
+    save([...(tags || []), { label: newLabel.trim(), color: newColor }]);
+    setNewLabel(""); setOpen(false);
+  };
+
+  return (
+    <div className="relative mt-2" ref={ref}>
+      <div className="flex flex-wrap gap-1 items-center">
+        {(tags || []).map((t, i) => (
+          <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", groupBadge(t.color))}>
+            {t.label}
+            <button onClick={() => { const n = (tags || []).filter((_, j) => j !== i); save(n); }} className="opacity-60 hover:opacity-100 leading-none">&times;</button>
+          </span>
+        ))}
+        <button onClick={() => setOpen(o => !o)} className="text-[10px] px-1.5 py-0.5 rounded border border-dashed border-white/20 text-on-surface-variant hover:text-white hover:border-white/40 transition-colors">
+          + Tag
+        </button>
+      </div>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 w-52 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl p-3 z-50">
+          <input type="text" placeholder="Nuevo tagâ€¦" autoFocus value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addTag()}
+            className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-surface border border-white/10 focus:border-primary outline-none text-white mb-2.5" />
+          <div className="flex gap-1.5 mb-2.5">
+            {["primary","success","warning","danger","secondary","tertiary"].map(c => (
+              <button key={c} onClick={() => setNewColor(c)}
+                className={cn("w-5 h-5 rounded-full flex items-center justify-center transition-transform", groupDot(c), newColor === c ? "scale-125 ring-2 ring-white/30" : "")}>
+              </button>
+            ))}
+          </div>
+          <button onClick={addTag} className="w-full text-xs bg-primary/20 text-primary border border-primary/30 rounded-lg py-1.5 font-medium hover:bg-primary/30 transition-colors">
+            Agregar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// K12: Manual Lead Groups Editor
+function LeadGroupsEditor({ leadId, currentGroupIds, allGroups, onSaved }: { leadId: string; currentGroupIds?: string[]; allGroups?: any[]; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleGroup = async (gId: string, isMember: boolean) => {
+    const ep = isMember ? "/api/leads/" + leadId + "/groups/" + gId : "/api/leads/" + leadId + "/groups";
+    await fetch(HELPER_URL + ep, {
+      method: isMember ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": HELPER_API_KEY },
+      body: isMember ? undefined : JSON.stringify({ groupId: gId }),
+    });
+    onSaved();
+  };
+
+  const assigned = (allGroups || []).filter(g => (currentGroupIds || []).includes(g.id));
+
+  return (
+    <div className="relative mt-2" ref={ref}>
+      <div className="flex flex-wrap gap-1 items-center">
+        {assigned.map((g, i) => (
+          <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", groupBadge(g.color || "primary"))}>
+            {g.name}
+            <button onClick={() => toggleGroup(g.id, true)} className="opacity-60 hover:opacity-100 leading-none">&times;</button>
+          </span>
+        ))}
+        <button onClick={() => setOpen(o => !o)} className="text-[10px] px-1.5 py-0.5 rounded border border-dashed border-white/20 text-on-surface-variant hover:text-white hover:border-white/40 transition-colors">
+          + Lista
+        </button>
+      </div>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 w-52 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl p-2 z-50 max-h-48 overflow-y-auto">
+          {!(allGroups && allGroups.length > 0) && <div className="text-xs text-on-surface-variant p-2 text-center">No hay listas creadas</div>}
+          {(allGroups || []).map((g: any) => {
+            const isM = (currentGroupIds || []).includes(g.id);
+            return (
+              <button key={g.id} onClick={() => toggleGroup(g.id, isM)} className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/5 flex items-center justify-between text-xs text-white">
+                <span className="flex items-center gap-2">
+                  <span className={cn("w-2 h-2 rounded-full", groupDot(g.color || "primary"))} />
+                  {g.name}
+                </span>
+                {isM && <span className="text-primary">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeadDetail({ lead, onClose, onChanged, config, groups }: { lead: any; onClose: () => void; onChanged: () => void; config?: any; groups?: any[] }) {
   const { toast } = useToast();
   const [profile, setProfile] = useState<any>(null);
   const [note, setNote] = useState("");
   const [editOpen, setEditOpen] = useState(false);
-  const [editing, setEditing] = useState({ name: "", phone: "", email: "", status: "" });
+  const [editing, setEditing] = useState({ name: "", phone: "", email: "", status: "", custom_fields: {} as any });
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedConv, setSelectedConv] = useState<any>(null);
+  const [isFavorite, setIsFavorite] = useState<boolean>(!!lead.is_favorite); // K6
+
+  const toggleFavorite = async () => { // K6
+    const newVal = !isFavorite;
+    setIsFavorite(newVal);
+    try {
+      await fetch(`${HELPER_URL}/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "x-api-key": HELPER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ is_favorite: newVal }),
+      });
+      onChanged();
+    } catch {
+      setIsFavorite(!newVal); // revert on error
+      toast("error", "No se pudo actualizar el favorito");
+    }
+  };
 
   const loadProfile = useCallback(() => {
     fetch(`${HELPER_URL}/api/leads/${lead.id}/profile`, { headers: { "x-api-key": HELPER_API_KEY }, cache: "no-store" })
@@ -116,13 +257,27 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               <h3 className="text-lg font-bold text-white truncate">{p.name || "Sin nombre"}</h3>
               <p className="text-xs text-on-surface-variant truncate">{p.phone || p.email || "Sin contacto"}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} · {scoreLabel(p.score)}</span>
+                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} Â· {scoreLabel(p.score)}</span>
                 <span className={cn("text-[11px] px-2 py-0.5 rounded-full border", channelClasses(p.source || "web"))}>{channelLabel(p.source)}</span>
               </div>
+              {/* K4: Tags multi-valor con colores */}
+              <UserTagsEditor leadId={p.id} tags={p.user_tags} onSaved={onChanged} />
+              {/* K12: Listas manuales de leads */}
+              <LeadGroupsEditor leadId={p.id} currentGroupIds={p.group_ids} allGroups={groups} onSaved={() => { onChanged(); loadProfile(); }} />
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
-            <button onClick={() => { setEditing({ name: p.name || "", phone: p.phone || "", email: p.email || "", status: p.status || "nuevo" }); setEditOpen(true); }}
+            {/* K6: Favorito */}
+            <button
+              onClick={toggleFavorite}
+              className={cn("p-2 rounded-lg transition-colors", isFavorite ? "text-yellow-400 hover:text-yellow-300" : "text-on-surface-variant hover:text-yellow-400 hover:bg-white/5")}
+              title={isFavorite ? "Quitar de favoritos" : "Marcar como favorito"}
+            >
+              <svg className="w-5 h-5" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+            </button>
+            <button onClick={() => { setEditing({ name: p.name || "", phone: p.phone || "", email: p.email || "", status: p.status || "primer_contacto", custom_fields: p.custom_fields || {} }); setEditOpen(true); }}
               className="p-2 rounded-lg text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" title="Editar contacto">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
             </button>
@@ -136,7 +291,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           {PIPELINE_STAGES.map((st) => (
             <button key={st} onClick={() => changeStage(st)}
               className={cn("px-3 py-1 text-[11px] rounded-full border transition-colors capitalize",
-                String(p.status || "nuevo") === st ? "bg-primary/20 text-primary border-primary/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>
+                String(p.status || "primer_contacto") === st ? "bg-primary/20 text-primary border-primary/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>
               {st === "opt_out" ? "Opt-out" : st}
             </button>
           ))}
@@ -144,21 +299,21 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Próxima acción sugerida */}
+        {/* PrÃƒÆ’Ã‚Â³xima acciÃƒÆ’Ã‚Â³n sugerida */}
         {p.nextAction && (
           <div className="p-3 rounded-lg bg-success/10 border border-success/20">
-            <p className="text-xs text-success uppercase tracking-wide mb-0.5">Siguiente acción</p>
+            <p className="text-xs text-success uppercase tracking-wide mb-0.5">Siguiente acciÃƒÆ’Ã‚Â³n</p>
             <p className="text-sm text-white font-medium capitalize">{p.nextAction.action.replace(/_/g, " ")}</p>
             <p className="text-xs text-on-surface-variant mt-0.5">{p.nextAction.reason}</p>
           </div>
         )}
 
-        {/* Interés / pain points */}
+        {/* InterÃƒÆ’Ã‚Â©s / pain points */}
         {(p.customFields?.interest || p.customFields?.pain_point) && (
           <div className="grid grid-cols-2 gap-3">
             {p.customFields?.interest && (
               <div className="bg-surface-container/50 rounded-xl p-3 border border-white/5">
-                <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">Interés</p>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃƒÆ’Ã‚Â©s</p>
                 <p className="text-sm text-white font-medium">{p.customFields.interest}</p>
               </div>
             )}
@@ -185,18 +340,18 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               {[...p.notes].reverse().map((n: any, i: number) => (
                 <div key={i} className="bg-surface-container/40 rounded-lg px-3 py-2.5 border border-white/5">
                   <p className="text-sm text-white">{n.text}</p>
-                  <p className="text-[10px] text-on-surface-variant mt-1">{formatDate(n.at)} · {n.by || "agente"}</p>
+                  <p className="text-[10px] text-on-surface-variant mt-1">{formatDate(n.at)} Ãƒâ€šÃ‚Â· {n.by || "agente"}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-on-surface-variant bg-surface-container/30 rounded-lg p-3 text-center">Sin notas todavía.</p>
+            <p className="text-xs text-on-surface-variant bg-surface-container/30 rounded-lg p-3 text-center">Sin notas todavÃƒÆ’Ã‚Â­a.</p>
           )}
         </div>
 
         {/* Entregas */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[["Total", p.deliveryStats?.total ?? 0, "text-white"], ["Leídos", p.deliveryStats?.read ?? 0, "text-primary"], ["Respuestas", p.deliveryStats?.replied ?? 0, "text-success"], ["Fallidos", p.deliveryStats?.failed ?? 0, "text-danger"]].map(([l, v, c]) => (
+          {[["Total", p.deliveryStats?.total ?? 0, "text-white"], ["LeÃƒÆ’Ã‚Â­dos", p.deliveryStats?.read ?? 0, "text-primary"], ["Respuestas", p.deliveryStats?.replied ?? 0, "text-success"], ["Fallidos", p.deliveryStats?.failed ?? 0, "text-danger"]].map(([l, v, c]) => (
             <div key={String(l)} className="bg-surface-container rounded-xl p-3 text-center">
               <p className={cn("text-xl font-bold", c)}>{v}</p>
               <p className="text-[11px] text-on-surface-variant">{l}</p>
@@ -204,15 +359,96 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           ))}
         </div>
 
-        {/* Historial de scoring */}
+        {/* Historial de scoring + L8: Desglose de factores */}
         {p.scoreHistory?.length > 0 && (
           <div>
             <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Historial de scoring ({p.scoreHistory.length})</p>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {p.scoreHistory.slice(0, 8).map((s: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-surface-container/40 rounded-lg px-3 py-2 border border-white/5">
-                  <span className="text-xs text-on-surface-variant">{formatDate(s.classifiedAt)}</span>
-                  <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border", scoreClasses(s.score))}>{s.score} · {s.category || "—"}</span>
+                <div key={i} className="bg-surface-container/40 rounded-lg px-3 py-2.5 border border-white/5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-on-surface-variant">{formatDate(s.classifiedAt)}</span>
+                    <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border", scoreClasses(s.score))}>{s.score} Ã‚Â· {s.category || "Ã¢â‚¬â€"}</span>
+                  </div>
+                  {/* L8: factores desglosados */}
+                  {s.factors && s.factors.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {s.factors.map((f: any, j: number) => (
+                        <span key={j} title={f.reason || f.label}
+                          className={cn("text-[10px] px-1.5 py-0.5 rounded border font-mono",
+                            f.value > 0 ? "text-success border-success/30 bg-success/10" : "text-danger border-danger/30 bg-danger/10"
+                          )}>
+                          {f.value > 0 ? "+" : ""}{f.value} {f.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {s.llmReasoning && (
+                    <p className="text-[10px] text-on-surface-variant mt-1 italic line-clamp-2">{s.llmReasoning}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* L8: Score data actual (si no hay historial) */}
+        {(!p.scoreHistory || p.scoreHistory.length === 0) && p.scoreData && (
+          <div className="bg-surface-container/40 rounded-xl p-3 border border-white/5">
+            <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Score actual</p>
+            <div className="flex flex-wrap gap-1.5">
+              {p.scoreData.engagement !== undefined && (
+                <span className="text-[11px] px-2 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                  Engagement: +{p.scoreData.engagement}
+                </span>
+              )}
+              {p.scoreData.recency !== undefined && (
+                <span className="text-[11px] px-2 py-1 rounded-lg bg-secondary/10 border border-secondary/20 text-on-surface-variant">
+                  Recencia: +{p.scoreData.recency}
+                </span>
+              )}
+              {p.scoreData.last_decay_days !== undefined && p.scoreData.last_decay_days > 0 && (
+                <span className="text-[11px] px-2 py-1 rounded-lg bg-danger/10 border border-danger/20 text-danger">
+                  Decay: -{p.scoreData.last_decay_days * 2}pts ({p.scoreData.last_decay_days}d)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* K5: CampaÃ±as donde participÃ³ el lead */}
+        {p.campaigns && p.campaigns.length > 0 && (
+          <div>
+            <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">CampaÃ±as ({p.campaigns.length})</p>
+            <div className="space-y-1.5">
+              {p.campaigns.map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between bg-surface-container/40 rounded-lg px-3 py-2 border border-white/5">
+                  <div>
+                    <p className="text-xs font-medium text-white">{c.name}</p>
+                    <p className="text-[10px] text-on-surface-variant">{c.channel} Â· {c.status}</p>
+                  </div>
+                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", channelClasses(c.channel))}>{channelLabel(c.channel)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* K7: Timeline unificada */}
+        {p.timeline && p.timeline.length > 0 && (
+          <div>
+            <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Timeline ({p.timeline.length})</p>
+            <div className="relative pl-5 border-l border-white/10 space-y-3">
+              {p.timeline.slice(0, 12).map((ev: any, i: number) => (
+                <div key={i} className="relative">
+                  <span className={cn("absolute -left-[21px] w-3 h-3 rounded-full border-2 border-surface top-0.5",
+                    ev.type === 'message' ? 'bg-primary' :
+                    ev.type === 'score' ? 'bg-warning' :
+                    ev.type === 'note' ? 'bg-secondary' : 'bg-success'
+                  )} />
+                  <p className="text-xs text-white font-medium leading-tight">{ev.label}</p>
+                  {ev.detail && <p className="text-[10px] text-on-surface-variant italic mt-0.5 line-clamp-1">{ev.detail}</p>}
+                  <p className="text-[10px] text-on-surface-variant/60 mt-0.5">{formatDate(ev.at)}{ev.by ? ` Â· ${ev.by}` : ''}</p>
                 </div>
               ))}
             </div>
@@ -240,7 +476,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
                   {selectedConv?.id === c.id && (
                     <div className="border-t border-white/5 max-h-64 overflow-y-auto p-3 space-y-2">
                       {messages.length === 0 ? (
-                        <p className="text-xs text-on-surface-variant text-center py-2">Sin mensajes en esta sesión.</p>
+                        <p className="text-xs text-on-surface-variant text-center py-2">Sin mensajes en esta sesiÃƒÆ’Ã‚Â³n.</p>
                       ) : messages.map((m: any, i: number) => {
                         const isAgent = m.role === "assistant" || m.role === "agent" || m.direction === "outbound";
                         return (
@@ -260,7 +496,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
         </div>
       </div>
 
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Editar contacto" description="Actualiza la información del lead.">
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Editar contacto" description="Actualiza la informaciÃƒÆ’Ã‚Â³n del lead.">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-on-surface-variant">Nombre</label>
@@ -269,7 +505,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-on-surface-variant">Teléfono</label>
+              <label className="text-xs font-medium text-on-surface-variant">TelÃƒÆ’Ã‚Â©fono</label>
               <input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-primary mt-1.5" />
             </div>
@@ -295,6 +531,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [showFavorites, setShowFavorites] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
@@ -302,6 +539,8 @@ export default function LeadsPage() {
   const [detailLead, setDetailLead] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [scoring, setScoring] = useState(false);
+  const [config, setConfig] = useState<any>(null);
+  const [groups, setGroups] = useState<any[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -338,7 +577,8 @@ export default function LeadsPage() {
   const filtered = leads.filter((l) => {
     if (search.trim()) {
       const q = search.toLowerCase();
-      if (![l.name, l.phone, l.email, l.source, l.custom_fields?.interest].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return false;
+      const tagHit = (l.user_tags || []).some((t: any) => String(t.label).toLowerCase().includes(q));
+      if (!tagHit && ![l.name, l.phone, l.email, l.source, l.custom_fields?.interest].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return false;
     }
     return true;
   });
@@ -349,7 +589,7 @@ export default function LeadsPage() {
 
       <header className="px-4 sm:px-8 py-5 sm:py-8 flex justify-between items-end z-10 flex-none gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight mb-2">Gestión de Leads</h2>
+          <h2 className="text-3xl font-bold text-white tracking-tight mb-2">GestiÃƒÆ’Ã‚Â³n de Leads</h2>
           <p className="text-on-surface-variant font-medium">Revisa, prioriza y da seguimiento a tus prospectos con IA.</p>
         </div>
         <div className="flex gap-3">
@@ -358,25 +598,25 @@ export default function LeadsPage() {
           </button>
           <button onClick={scoreAll} disabled={scoring}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-all font-medium text-sm shadow-[0_0_20px_rgba(125,211,252,0.1)] disabled:opacity-50">
-            {scoring ? <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <span>✦</span>} Score All
+            {scoring ? <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <span>ÃƒÂ¢Ã…â€œÃ‚Â¦</span>} Score All
           </button>
         </div>
       </header>
 
       <main className="flex-1 px-3 sm:px-8 pb-20 sm:pb-24 overflow-y-auto z-10">
-        {/* Toolbar: búsqueda + filtros */}
+        {/* Toolbar: bÃƒÆ’Ã‚Âºsqueda + filtros */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <div className="relative flex-1 min-w-[240px] max-w-md">
             <svg className="w-4 h-4 absolute left-3 top-2.5 text-on-surface-variant opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, email, interés..."
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, telÃƒÆ’Ã‚Â©fono, email, interÃƒÆ’Ã‚Â©s..."
               className="w-full bg-surface-container border border-outline-variant rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary" />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-surface-container border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none">
             <option value="all" className="bg-surface-container text-white">Todos los estados</option>
-            {["nuevo", "calificado", "oportunidad", "propuesta", "cerrado", "opt_out"].map((s) => (
+            {PIPELINE_STAGES.map((s) => (
               <option key={s} value={s} className="bg-surface-container text-white capitalize">{s}</option>
             ))}
           </select>
@@ -390,9 +630,21 @@ export default function LeadsPage() {
           <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))}
             className="bg-surface-container border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none">
             <option value={0} className="bg-surface-container text-white">Score: Todos</option>
-            <option value={80} className="bg-surface-container text-white">Score ≥ 80 (Hot)</option>
-            <option value={50} className="bg-surface-container text-white">Score ≥ 50 (Tibio)</option>
+            <option value={80} className="bg-surface-container text-white">Score ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ 80 (Hot)</option>
+            <option value={50} className="bg-surface-container text-white">Score ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ 50 (Tibio)</option>
           </select>
+          {/* K6: filtro favoritos */}
+          <button
+            onClick={() => setShowFavorites(f => !f)}
+            className={cn("p-2.5 rounded-xl transition-colors border text-sm flex items-center gap-1.5",
+              showFavorites ? "bg-yellow-400/20 text-yellow-400 border-yellow-400/30" : "bg-surface-container text-on-surface-variant hover:text-yellow-400 border-outline-variant")}
+            title="Solo favoritos"
+          >
+            <svg className="w-4 h-4" fill={showFavorites ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+            {showFavorites && <span className="text-xs font-medium">Favoritos</span>}
+          </button>
           <div className="flex gap-2 ml-auto">
             <button onClick={() => setViewMode("list")} className={`p-2.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-primary/20 text-primary border border-primary/30" : "bg-surface-container text-on-surface-variant hover:text-white border border-outline-variant"}`} title="Vista lista">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -405,7 +657,7 @@ export default function LeadsPage() {
 
         {error && (
           <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 mb-6 text-sm text-danger">
-            No se pudo conectar con el backend. Verifica que el Helper Node esté activo.
+            No se pudo conectar con el backend. Verifica que el Helper Node estÃƒÆ’Ã‚Â© activo.
           </div>
         )}
 
@@ -434,8 +686,8 @@ export default function LeadsPage() {
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">AI Score</th>
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Canal</th>
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Pipeline</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Interés</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Acción</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">InterÃƒÆ’Ã‚Â©s</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">AcciÃƒÆ’Ã‚Â³n</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-primary/5">
@@ -454,14 +706,14 @@ export default function LeadsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn("px-3 py-1 rounded-md font-semibold text-xs tracking-wide border", scoreClasses(lead.score))}>
-                          {lead.score || 0} · {scoreLabel(lead.score)}
+                          {lead.score || 0} Ãƒâ€šÃ‚Â· {scoreLabel(lead.score)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-medium", channelClasses(lead.source))}>{channelLabel(lead.source)}</span>
                       </td>
                       <td className="px-6 py-4"><StatusProgress status={lead.status} /></td>
-                      <td className="px-6 py-4 text-xs text-on-surface-variant max-w-[160px] truncate">{lead.custom_fields?.interest || "—"}</td>
+                      <td className="px-6 py-4 text-xs text-on-surface-variant max-w-[160px] truncate">{lead.custom_fields?.interest || "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â"}</td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={(e) => { e.stopPropagation(); setDetailLead(lead); }} className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -489,8 +741,18 @@ export default function LeadsPage() {
                       </p>
                     </div>
                   </div>
-                  <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", scoreClasses(lead.score))}>{lead.score || 0} · {scoreLabel(lead.score)}</span>
+                  <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", scoreClasses(lead.score))}>{lead.score || 0} Ãƒâ€šÃ‚Â· {scoreLabel(lead.score)}</span>
                 </div>
+
+                {/* K4: Tags del lead */}
+                {lead.user_tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {lead.user_tags.slice(0, 4).map((t: any, i: number) => (
+                      <span key={i} className={cn("text-[9px] px-1.5 py-0.5 rounded border", groupBadge(t.color))}>{t.label}</span>
+                    ))}
+                    {lead.user_tags.length > 4 && <span className="text-[9px] text-on-surface-variant px-1.5 py-0.5 rounded border border-white/10">+{lead.user_tags.length - 4}</span>}
+                  </div>
+                )}
 
                 <div className="py-4 border-y border-white/5 mb-4">
                   <div className="text-xs text-on-surface-variant mb-2">Estado del Pipeline</div>
@@ -499,13 +761,13 @@ export default function LeadsPage() {
 
                 {lead.custom_fields?.interest && (
                   <div className="mb-4">
-                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">Interés</p>
+                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃƒÆ’Ã‚Â©s</p>
                     <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">{lead.custom_fields.interest}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between items-center mt-auto">
-                  <div className="text-xs text-on-surface-variant">Último contacto: {formatDate(lead.updated_at || lead.created_at)}</div>
+                  <div className="text-xs text-on-surface-variant">ÃƒÆ’Ã…Â¡ltimo contacto: {formatDate(lead.updated_at || lead.created_at)}</div>
                   <button onClick={(e) => { e.stopPropagation(); setDetailLead(lead); }} className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold transition-colors">
                     Ver Detalle
                   </button>
@@ -516,12 +778,12 @@ export default function LeadsPage() {
         )}
       </main>
 
-      <Dialog open={importOpen} onClose={() => setImportOpen(false)} title="Importar leads (CSV)" description="Formato: name,phone,email por línea, con encabezado.">
+      <Dialog open={importOpen} onClose={() => setImportOpen(false)} title="Importar leads (CSV)" description="Formato: name,phone,email por lÃƒÆ’Ã‚Â­nea, con encabezado.">
         <ImportCsv onDone={() => { setImportOpen(false); load(); }} />
       </Dialog>
 
       <Sheet open={!!detailLead} onClose={() => setDetailLead(null)} className="w-[540px]">
-        {detailLead && <LeadDetail lead={detailLead} onClose={() => setDetailLead(null)} onChanged={load} />}
+        {detailLead && <LeadDetail lead={detailLead} onClose={() => setDetailLead(null)} onChanged={load} config={config} groups={groups} />}
       </Sheet>
     </div>
   );
@@ -544,7 +806,7 @@ function ImportCsv({ onDone }: { onDone: () => void }) {
       toast("success", "Leads importados", `${d.imported} registros`);
       onDone();
     } catch (e: any) {
-      toast("error", "Importación fallida", e.message);
+      toast("error", "ImportaciÃƒÆ’Ã‚Â³n fallida", e.message);
     } finally {
       setUploading(false);
     }

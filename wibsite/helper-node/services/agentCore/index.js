@@ -169,13 +169,39 @@ async function executeCommercialGraph(input) {
     _stage: restored.machineStage,
   };
 
-  const graph = createCommercialGraph(template, clientConfig);
+  // Inject company context: if the lead has a company_id, enrich clientConfig
+  // with the company name and sibling contacts so the agent can reference them
+  const enrichedClientConfig = { ...clientConfig };
+  if (input.lead && input.lead.company_id && input.store) {
+    const store = input.store;
+    const company = (store.companies || []).find(c => c.id === input.lead.company_id);
+    if (company) {
+      const siblings = (store.leads || []).filter(
+        l => l.company_id === input.lead.company_id && l.id !== input.lead.id
+      );
+      enrichedClientConfig.company = {
+        id: company.id,
+        name: company.name,
+        domain: company.domain || null,
+        industry: company.industry || null,
+      };
+      enrichedClientConfig.companyContacts = siblings.map(l => ({
+        id: l.id,
+        name: l.name,
+        phone: l.phone || null,
+        email: l.email || null,
+        status: l.status || null,
+      }));
+    }
+  }
+
+  const graph = createCommercialGraph(template, enrichedClientConfig);
   const { context, final, path } = await graph.execute({
     message: input.message || '',
     conversationId,
     tenantId,
     template,
-    clientConfig,
+    clientConfig: enrichedClientConfig,
     state: startState,
     machineStage: restored.machineStage,
     checkpoint: restored,

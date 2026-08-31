@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const pgStore = require('./pgStore');
 const { logEvent } = require('./auditLogger');
@@ -12,7 +12,7 @@ const PG_SNAPSHOT_TTL = 5000;
 let storeLock = Promise.resolve();
 
 // Snapshot PG (modo pg): lectura unificada desde PostgreSQL con refresco por TTL
-let pgSnapshot = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], channels: [] };
+let pgSnapshot = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], companies: [], channels: [] };
 let pgSnapshotTime = 0;
 let pgSnapshotLoading = null;
 
@@ -22,11 +22,12 @@ async function loadPgSnapshot() {
   if (pgSnapshotLoading) return pgSnapshotLoading;
   pgSnapshotLoading = (async () => {
     try {
-      const [campaigns, leads, scores, optOuts] = await Promise.all([
+      const [campaigns, leads, scores, optOuts, companies] = await Promise.all([
         pgStore.CampaignStore.findAll({ limit: 500 }),
         pgStore.LeadStore.findAll ? pgStore.LeadStore.findAll({ limit: 500 }) : Promise.resolve([]),
         pgStore.ScoreStore.findAll ? pgStore.ScoreStore.findAll({ limit: 500 }) : Promise.resolve([]),
         pgStore.OptOutStore.findAll ? pgStore.OptOutStore.findAll({ limit: 500 }) : Promise.resolve([]),
+        pgStore.CompanyStore && pgStore.CompanyStore.findAll ? pgStore.CompanyStore.findAll({ limit: 500 }) : Promise.resolve([]),
       ]);
       pgSnapshot = {
         campaigns: campaigns || [],
@@ -34,6 +35,7 @@ async function loadPgSnapshot() {
         optOuts: optOuts || [],
         leads: leads || [],
         scores: scores || [],
+        companies: companies || [],
         channels: [],
       };
       pgSnapshotTime = now;
@@ -62,7 +64,7 @@ function loadJsonStore() {
       return storeCache;
     }
   } catch (e) { /* ignore */ }
-  storeCache = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], channels: [] };
+  storeCache = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], companies: [], channels: [] };
   storeCacheTime = now;
   return storeCache;
 }
@@ -98,6 +100,9 @@ async function writeToPg(storeType, operation, data) {
         break;
       case 'optout':
         if (operation === 'create') await pgStore.OptOutStore.create(data);
+        break;
+      case 'company':
+        if (operation === 'create') await pgStore.CompanyStore.create(data);
         break;
     }
   } catch (e) {
@@ -140,7 +145,7 @@ module.exports = {
     if (STORE_MODE !== 'json') await writeToPg('optout', 'create', data);
     if (STORE_MODE !== 'pg') await updateJsonStore(store => store.optOuts.push(data));
   },
-  // Best-effort PG-only writes (el JSON ya fue actualizado por la ruta vía updateStore)
+  // Best-effort PG-only writes (el JSON ya fue actualizado por la ruta vÃ­a updateStore)
   async writeCampaignToPg(data) {
     if (STORE_MODE !== 'json') await writeToPg('campaign', 'create', data);
   },
@@ -152,6 +157,13 @@ module.exports = {
   },
   async writeOptOutToPg(data) {
     if (STORE_MODE !== 'json') await writeToPg('optout', 'create', data);
+  },
+  async writeCompany(data) {
+    if (STORE_MODE !== 'json') await writeToPg('company', 'create', data);
+    if (STORE_MODE !== 'pg') await updateJsonStore(store => store.companies.push(data));
+  },
+  async writeCompanyToPg(data) {
+    if (STORE_MODE !== 'json') await writeToPg('company', 'create', data);
   },
   getStoreMode() { return STORE_MODE; },
   initPgStore(pool) {
