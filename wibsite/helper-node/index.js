@@ -312,6 +312,78 @@ app.post('/api/campaigns/events/run', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// C4: Campañas de reactivación automática (leads tibios sin respuesta en N días)
+// Regla: score >= min_score (default warm=40) y última entrega sin reply en >= days_without_reply
+function resolveReactivationAudience(store, rule = {}) {
+  const minScore = Number(rule.min_score) || 40;
+  const daysWithoutReply = Number(rule.days_without_reply) || 14;
+  const cutoff = Date.now() - daysWithoutReply * 86400000;
+
+  return store.leads.filter(l => {
+    if (l.status === 'opted_out' || l.opt_out) return false;
+    if ((l.score ?? 0) < minScore) return false;
+    const leadDeliveries = store.deliveries.filter(d => d.contact_id === l.id || d.contact_id === l.phone);
+    if (leadDeliveries.length === 0) return false; // sin contacto previo no aplica reactivación
+    const last = leadDeliveries.sort((a, b) => new Date(b.created_at || b.sent_at) - new Date(a.created_at || a.sent_at))[0];
+    if (!last) return false;
+    const lastAt = new Date(last.created_at || last.sent_at).getTime();
+    if (lastAt > cutoff) return false; // respondió/contactado hace poco
+    return !(last.status === 'replied' || last.status === 'read');
+  });
+}
+
+const REACTIVATION_TEMPLATE = 'Hola {{name}}, hace un tiempo hablamos sobre {producto}. ¿Seguís interesado? Tengo una propuesta especial para vos.';
+
+async function runReactivationCampaigns() {
+  const store = getStore();
+  const triggered = [];
+  for (const campaign of store.campaigns || []) {
+    if (campaign.campaign_type !== 'reactivation') continue;
+    if (campaign.status === 'completed' || campaign.status === 'sending') continue;
+    const rule = campaign.reactivation_rule || {};
+    const audience = resolveReactivationAudience(store, rule);
+    if (audience.length === 0) continue;
+    const text = String(campaign.message_template || REACTIVATION_TEMPLATE)
+      .replace(/\{\{name\}\}/g, (m) => { const l = audience.find(x => x.phone === m); return l?.name || ''; })
+      .replace(/\{producto\}/g, rule.product || 'nuestros servicios');
+    const sent = await sendToChannel(campaign.channel, audience[0]?.phone, text, {});
+    triggered.push({ campaign_id: campaign.id, campaign_name: campaign.name, audience: audience.length, sent_ok: sent.ok });
+    await logEvent(sent.ok ? 'campaign_sent' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Reactivación ${campaign.name} → ${audience.length} lead(s) tibios`,
+      tenantId: 'default',
+      module: 'campaigns',
+      flow: 'campaign.reactivation',
+      action: 'campaign.trigger_reactivation',
+      severity: sent.ok ? null : 'medium',
+      data: { campaign_id: campaign.id, audience: audience.length, rule },
+    });
+  }
+  return triggered;
+}
+
+// C4: job cada 24h + endpoint manual
+setInterval(async () => {
+  try { await runReactivationCampaigns(); } catch (e) { console.error('[C4] reactivation job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
+
+app.post('/api/campaigns/reactivation/run', async (req, res) => {
+  try {
+    const triggered = await runReactivationCampaigns();
+    res.json({ ok: true, triggered, total: triggered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C4: preview de audiencia de reactivación (para dry-run/verificación)
+app.post('/api/campaigns/reactivation/audience', async (req, res) => {
+  try {
+    const store = getStore();
+    const { min_score, days_without_reply } = req.body || {};
+    const audience = resolveReactivationAudience(store, { min_score, days_without_reply });
+    res.json({ total: audience.length, leads: audience.slice(0, 20).map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Multi-Tenant Context Middleware (FASE 8) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -332,7 +404,7 @@ function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
 app.post('/api/campaigns', async (req, res) => {
   try {
-    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger } = req.body;
+    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger, campaign_type, reactivation_rule } = req.body;
     const store = getStore();
     if (store.campaigns.some(c => c.name === name)) return res.status(409).json({ error: 'Campaign name already exists' });
     const c = {
@@ -343,6 +415,8 @@ app.post('/api/campaigns', async (req, res) => {
       template_name: template_name || null,
       audience_filter: audience_filter || {},
       event_trigger: event_trigger || null, // C6: { field, offset_days } — triggers por fecha del contacto
+      campaign_type: campaign_type || 'standard', // C4: 'standard' | 'reactivation'
+      reactivation_rule: reactivation_rule || null, // C4: { min_score, days_without_reply }
       status: scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: scheduled_at || null,
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
