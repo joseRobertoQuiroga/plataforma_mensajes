@@ -169,7 +169,7 @@ function detectAffectedDependencies(errorMessage = '', path = '') {
     errorMessage.toLowerCase().includes(' pg ') ||
     errorMessage.includes('relation')
   ) deps.push('postgresql');
-  if (errorMessage.includes('twenty') || path.includes('twenty')) deps.push('twenty-crm');
+  if (errorMessage.includes('twenty') || path.includes('twenty')) deps.push('twenty-crm'); // ADR-010: Twenty fuera de alcance (legacy)
   if (errorMessage.includes('n8n') || path.includes('n8n')) deps.push('n8n');
   if (errorMessage.includes('dify') || errorMessage.includes('llm') || path.includes('llm')) deps.push('dify-llm');
   if (errorMessage.toLowerCase().includes('chatwoot') || path.includes('chatwoot')) deps.push('chatwoot');

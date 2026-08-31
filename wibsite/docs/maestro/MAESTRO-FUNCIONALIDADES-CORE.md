@@ -16,7 +16,7 @@
 | G4 | Leads y scoring | 4 | CTX-04 §6 | TEC-02 §G4 |
 | G5 | IA y agentes (Dify) | 4 | CTX-04 §11 | TEC-02 §G5 |
 | G6 | Automatización (n8n) | 4 | CTX-02 M5 | TEC-02 §G6 |
-| G7 | CRM (Twenty) | 4 | CTX-03 | TEC-02 §G7 |
+| G7 | CRM (Twenty) — **cancelado ADR-010** | 0 | ADR-010 | TEC-02 §G7 (histórico) |
 | G8 | Canales y webhooks | 4 | CTX-04 §10 | TEC-02 §G8 |
 | G9 | Seguridad | 4 | CTX-01 §5.3 | TEC-02 §G9 |
 | G10 | Memoria y contexto | 2 | CTX-07 §3 | TEC-02 §G10 |
@@ -87,14 +87,16 @@
 | RAG-G6-03 | Nurturing automático | Diseño: ROAD 5.1 | schedule 6h + reglas JSON (`nurturing-rules.js`) | Ejecutor de la cadencia de seguimiento (G15-05) | 🔴 | CTX-04 §4 |
 | RAG-G6-04 | Onboarding de clientes | Diseño: CTX-01 §5.3 | workflow "un botón, nuevo cliente" (org + workspace Dify + inbox Chatwoot + plantillas) | Automatización del alta SaaS | 🔴 | CTX01 §5.3 |
 
-## G7 — CRM (Twenty)
+## G7 — CRM (Twenty) — **FUERA DE ALCANCE (ADR-010, 31/08)**
+
+> **Decisión técnica (31/08):** Twenty CRM ya NO se usa en este proyecto. La frontera única es el frontend unificado (`wibsite/frontend/`), y los contenedores restantes operan únicamente como motores de backend. El perfil de lead propio del helper (`leadProfile.js`) es la fuente de verdad del CRM interno. `contact_id` en leads queda como referencia genérica de CRM. Verificado: Twenty ausente de `docker-compose.yml` (18 servicios), sin rutas `/api/twenty/*` en `index.js` (404 en runtime con API key válida). Issue V2 cerrado; issues pospuestos K2/K3 no dependen más de Twenty.
 
 | ID | Funcionalidad | Path | Funciones/Endpoints | Cómo se abarca | Estado | Refs |
 |---|---|---|---|---|---|---|
-| RAG-G7-01 | Sync helper→Twenty | `helper-node/index.js` | `POST /api/twenty/sync` (upsert por phone/email, paginación), `POST /sync-all`, `GET /health` | Person con datos + campos custom; `contact_id` guardado | ✅ | ADR-017 |
-| RAG-G7-02 | Campos custom | Twenty metadata API | 10 campos en `people` (painPoints, interests, leadSource… + prefijo `lead` por namespace global) | Persistencia de señales de calificación | ✅ | ADR-012 |
-| RAG-G7-03 | Bidireccionalidad y eventos | — | Webhook Twenty→helper; sync por evento (`temperature_change`, `handoff`); `Modo_Conversación` | CRM como registro vivo (línea de tiempo única) | 🔴 | CTX-03 §6, OT-06 |
-| RAG-G7-04 | Modelo metodológico | — | Campos SPICED/MEDDIC/`lead_fit_score`/`qualification_stage`; 3 pipelines por `ContactType` | El CRM ordena y califica según metodología de venta | 🔴 | CTX-03 §3-4, OT-06 |
+| RAG-G7-01 | Sync helper→Twenty | `helper-node/index.js` | `POST /api/twenty/sync` (upsert por phone/email, paginación), `POST /sync-all`, `GET /health` | Person con datos + campos custom; `contact_id` guardado | ❌ **Cancelado (ADR-010)** — rutas nunca existieron en el estado actual; no se implementarán | ADR-010 |
+| RAG-G7-02 | Campos custom | Twenty metadata API | 10 campos en `people` (painPoints, interests, leadSource… + prefijo `lead` por namespace global) | Persistencia de señales de calificación | ❌ **Cancelado (ADR-010)** — el perfil de lead en `leadProfile.js` + `custom_fields` es la fuente de verdad | ADR-010 |
+| RAG-G7-03 | Bidireccionalidad y eventos | — | Webhook Twenty→helper; sync por evento (`temperature_change`, `handoff`); `Modo_Conversación` | CRM como registro vivo (línea de tiempo única) | ❌ **Cancelado (ADR-010)** — timeline unificada nativa en `leadProfile.buildTimeline` (K7) | ADR-010 |
+| RAG-G7-04 | Modelo metodológico | — | Campos SPICED/MEDDIC/`lead_fit_score`/`qualification_stage`; 3 pipelines por `ContactType` | El CRM ordena y califica según metodología de venta | 🟡 Sustituido por el pipeline F1 propio (6+2 etapas, `leadStages.js`) + score del helper | ADR-010, CTX-03 |
 
 ## G8 — Canales y webhooks
 

@@ -1,5 +1,11 @@
 # Contexto: Twenty CRM
 
+> **⚠️ CANCELADO (ADR-010, 31/08):** Twenty CRM ya NO se usa en este proyecto por decisión técnica.
+> La frontera única es el frontend unificado (`wibsite/frontend/`); los contenedores restantes son solo motores de backend.
+> Twenty no está en `docker-compose.yml` (18 servicios), no hay rutas `/api/twenty/*` en `helper-node/index.js` (404 en runtime con API key válida).
+> El perfil de lead del helper (`leadProfile.js`) + pipeline F1 (`leadStages.js`) son la fuente de verdad del CRM interno.
+> Este archivo queda como referencia histórica; no se re-implementará nada de lo descrito aquí.
+
 ## Propósito
 Twenty CRM es el sistema de gestión de relaciones con clientes. Almacena leads, contactos, y empresas. Se integra con helper-node para sync de leads y con n8n para workflows de inbound message.
 

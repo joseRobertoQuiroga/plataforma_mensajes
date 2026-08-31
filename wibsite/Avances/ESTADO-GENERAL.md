@@ -72,7 +72,7 @@ Dual-Write PG           Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢�
 | **Chatwoot** | Ã¢Å“â€¦ Servicio OK + bridge Twilio | UI funcional, webhook n8n configurable, push inbound `/api/chatwoot/push` | Configurar inbox WhatsApp nativo (opcional) |
 | **Dify** | Ã¢Å“â€¦ Completo | Workflow clasificador funcional con OpenRouter | Ã¢â‚¬â€ |
 | **n8n** | Ã¢Å“â€¦ Servicio OK, Ã¢Å¡Â Ã¯Â¸Â Config pendiente | Workflows importados, body parser bug conocido | Activar workflows UI, crear credenciales |
-| **Twenty CRM** | Ã¢Å“â€¦ Completo | API key JWT, 10 campos custom, sync funcional | Ã¢â‚¬â€ |
+| **Twenty CRM** | ❌ **CANCELADO (ADR-010, 31/08)** — fuera de alcance por decisión técnica; frontera única = frontend unificado; resto de contenedores = motores de backend | Ã¢â‚¬â€ |
 | **Helper Node** | Ã¢Å“â€¦ Completo | ~108 rutas (~35+ grupos), dashboard SPA, PostgreSQL + JSON fallback | Ã¢â‚¬â€ |
 | **Elasticsearch** | Ã¢Å“â€¦ Operativo | Datastreams traces/metrics/logs con ILM rollover 1d + delete 30d (15/08) | Ã¢â‚¬â€ |
 | **Kibana** | Ã¢Å“â€¦ Operativo | UI observabilidad en :5601 | Ã¢â‚¬â€ |

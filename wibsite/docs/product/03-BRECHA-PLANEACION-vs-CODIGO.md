@@ -35,7 +35,7 @@
 | # | Ítem | Qué falta |
 |---|------|-----------|
 | V1 | Unit tests helper (176/22 suites) | Re-ejecutar `npm test` en el estado actual (commit 8f4141e) |
-| V2 | Endpoints Twenty CRM | Localizar rutas reales en código y probar sync |
+| V2 | Endpoints Twenty CRM | ✅ CERRADO (31/08): **Twenty fuera de alcance (ADR-010)** — no está en compose, sin rutas en index.js, 404 en runtime. No aplica |
 | V3 | Multimodal (STT/visión/TTS) | Probar en runtime con OPENROUTER_STT_MODEL |
 | V4 | Dashboards Kibana (traces+metrics+logs) | Validar visualización de los 3 datastreams |
 | V5 | Load test k6 | Re-ejecutar tras cambios recientes |
