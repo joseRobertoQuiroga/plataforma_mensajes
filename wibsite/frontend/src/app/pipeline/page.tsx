@@ -8,22 +8,32 @@ import { cn, initials, scoreClasses, channelLabel, channelClasses, formatDate } 
 const HELPER_URL = (process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100") === "/api" ? "" : process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100";
 const HELPER_API_KEY = process.env.NEXT_PUBLIC_HELPER_API_KEY || "";
 
-const STAGES = [
-  { id: "primer_contacto", label: "1° Contacto", color: "bg-primary", glow: "shadow-[0_0_12px_rgba(125,211,252,0.4)]" },
-  { id: "primer_mensaje", label: "1° Mensaje", color: "bg-blue-400", glow: "shadow-[0_0_12px_rgba(96,165,250,0.4)]" },
+const COLOR_MAP: Record<string, { color: string; glow: string }> = {
+  primary: { color: "bg-primary", glow: "shadow-[0_0_12px_rgba(125,211,252,0.4)]" },
+  blue: { color: "bg-blue-400", glow: "shadow-[0_0_12px_rgba(96,165,250,0.4)]" },
+  secondary: { color: "bg-secondary", glow: "shadow-[0_0_12px_rgba(136,180,204,0.4)]" },
+  tertiary: { color: "bg-tertiary", glow: "shadow-[0_0_12px_rgba(200,160,240,0.4)]" },
+  warning: { color: "bg-warning", glow: "shadow-[0_0_12px_rgba(245,158,11,0.4)]" },
+  success: { color: "bg-success", glow: "shadow-[0_0_12px_rgba(16,185,129,0.4)]" },
+  error: { color: "bg-error", glow: "shadow-[0_0_12px_rgba(248,113,113,0.4)]" },
+  gray: { color: "bg-gray-500", glow: "shadow-[0_0_12px_rgba(107,114,128,0.4)]" },
+};
+
+const DEFAULT_STAGES = [
+  { id: "primer_contacto", label: "1Â° Contacto", color: "bg-primary", glow: "shadow-[0_0_12px_rgba(125,211,252,0.4)]" },
+  { id: "primer_mensaje", label: "1Â° Mensaje", color: "bg-blue-400", glow: "shadow-[0_0_12px_rgba(96,165,250,0.4)]" },
   { id: "interesado", label: "Interesado", color: "bg-secondary", glow: "shadow-[0_0_12px_rgba(136,180,204,0.4)]" },
-  { id: "cotizacion_pendiente", label: "Cotización Pend.", color: "bg-tertiary", glow: "shadow-[0_0_12px_rgba(200,160,240,0.4)]" },
+  { id: "cotizacion_pendiente", label: "CotizaciÃ³n Pend.", color: "bg-tertiary", glow: "shadow-[0_0_12px_rgba(200,160,240,0.4)]" },
   { id: "posible_comprador", label: "Posible Comprador", color: "bg-warning", glow: "shadow-[0_0_12px_rgba(245,158,11,0.4)]" },
   { id: "comprador", label: "Comprador", color: "bg-success", glow: "shadow-[0_0_12px_rgba(16,185,129,0.4)]" },
   { id: "descartado", label: "Descartado", color: "bg-error", glow: "shadow-[0_0_12px_rgba(248,113,113,0.4)]" },
   { id: "opt_out", label: "Opt-Out", color: "bg-gray-500", glow: "shadow-[0_0_12px_rgba(107,114,128,0.4)]" }
 ];
 
-const stageOf = (status?: string) => {
+const stageOf = (status?: string, stages = DEFAULT_STAGES) => {
   const s = String(status || "primer_contacto").toLowerCase();
-  const valid = STAGES.find(x => x.id === s);
+  const valid = stages.find(x => x.id === s);
   if (valid) return valid.id;
-  
   // Legacy mappings
   if (["nuevo", "new", "pending"].includes(s)) return "primer_contacto";
   if (["calificado", "qualified", "sent", "delivered", "contactado"].includes(s)) return "interesado";
@@ -31,7 +41,7 @@ const stageOf = (status?: string) => {
   if (["propuesta", "proposal", "cotizado"].includes(s)) return "cotizacion_pendiente";
   if (["cerrado", "closed", "won", "ganado"].includes(s)) return "comprador";
   if (["failed", "descartado"].includes(s)) return "descartado";
-  return "primer_contacto";
+  return stages[0]?.id || "primer_contacto";
 };
 
 function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: string) => void }) {
@@ -64,7 +74,7 @@ function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: s
             Mover a etapa
           </div>
           <div className="p-1">
-            {STAGES.map((s) => (
+            {stages.map((s) => (
               <button
                 key={s.id}
                 onClick={(e) => { e.stopPropagation(); setOpen(false); onMove(lead.id, s.id); }}
@@ -87,6 +97,7 @@ function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: s
 export default function PipelinePage() {
   const { toast } = useToast();
   const [leads, setLeads] = useState<any[]>([]);
+  const [stages, setStages] = useState(DEFAULT_STAGES); // D3: configurable
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [detailLead, setDetailLead] = useState<any>(null);
@@ -97,7 +108,7 @@ export default function PipelinePage() {
   const [newLead, setNewLead] = useState({ name: "", phone: "", email: "" });
   const [duplicateSuggestions, setDuplicateSuggestions] = useState<any[]>([]);
 
-  // DetecciÃ³n de duplicados en vivo (K13)
+  // DetecciÃƒÂ³n de duplicados en vivo (K13)
   useEffect(() => {
     const q = newLead.phone.trim() || newLead.name.trim();
     if (q.length < 4) {
@@ -116,14 +127,14 @@ export default function PipelinePage() {
           setDuplicateSuggestions(items.slice(0, 3));
         }
       } catch (e) {
-        // Ignorar errores de red en la bÃºsqueda interactiva
+        // Ignorar errores de red en la bÃƒÂºsqueda interactiva
       }
     }, 400); // debounce
     return () => clearTimeout(timer);
   }, [newLead.phone, newLead.name]);
 
   const createLead = async () => {
-    if (!newLead.name.trim() && !newLead.phone.trim()) return toast("error", "Nombre o telÃ©fono requeridos");
+    if (!newLead.name.trim() && !newLead.phone.trim()) return toast("error", "Nombre o telÃƒÂ©fono requeridos");
     setCreating(true);
     try {
       const res = await fetch(`${HELPER_URL}/api/leads`, {
@@ -158,6 +169,24 @@ export default function PipelinePage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // D3: Cargar configuraciÃ³n de pipeline (etapas por tenant)
+  useEffect(() => {
+    fetch(`${HELPER_URL}/api/pipeline/config`, { headers: { "x-api-key": HELPER_API_KEY } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.stages?.length) {
+          const mapped = data.stages.map((s: any) => ({
+            id: s.id,
+            label: s.label,
+            color: COLOR_MAP[s.color]?.color || "bg-primary",
+            glow: COLOR_MAP[s.color]?.glow || "shadow-[0_0_12px_rgba(125,211,252,0.4)]",
+          }));
+          setStages(mapped);
+        }
+      })
+      .catch(() => {}); // fallback to defaults silently
+  }, []);
+
   const moveStage = async (leadId: string, status: string) => {
     try {
       const res = await fetch(`${HELPER_URL}/api/leads/${leadId}`, {
@@ -173,7 +202,7 @@ export default function PipelinePage() {
     }
   };
 
-const grouped = STAGES.map((stage) => {
+const grouped = stages.map((stage) => {
   const items = leads
     .filter((l) => stageOf(l.status) === stage.id)
       .filter((l) => {
@@ -206,7 +235,7 @@ const grouped = STAGES.map((stage) => {
       <main className="flex-1 px-2 sm:px-8 py-4 sm:py-6 overflow-x-auto overflow-y-auto z-10">
         {error && (
           <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 mb-6 text-sm text-danger">
-            No se pudo conectar con el backend. Verifica que el Helper Node estÃ© activo.
+            No se pudo conectar con el backend. Verifica que el Helper Node estÃƒÂ© activo.
           </div>
         )}
         {loading && leads.length === 0 ? (
@@ -236,7 +265,7 @@ const grouped = STAGES.map((stage) => {
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[120px]">
                   {stage.items.length === 0 ? (
                     <div className="border-2 border-dashed border-outline-variant rounded-xl p-6 text-center">
-                      <p className="text-xs text-on-surface-variant">Suelta leads aquÃ­</p>
+                      <p className="text-xs text-on-surface-variant">Suelta leads aquÃƒÂ­</p>
                     </div>
                   ) : stage.items.map((lead: any) => (
                     <div
@@ -275,7 +304,7 @@ const grouped = STAGES.map((stage) => {
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-on-surface-variant">{formatDate(lead.updated_at || lead.created_at)}</span>
-                          {/* MenÃº tÃ¡ctil para mover de etapa (mÃ³vil/tablet â€” el drag&drop no es tÃ¡ctil) */}
+                          {/* MenÃƒÂº tÃƒÂ¡ctil para mover de etapa (mÃƒÂ³vil/tablet Ã¢â‚¬â€ el drag&drop no es tÃƒÂ¡ctil) */}
                           <StageMenu lead={lead} onMove={moveStage} />
                         </div>
                       </div>
@@ -288,7 +317,7 @@ const grouped = STAGES.map((stage) => {
         )}
       </main>
 
-      {/* FAB mÃ³vil: nuevo lead */}
+      {/* FAB mÃƒÂ³vil: nuevo lead */}
       <button
         onClick={() => setCreateOpen(true)}
         className="lg:hidden fixed bottom-20 right-4 z-40 p-4 rounded-full bg-success/90 text-white shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:bg-success transition-all active:scale-95"
@@ -300,17 +329,17 @@ const grouped = STAGES.map((stage) => {
         </svg>
       </button>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nuevo lead" description="Agrega un lead rÃ¡pido al pipeline (etapa: Nuevos).">
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nuevo lead" description="Agrega un lead rÃƒÂ¡pido al pipeline (etapa: Nuevos).">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-on-surface-variant">Nombre *</label>
             <input value={newLead.name} onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
-              placeholder="Ej: Juan PÃ©rez"
+              placeholder="Ej: Juan PÃƒÂ©rez"
               className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-on-surface-variant">TelÃ©fono</label>
+              <label className="text-xs font-medium text-on-surface-variant">TelÃƒÂ©fono</label>
               <input value={newLead.phone} onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
                 placeholder="+5215510000000"
                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
@@ -372,7 +401,7 @@ const grouped = STAGES.map((stage) => {
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="flex flex-wrap gap-1.5">
-                {STAGES.map((s) => (
+                {stages.map((s) => (
                   <button key={s.id} onClick={() => moveStage(detailLead.id, s.id)}
                     className={cn("px-3 py-1 text-[11px] rounded-full border transition-colors capitalize",
                       String(detailLead.status || "nuevo") === s.id ? "bg-success/15 text-success border-success/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>
@@ -392,7 +421,7 @@ const grouped = STAGES.map((stage) => {
               </div>
               {detailLead.custom_fields?.interest && (
                 <div className="bg-surface-container/50 rounded-xl p-3 border border-white/5">
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃ©s</p>
+                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃƒÂ©s</p>
                   <p className="text-sm text-white">{detailLead.custom_fields.interest}</p>
                 </div>
               )}
@@ -403,7 +432,7 @@ const grouped = STAGES.map((stage) => {
                 </div>
               )}
               <p className="text-xs text-on-surface-variant">Creado: {formatDate(detailLead.created_at)}</p>
-              <a href="/leads" className="text-xs text-primary hover:text-white transition-colors">Abrir gestiÃ³n completa de leads â†’</a>
+              <a href="/leads" className="text-xs text-primary hover:text-white transition-colors">Abrir gestiÃƒÂ³n completa de leads Ã¢â€ â€™</a>
             </div>
           </div>
         )}

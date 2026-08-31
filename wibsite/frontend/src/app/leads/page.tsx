@@ -288,6 +288,45 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           </div>
         )}
 
+        {/* K5: Campañas donde participó el lead */}
+        {p.campaigns && p.campaigns.length > 0 && (
+          <div>
+            <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Campañas ({p.campaigns.length})</p>
+            <div className="space-y-1.5">
+              {p.campaigns.map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between bg-surface-container/40 rounded-lg px-3 py-2 border border-white/5">
+                  <div>
+                    <p className="text-xs font-medium text-white">{c.name}</p>
+                    <p className="text-[10px] text-on-surface-variant">{c.channel} · {c.status}</p>
+                  </div>
+                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", channelClasses(c.channel))}>{channelLabel(c.channel)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* K7: Timeline unificada */}
+        {p.timeline && p.timeline.length > 0 && (
+          <div>
+            <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Timeline ({p.timeline.length})</p>
+            <div className="relative pl-5 border-l border-white/10 space-y-3">
+              {p.timeline.slice(0, 12).map((ev: any, i: number) => (
+                <div key={i} className="relative">
+                  <span className={cn("absolute -left-[21px] w-3 h-3 rounded-full border-2 border-surface top-0.5",
+                    ev.type === 'message' ? 'bg-primary' :
+                    ev.type === 'score' ? 'bg-warning' :
+                    ev.type === 'note' ? 'bg-secondary' : 'bg-success'
+                  )} />
+                  <p className="text-xs text-white font-medium leading-tight">{ev.label}</p>
+                  {ev.detail && <p className="text-[10px] text-on-surface-variant italic mt-0.5 line-clamp-1">{ev.detail}</p>}
+                  <p className="text-[10px] text-on-surface-variant/60 mt-0.5">{formatDate(ev.at)}{ev.by ? ` · ${ev.by}` : ''}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Chat en miniatura */}
         <div>
           <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Chat del lead ({conversations.length})</p>

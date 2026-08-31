@@ -5,6 +5,14 @@ function buildLeadProfile(leadId, store) {
   const deliveries = store.deliveries.filter(d => d.contact_id === leadId || d.contact_id === lead.phone);
   const scores = store.scores.filter(s => s.lead_id === leadId);
   const campaign = lead.campaign_id ? store.campaigns.find(c => c.id === lead.campaign_id) : null;
+  
+  // K5: Todas las campañas donde participó (no solo la principal)
+  const allCampaigns = store.campaigns ? store.campaigns.filter(c => {
+    if (c.id === lead.campaign_id) return true;
+    const hasDelivery = deliveries.some(d => d.campaign_id === c.id);
+    return hasDelivery;
+  }).map(c => ({ id: c.id, name: c.name, channel: c.channel, status: c.status, created_at: c.created_at })) : [];
+
   const lastDelivery = deliveries.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
   const lastScore = scores.sort((a, b) => new Date(b.classified_at) - new Date(a.classified_at))[0];
 
@@ -32,6 +40,9 @@ function buildLeadProfile(leadId, store) {
   const engagementScore = lead.score_data?.engagement || 0;
   const recencyScore = lead.score_data?.recency || 0;
 
+  // K7: Timeline unificada — mensajes + cambios de etapa + scores + notas
+  const timeline = buildTimeline(lead, deliveries, scores);
+
   return {
     id: lead.id,
     name: lead.name,
@@ -40,8 +51,11 @@ function buildLeadProfile(leadId, store) {
     source: lead.source,
     status: lead.status,
     score: lead.score,
+    is_favorite: !!lead.is_favorite, // K6
+    company_id: lead.company_id || null,
     scoreCategory: lastScore?.category || (lead.score >= 70 ? 'hot' : lead.score >= 40 ? 'warm' : 'cold'),
     campaign: campaign ? { id: campaign.id, name: campaign.name, channel: campaign.channel } : null,
+    campaigns: allCampaigns, // K5
     customFields: lead.custom_fields,
     scoreData: lead.score_data,
     deliveryStats,
@@ -53,6 +67,7 @@ function buildLeadProfile(leadId, store) {
     tags: buildTags(lead, deliveryStats, engagementScore, recencyScore),
     nextAction: suggestNextAction(lead, deliveryStats, engagementScore, recencyScore),
     notes: lead.notes || [],
+    timeline, // K7
   };
 }
 
@@ -89,4 +104,59 @@ function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore) {
   return { action: 'monitor', reason: 'Esperar interacción del lead' };
 }
 
-module.exports = { buildLeadProfile, buildTags, suggestNextAction };
+// K7: Timeline unificada por contacto
+function buildTimeline(lead, deliveries, scores) {
+  const events = [];
+
+  // Mensajes/entregas
+  for (const d of deliveries) {
+    events.push({
+      type: 'message',
+      at: d.created_at || d.sent_at,
+      label: `Mensaje ${d.status}`,
+      detail: d.status,
+      channel: d.channel || 'whatsapp',
+      icon: 'message',
+    });
+  }
+
+  // Cambios de puntuación
+  for (const s of scores) {
+    events.push({
+      type: 'score',
+      at: s.classified_at,
+      label: `Score: ${s.score} (${s.category || '—'})`,
+      detail: s.llm_reasoning || null,
+      icon: 'score',
+    });
+  }
+
+  // Notas del lead
+  if (Array.isArray(lead.notes)) {
+    for (const n of lead.notes) {
+      const noteAt = typeof n === 'string' ? lead.updated_at : n.at;
+      const noteText = typeof n === 'string' ? n : n.text;
+      events.push({
+        type: 'note',
+        at: noteAt,
+        label: `Nota: ${String(noteText).slice(0, 60)}${noteText?.length > 60 ? '...' : ''}`,
+        detail: typeof n === 'string' ? n : n.text,
+        by: typeof n === 'object' ? n.by : 'operador',
+        icon: 'note',
+      });
+    }
+  }
+
+  // Creación del lead
+  events.push({
+    type: 'created',
+    at: lead.created_at,
+    label: `Lead creado (${lead.source || 'manual'})`,
+    icon: 'created',
+  });
+
+  // Ordenar cronológicamente descendente (más reciente primero)
+  return events.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+}
+
+module.exports = { buildLeadProfile, buildTags, suggestNextAction, buildTimeline };

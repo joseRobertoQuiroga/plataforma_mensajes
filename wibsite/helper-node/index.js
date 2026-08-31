@@ -1539,6 +1539,35 @@ app.post('/api/leads/deduplicate', async (req, res) => {
     res.json(result);
   } catch(e) {
     res.status(500).json({ error: e.message });
+
+// D3: Pipeline configurable por tenant
+const DEFAULT_PIPELINE_STAGES = [
+  { id: 'primer_contacto', label: '1° Contacto', color: 'primary' },
+  { id: 'primer_mensaje', label: '1° Mensaje', color: 'blue' },
+  { id: 'interesado', label: 'Interesado', color: 'secondary' },
+  { id: 'cotizacion_pendiente', label: 'Cotización Pend.', color: 'tertiary' },
+  { id: 'posible_comprador', label: 'Posible Comprador', color: 'warning' },
+  { id: 'comprador', label: 'Comprador', color: 'success' },
+  { id: 'descartado', label: 'Descartado', color: 'error' },
+  { id: 'opt_out', label: 'Opt-Out', color: 'gray' }
+];
+
+// In-memory per-tenant pipeline config store (MVP: replaced by PG later)
+const pipelineConfigs = {};
+
+app.get('/api/pipeline/config', (req, res) => {
+  const tenantId = req.tenantId || 'default';
+  res.json({ stages: pipelineConfigs[tenantId] || DEFAULT_PIPELINE_STAGES });
+});
+
+app.put('/api/pipeline/config', (req, res) => {
+  const tenantId = req.tenantId || 'default';
+  const { stages } = req.body;
+  if (!Array.isArray(stages) || stages.length === 0) return res.status(400).json({ error: 'stages[] required' });
+  pipelineConfigs[tenantId] = stages;
+  res.json({ ok: true, stages });
+});
+
   }
 });
 app.get('/api/leads/search', async (req, res) => {
