@@ -404,7 +404,7 @@ function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
 app.post('/api/campaigns', async (req, res) => {
   try {
-    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger, campaign_type, reactivation_rule } = req.body;
+    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger, campaign_type, reactivation_rule, variants } = req.body;
     const store = getStore();
     if (store.campaigns.some(c => c.name === name)) return res.status(409).json({ error: 'Campaign name already exists' });
     const c = {
@@ -417,6 +417,7 @@ app.post('/api/campaigns', async (req, res) => {
       event_trigger: event_trigger || null, // C6: { field, offset_days } — triggers por fecha del contacto
       campaign_type: campaign_type || 'standard', // C4: 'standard' | 'reactivation'
       reactivation_rule: reactivation_rule || null, // C4: { min_score, days_without_reply }
+      variants: Array.isArray(variants) && variants.length >= 2 ? variants : null, // C5: [{ name, message_template }]
       status: scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: scheduled_at || null,
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
@@ -1008,6 +1009,46 @@ app.get('/api/campaigns/:id/stats', async (req, res) => {
     if (!campaign) return res.status(404).json({ error: 'Not found' });
     const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id);
     res.json({ campaign, deliveries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C5: reporte A/B — métricas por variante y ganadora
+app.get('/api/campaigns/:id/ab-report', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Not found' });
+    if (!campaign.variants || campaign.variants.length < 2) {
+      return res.status(400).json({ error: 'Campaign sin variantes A/B' });
+    }
+
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id && d.variant);
+    const byVariant = {};
+    for (const d of deliveries) {
+      if (!byVariant[d.variant]) byVariant[d.variant] = { sent: 0, delivered: 0, replied: 0, read: 0, failed: 0, total: 0 };
+      const v = byVariant[d.variant];
+      v.total++;
+      if (['sent', 'delivered', 'read', 'replied'].includes(d.status)) v.sent++;
+      if (['delivered', 'read', 'replied'].includes(d.status)) v.delivered++;
+      if (d.status === 'replied') v.replied++;
+      if (d.status === 'read') v.read++;
+      if (d.status === 'failed') v.failed++;
+    }
+
+    const variants = campaign.variants.map(v => ({
+      name: v.name,
+      message_template: v.message_template,
+      stats: byVariant[v.name] || { sent: 0, delivered: 0, replied: 0, read: 0, failed: 0, total: 0 },
+    }));
+
+    let winner = null;
+    if (variants.length === 2) {
+      const [a, b] = variants;
+      const ar = a.stats.sent > 0 ? a.stats.replied / a.stats.sent : 0;
+      const br = b.stats.sent > 0 ? b.stats.replied / b.stats.sent : 0;
+      if (ar !== br) winner = ar > br ? a.name : b.name;
+    }
+    res.json({ campaign_id: campaign.id, variants, winner });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3542,6 +3583,16 @@ app.get('/api/notifications', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// C5: split determinístico 50/50 de la audiencia para A/B (hash estable por to)
+function pickVariant(to, variants) {
+  if (!variants || variants.length < 2) return null;
+  let h = 0;
+  const s = String(to || '');
+  for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return variants[h % variants.length];
+}
+
 app.post('/api/channels/broadcast', async (req, res) => {
   try {
     const { channel, message_template, audience = {}, subject } = req.body;
@@ -3600,13 +3651,17 @@ app.post('/api/channels/broadcast', async (req, res) => {
       });
     }
 
+    // C5: cada destinatario recibe la variante de su split
     const results = [];
     for (const to of targets) {
-      const text = String(message_template).replace(/\{\{name\}\}/g, (store.leads.find(l => l.phone === to || l.email === to)?.name) || '');
+      // C5: A/B — cada destinatario recibe la variante de su split
+      const variant = pickVariant(to, req.body.variants);
+      const template = variant ? variant.message_template : message_template;
+      const text = String(template).replace(/\{\{name\}\}/g, (store.leads.find(l => l.phone === to || l.email === to)?.name) || '');
       const started = Date.now();
       const sent = await sendToChannel(channel, to, text, { subject: subject || 'Wibsite Business' });
-      results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error });
-      // C8: log de backoff aplicado (reintentos por rate-limit)
+      results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error, variant: variant ? variant.name : null });
+      // C5: log de backoff aplicado (reintentos por rate-limit)
       if (sent.attempts > 1 || sent.backoffAppliedMs > 0) {
         await logEvent('state_transition', {
           level: 'info',
@@ -3631,7 +3686,7 @@ app.post('/api/channels/broadcast', async (req, res) => {
         severity: sent.ok ? null : 'medium',
         dependency: `${channel}-api`,
         latencyMs: Date.now() - started,
-        data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error },
+        data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error, variant: variant ? variant.name : null },
       });
     }
 
@@ -4258,6 +4313,7 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 module.exports = app;
+app.pickVariant = pickVariant; // C5: expuesto para tests unitarios
 app.closeAll = async () => {
   await closeRedis();
   if (pool) { try { await pool.end(); } catch (e) { /* ignore */ } }
