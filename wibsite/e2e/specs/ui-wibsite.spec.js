@@ -146,6 +146,18 @@ test.describe('Wibsite 2.0 — Plantillas y agente IA', () => {
     await page.getByRole('button', { name: 'Productos y FAQs' }).click();
     await expect(page.getByRole('button', { name: '+ Agregar', exact: true }).first()).toBeVisible();
   });
+
+  // R15: Simulador de conversacion expuesto en settings (Issue #53)
+  test('settings: probar agente con grafo muestra ruta de nodos', async ({ page }) => {
+    await login(page);
+    await page.getByRole('link', { name: 'Agente IA', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Probar chat' })).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: 'Probar chat' }).click();
+    await page.getByPlaceholder(/precios y planes/i).fill('Hola, quiero información sobre sus precios');
+    await page.getByRole('button', { name: 'Probar agente (grafo)' }).click();
+    await expect(page.getByText(/Ruta del grafo/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/entry|response/i).first()).toBeVisible();
+  });
 });
 
 test.describe('API — SOAC y endpoints consolidados', () => {
