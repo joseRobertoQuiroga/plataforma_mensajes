@@ -14,7 +14,7 @@
 | **OrquestaciÃƒÂ³n** | Docker Compose (20 servicios) |
 | **Estado General** | 🟢 **Oleada 2 COMPLETADA — K4, K10, K12, L2, L6, C3, O2 cerrados. Listo para Oleada 3** |
 | **Última actualización** | 2026-08-31 (Oleada 2 cerrada: Tags multi-valor, Campos custom, Listas manuales leads, Recalificación automática, Ponderación por rubro, Segmentos dinámicos. Tests 83/83 ✅) |
-| **Helper Node** | v2.3.0 — ~140+ rutas, 83 tests (8 suites unit), Oleada 2 fully live |
+| **Helper Node** | v2.3.0 — **153 rutas** (123 únicas), 83 tests (8 suites unit), Oleada 2 fully live |
 
 ---
 

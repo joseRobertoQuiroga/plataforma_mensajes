@@ -97,7 +97,7 @@ Resumen de estado de las 68 funcionalidades RAG:
 | Ítem | Resolución |
 |---|---|
 | Telegram "sin token" | Código confirma `configured=true` → solo validación real pendiente (P8) |
-| "~120-130 rutas" | **136 rutas** en `index.js` |
+| "~120-130 rutas" | **153 rutas** en `index.js` (123 únicas, 31/08) |
 | TeVS 11/13 → 14/14 | **14 tests** (10/14 CI dev + 4 entorno informativos) — pipeline #58 |
 | Twenty health 404 | Módulo reorganizado → V2 |
 | "Hub central / Dashboard SPA" | **Hub eliminado** (d17b09c); frontend Next.js unificado — docs/índices corregidos 30/08 |
