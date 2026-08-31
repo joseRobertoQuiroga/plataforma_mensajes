@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -1931,6 +1931,96 @@ app.delete('/api/leads/:id/groups/:groupId', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// C3: Segmentos dinamicos como fuente de audiencia
+// segmentRules = [{ field, op, value }]
+// field: score, status, source, campaign_id, is_favorite, custom_fields.*
+const segmentCache = new Map(); // cache { key -> { leads, resolvedAt } }
+const SEGMENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function evaluateSegmentRule(lead, rule) {
+  let val;
+  if (rule.field === 'score') val = lead.score || 0;
+  else if (rule.field === 'status') val = lead.status || '';
+  else if (rule.field === 'source') val = lead.source || '';
+  else if (rule.field === 'campaign_id') val = lead.campaign_id || '';
+  else if (rule.field === 'is_favorite') val = !!lead.is_favorite;
+  else if (rule.field.startsWith('custom_fields.')) val = lead.custom_fields?.[rule.field.split('.')[1]] || '';
+  else return true; // unknown fields pass-through
+
+  switch (rule.op) {
+    case 'eq': return val == rule.value;
+    case 'neq': return val != rule.value;
+    case 'gte': return Number(val) >= Number(rule.value);
+    case 'lte': return Number(val) <= Number(rule.value);
+    case 'gt': return Number(val) > Number(rule.value);
+    case 'lt': return Number(val) < Number(rule.value);
+    case 'contains': return String(val).toLowerCase().includes(String(rule.value).toLowerCase());
+    case 'in': return Array.isArray(rule.value) ? rule.value.includes(val) : String(rule.value).split(',').includes(String(val));
+    default: return true;
+  }
+}
+
+function resolveSegmentAudience(rules, leads) {
+  if (!rules || rules.length === 0) return leads;
+  return leads.filter(lead => rules.every(rule => evaluateSegmentRule(lead, rule)));
+}
+
+// GET /api/segments — list all saved segments
+app.get('/api/segments', (req, res) => {
+  const store = getStore();
+  res.json({ segments: store.segments || [], total: (store.segments || []).length });
+});
+
+// POST /api/segments — create or update segment definition
+app.post('/api/segments', async (req, res) => {
+  try {
+    const { name, description, rules } = req.body;
+    if (!name || !Array.isArray(rules)) return res.status(400).json({ error: 'name and rules[] required' });
+    const seg = {
+      id: crypto.randomUUID(),
+      name,
+      description: description || '',
+      rules,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await updateStore(s => {
+      if (!s.segments) s.segments = [];
+      s.segments.push(seg);
+    });
+    segmentCache.delete(seg.id);
+    res.status(201).json(seg);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/segments/:id/resolve — resolve audience for a segment
+app.get('/api/segments/:id/resolve', (req, res) => {
+  const store = getStore();
+  const seg = (store.segments || []).find(s => s.id === req.params.id);
+  if (!seg) return res.status(404).json({ error: 'Segment not found' });
+
+  const cacheKey = seg.id;
+  const cached = segmentCache.get(cacheKey);
+  if (cached && (Date.now() - cached.resolvedAt) < SEGMENT_CACHE_TTL) {
+    return res.json({ segment_id: seg.id, from_cache: true, leads: cached.leads, total: cached.leads.length });
+  }
+
+  const leads = resolveSegmentAudience(seg.rules, store.leads);
+  const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
+  segmentCache.set(cacheKey, { leads: result, resolvedAt: Date.now() });
+  res.json({ segment_id: seg.id, from_cache: false, leads: result, total: result.length });
+});
+
+// POST /api/segments/resolve — resolve ad-hoc rules without saving (dry-run)
+app.post('/api/segments/resolve', (req, res) => {
+  const store = getStore();
+  const { rules } = req.body;
+  if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules[] required' });
+  const leads = resolveSegmentAudience(rules, store.leads);
+  const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
+  res.json({ leads: result, total: result.length });
 });
 
 app.post('/api/chat-groups', async (req, res) => {
