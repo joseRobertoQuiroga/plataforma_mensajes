@@ -32,6 +32,7 @@ const {
   initConvArchivePool, runArchiveJob, getArchivedByPhone, getArchivedByLeadId,
 } = require('./services/conversationStore');
 const chatGroups = require('./services/chatGroups');
+const { runScheduledScoreDecay } = require('./services/scoreDecay');
 const { runScheduledDeduplication } = require('./services/deduplicator');
 const { executeTestGraph, executeCommercialGraph } = require('./services/agentCore');
 const checkpointer = require('./services/agentCore/checkpointer');
@@ -246,6 +247,11 @@ if (pool) {
 const DEDUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 setInterval(async () => {
   try { await runScheduledDeduplication(); } catch (e) { console.error('[Dedup] job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
+
+// L5: Score Decay (cada 24h)
+setInterval(async () => {
+  try { await runScheduledScoreDecay(); } catch (e) { console.error('[Decay] job error:', e.message); }
 }, DEDUP_INTERVAL_MS).unref();
 
 
