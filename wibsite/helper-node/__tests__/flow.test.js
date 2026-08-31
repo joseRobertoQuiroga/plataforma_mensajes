@@ -440,4 +440,47 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     const l2 = res.body.leads.find(l => l.lead_id === 'C10-l2');
     expect(l2.advanced_stage).toBe(false);
   });
+
+  // C12: validación de plantillas por canal (HSM vs sesión)
+  test('C12: plantilla HSM marcada rechaza envío directo fuera de sesión (simulado)', async () => {
+    const resTpl = await request(app)
+      .post('/api/templates')
+      .set('x-api-key', API_KEY)
+      .send({
+        name: 'C12-hsm-whatsapp',
+        channel: 'whatsapp',
+        body: 'Hola {{name}}, oferta de la semana',
+        requires_approval: true,
+      });
+    expect(resTpl.status).toBe(201);
+    const tplId = resTpl.body.id;
+
+    // Validación por canal: WhatsApp + HSM sin aprobación → inválido
+    const resVal = await request(app)
+      .get(`/api/templates/validate/${tplId}?channel=whatsapp`)
+      .set('x-api-key', API_KEY);
+    expect(resVal.status).toBe(200);
+    expect(resVal.body.valid).toBe(false);
+    expect(resVal.body.requires_approval).toBe(true);
+
+    // Broadcast con template_id HSM en WhatsApp → rechazado (400)
+    const resBroadcast = await request(app)
+      .post('/api/channels/broadcast')
+      .set('x-api-key', API_KEY)
+      .send({
+        channel: 'whatsapp',
+        message_template: 'Hola {{name}}',
+        template_id: tplId,
+        audience: { phones: ['+591C12000001'] },
+      });
+    expect(resBroadcast.status).toBe(400);
+    expect(resBroadcast.body.error).toBe('template_not_valid_for_channel');
+
+    // Mismo template en Telegram (sesión libre) → válido
+    const resTg = await request(app)
+      .get(`/api/templates/validate/${tplId}?channel=telegram`)
+      .set('x-api-key', API_KEY);
+    expect(resTg.status).toBe(200);
+    expect(resTg.body.valid).toBe(true);
+  });
 });
