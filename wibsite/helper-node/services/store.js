@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 const pgStore = require('./pgStore');
 const { logEvent } = require('./auditLogger');
@@ -145,7 +145,7 @@ module.exports = {
     if (STORE_MODE !== 'json') await writeToPg('optout', 'create', data);
     if (STORE_MODE !== 'pg') await updateJsonStore(store => store.optOuts.push(data));
   },
-  // Best-effort PG-only writes (el JSON ya fue actualizado por la ruta vía updateStore)
+  // Best-effort PG-only writes (el JSON ya fue actualizado por la ruta vÃ­a updateStore)
   async writeCampaignToPg(data) {
     if (STORE_MODE !== 'json') await writeToPg('campaign', 'create', data);
   },

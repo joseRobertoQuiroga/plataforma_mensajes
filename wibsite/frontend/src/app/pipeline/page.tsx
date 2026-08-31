@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Dialog } from "@/components/ui/dialog";
@@ -9,21 +9,29 @@ const HELPER_URL = (process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100
 const HELPER_API_KEY = process.env.NEXT_PUBLIC_HELPER_API_KEY || "";
 
 const STAGES = [
-  { id: "nuevo", label: "Nuevos", color: "bg-primary", glow: "shadow-[0_0_12px_rgba(125,211,252,0.4)]" },
-  { id: "calificado", label: "Calificados", color: "bg-secondary", glow: "shadow-[0_0_12px_rgba(136,180,204,0.4)]" },
-  { id: "oportunidad", label: "Oportunidades", color: "bg-warning", glow: "shadow-[0_0_12px_rgba(245,158,11,0.4)]" },
-  { id: "propuesta", label: "Propuestas", color: "bg-tertiary", glow: "shadow-[0_0_12px_rgba(200,160,240,0.4)]" },
-  { id: "cerrado", label: "Cerrados", color: "bg-success", glow: "shadow-[0_0_12px_rgba(16,185,129,0.4)]" },
+  { id: "primer_contacto", label: "1° Contacto", color: "bg-primary", glow: "shadow-[0_0_12px_rgba(125,211,252,0.4)]" },
+  { id: "primer_mensaje", label: "1° Mensaje", color: "bg-blue-400", glow: "shadow-[0_0_12px_rgba(96,165,250,0.4)]" },
+  { id: "interesado", label: "Interesado", color: "bg-secondary", glow: "shadow-[0_0_12px_rgba(136,180,204,0.4)]" },
+  { id: "cotizacion_pendiente", label: "Cotización Pend.", color: "bg-tertiary", glow: "shadow-[0_0_12px_rgba(200,160,240,0.4)]" },
+  { id: "posible_comprador", label: "Posible Comprador", color: "bg-warning", glow: "shadow-[0_0_12px_rgba(245,158,11,0.4)]" },
+  { id: "comprador", label: "Comprador", color: "bg-success", glow: "shadow-[0_0_12px_rgba(16,185,129,0.4)]" },
+  { id: "descartado", label: "Descartado", color: "bg-error", glow: "shadow-[0_0_12px_rgba(248,113,113,0.4)]" },
+  { id: "opt_out", label: "Opt-Out", color: "bg-gray-500", glow: "shadow-[0_0_12px_rgba(107,114,128,0.4)]" }
 ];
 
 const stageOf = (status?: string) => {
-  const s = String(status || "nuevo").toLowerCase();
-  if (["nuevo", "new", "pending", "failed"].includes(s)) return "nuevo";
-  if (["calificado", "qualified", "sent", "delivered", "contactado"].includes(s)) return "calificado";
-  if (["oportunidad", "opportunity", "replied", "responded", "interesado"].includes(s)) return "oportunidad";
-  if (["propuesta", "proposal", "cotizado"].includes(s)) return "propuesta";
-  if (["cerrado", "closed", "won", "ganado"].includes(s)) return "cerrado";
-  return "nuevo";
+  const s = String(status || "primer_contacto").toLowerCase();
+  const valid = STAGES.find(x => x.id === s);
+  if (valid) return valid.id;
+  
+  // Legacy mappings
+  if (["nuevo", "new", "pending"].includes(s)) return "primer_contacto";
+  if (["calificado", "qualified", "sent", "delivered", "contactado"].includes(s)) return "interesado";
+  if (["oportunidad", "opportunity", "replied", "responded"].includes(s)) return "posible_comprador";
+  if (["propuesta", "proposal", "cotizado"].includes(s)) return "cotizacion_pendiente";
+  if (["cerrado", "closed", "won", "ganado"].includes(s)) return "comprador";
+  if (["failed", "descartado"].includes(s)) return "descartado";
+  return "primer_contacto";
 };
 
 function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: string) => void }) {
@@ -89,7 +97,7 @@ export default function PipelinePage() {
   const [newLead, setNewLead] = useState({ name: "", phone: "", email: "" });
   const [duplicateSuggestions, setDuplicateSuggestions] = useState<any[]>([]);
 
-  // Detección de duplicados en vivo (K13)
+  // DetecciÃ³n de duplicados en vivo (K13)
   useEffect(() => {
     const q = newLead.phone.trim() || newLead.name.trim();
     if (q.length < 4) {
@@ -108,14 +116,14 @@ export default function PipelinePage() {
           setDuplicateSuggestions(items.slice(0, 3));
         }
       } catch (e) {
-        // Ignorar errores de red en la búsqueda interactiva
+        // Ignorar errores de red en la bÃºsqueda interactiva
       }
     }, 400); // debounce
     return () => clearTimeout(timer);
   }, [newLead.phone, newLead.name]);
 
   const createLead = async () => {
-    if (!newLead.name.trim() && !newLead.phone.trim()) return toast("error", "Nombre o teléfono requeridos");
+    if (!newLead.name.trim() && !newLead.phone.trim()) return toast("error", "Nombre o telÃ©fono requeridos");
     setCreating(true);
     try {
       const res = await fetch(`${HELPER_URL}/api/leads`, {
@@ -165,16 +173,6 @@ export default function PipelinePage() {
     }
   };
 
-const stageOf = (status?: string) => {
-  const s = String(status || "nuevo").toLowerCase();
-  if (["nuevo", "new", "pending", "nuevo", "failed"].includes(s)) return "nuevo";
-  if (["calificado", "qualified", "sent", "delivered", "contactado"].includes(s)) return "calificado";
-  if (["oportunidad", "opportunity", "replied", "responded", "interesado"].includes(s)) return "oportunidad";
-  if (["propuesta", "proposal", "cotizado"].includes(s)) return "propuesta";
-  if (["cerrado", "closed", "won", "ganado"].includes(s)) return "cerrado";
-  return "nuevo";
-};
-
 const grouped = STAGES.map((stage) => {
   const items = leads
     .filter((l) => stageOf(l.status) === stage.id)
@@ -208,7 +206,7 @@ const grouped = STAGES.map((stage) => {
       <main className="flex-1 px-2 sm:px-8 py-4 sm:py-6 overflow-x-auto overflow-y-auto z-10">
         {error && (
           <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 mb-6 text-sm text-danger">
-            No se pudo conectar con el backend. Verifica que el Helper Node esté activo.
+            No se pudo conectar con el backend. Verifica que el Helper Node estÃ© activo.
           </div>
         )}
         {loading && leads.length === 0 ? (
@@ -238,7 +236,7 @@ const grouped = STAGES.map((stage) => {
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[120px]">
                   {stage.items.length === 0 ? (
                     <div className="border-2 border-dashed border-outline-variant rounded-xl p-6 text-center">
-                      <p className="text-xs text-on-surface-variant">Suelta leads aquí</p>
+                      <p className="text-xs text-on-surface-variant">Suelta leads aquÃ­</p>
                     </div>
                   ) : stage.items.map((lead: any) => (
                     <div
@@ -277,7 +275,7 @@ const grouped = STAGES.map((stage) => {
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-on-surface-variant">{formatDate(lead.updated_at || lead.created_at)}</span>
-                          {/* Menú táctil para mover de etapa (móvil/tablet — el drag&drop no es táctil) */}
+                          {/* MenÃº tÃ¡ctil para mover de etapa (mÃ³vil/tablet â€” el drag&drop no es tÃ¡ctil) */}
                           <StageMenu lead={lead} onMove={moveStage} />
                         </div>
                       </div>
@@ -290,7 +288,7 @@ const grouped = STAGES.map((stage) => {
         )}
       </main>
 
-      {/* FAB móvil: nuevo lead */}
+      {/* FAB mÃ³vil: nuevo lead */}
       <button
         onClick={() => setCreateOpen(true)}
         className="lg:hidden fixed bottom-20 right-4 z-40 p-4 rounded-full bg-success/90 text-white shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:bg-success transition-all active:scale-95"
@@ -302,17 +300,17 @@ const grouped = STAGES.map((stage) => {
         </svg>
       </button>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nuevo lead" description="Agrega un lead rápido al pipeline (etapa: Nuevos).">
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="Nuevo lead" description="Agrega un lead rÃ¡pido al pipeline (etapa: Nuevos).">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-on-surface-variant">Nombre *</label>
             <input value={newLead.name} onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
-              placeholder="Ej: Juan Pérez"
+              placeholder="Ej: Juan PÃ©rez"
               className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-on-surface-variant">Teléfono</label>
+              <label className="text-xs font-medium text-on-surface-variant">TelÃ©fono</label>
               <input value={newLead.phone} onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
                 placeholder="+5215510000000"
                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary mt-1.5" />
@@ -394,7 +392,7 @@ const grouped = STAGES.map((stage) => {
               </div>
               {detailLead.custom_fields?.interest && (
                 <div className="bg-surface-container/50 rounded-xl p-3 border border-white/5">
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">Interés</p>
+                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃ©s</p>
                   <p className="text-sm text-white">{detailLead.custom_fields.interest}</p>
                 </div>
               )}
@@ -405,7 +403,7 @@ const grouped = STAGES.map((stage) => {
                 </div>
               )}
               <p className="text-xs text-on-surface-variant">Creado: {formatDate(detailLead.created_at)}</p>
-              <a href="/leads" className="text-xs text-primary hover:text-white transition-colors">Abrir gestión completa de leads →</a>
+              <a href="/leads" className="text-xs text-primary hover:text-white transition-colors">Abrir gestiÃ³n completa de leads â†’</a>
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useCallback } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Dialog } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { cn, formatDate, channelLabel, channelClasses, scoreClasses, scoreLabel,
 const HELPER_URL = (process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100") === "/api" ? "" : process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100";
 const HELPER_API_KEY = process.env.NEXT_PUBLIC_HELPER_API_KEY || "";
 
-const PIPELINE_STAGES = ["nuevo", "calificado", "oportunidad", "propuesta", "cerrado", "opt_out"];
+const PIPELINE_STAGES = ["primer_contacto", "primer_mensaje", "interesado", "cotizacion_pendiente", "posible_comprador", "comprador", "descartado", "opt_out"];
 
 function StatusProgress({ status }: { status: string }) {
   const idx = PIPELINE_STAGES.indexOf(status?.toLowerCase() || "nuevo");
@@ -19,7 +19,7 @@ function StatusProgress({ status }: { status: string }) {
           <div key={step} className={cn("w-6 h-1.5 rounded-full transition-colors", i <= (idx < 0 ? 0 : idx) ? "bg-primary shadow-[0_0_5px_rgba(125,211,252,0.5)]" : "bg-surface-container-high")} />
         ))}
       </div>
-      <span className="text-xs text-on-surface-variant ml-1 capitalize">{status || "nuevo"}</span>
+      <span className="text-xs text-on-surface-variant ml-1 capitalize">{status || "primer_contacto"}</span>
     </div>
   );
 }
@@ -116,13 +116,13 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               <h3 className="text-lg font-bold text-white truncate">{p.name || "Sin nombre"}</h3>
               <p className="text-xs text-on-surface-variant truncate">{p.phone || p.email || "Sin contacto"}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} · {scoreLabel(p.score)}</span>
+                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} Â· {scoreLabel(p.score)}</span>
                 <span className={cn("text-[11px] px-2 py-0.5 rounded-full border", channelClasses(p.source || "web"))}>{channelLabel(p.source)}</span>
               </div>
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
-            <button onClick={() => { setEditing({ name: p.name || "", phone: p.phone || "", email: p.email || "", status: p.status || "nuevo" }); setEditOpen(true); }}
+            <button onClick={() => { setEditing({ name: p.name || "", phone: p.phone || "", email: p.email || "", status: p.status || "primer_contacto" }); setEditOpen(true); }}
               className="p-2 rounded-lg text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" title="Editar contacto">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
             </button>
@@ -136,7 +136,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           {PIPELINE_STAGES.map((st) => (
             <button key={st} onClick={() => changeStage(st)}
               className={cn("px-3 py-1 text-[11px] rounded-full border transition-colors capitalize",
-                String(p.status || "nuevo") === st ? "bg-primary/20 text-primary border-primary/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>
+                String(p.status || "primer_contacto") === st ? "bg-primary/20 text-primary border-primary/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>
               {st === "opt_out" ? "Opt-out" : st}
             </button>
           ))}
@@ -144,21 +144,21 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Próxima acción sugerida */}
+        {/* PrÃ³xima acciÃ³n sugerida */}
         {p.nextAction && (
           <div className="p-3 rounded-lg bg-success/10 border border-success/20">
-            <p className="text-xs text-success uppercase tracking-wide mb-0.5">Siguiente acción</p>
+            <p className="text-xs text-success uppercase tracking-wide mb-0.5">Siguiente acciÃ³n</p>
             <p className="text-sm text-white font-medium capitalize">{p.nextAction.action.replace(/_/g, " ")}</p>
             <p className="text-xs text-on-surface-variant mt-0.5">{p.nextAction.reason}</p>
           </div>
         )}
 
-        {/* Interés / pain points */}
+        {/* InterÃ©s / pain points */}
         {(p.customFields?.interest || p.customFields?.pain_point) && (
           <div className="grid grid-cols-2 gap-3">
             {p.customFields?.interest && (
               <div className="bg-surface-container/50 rounded-xl p-3 border border-white/5">
-                <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">Interés</p>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃ©s</p>
                 <p className="text-sm text-white font-medium">{p.customFields.interest}</p>
               </div>
             )}
@@ -185,18 +185,18 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               {[...p.notes].reverse().map((n: any, i: number) => (
                 <div key={i} className="bg-surface-container/40 rounded-lg px-3 py-2.5 border border-white/5">
                   <p className="text-sm text-white">{n.text}</p>
-                  <p className="text-[10px] text-on-surface-variant mt-1">{formatDate(n.at)} · {n.by || "agente"}</p>
+                  <p className="text-[10px] text-on-surface-variant mt-1">{formatDate(n.at)} Â· {n.by || "agente"}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-on-surface-variant bg-surface-container/30 rounded-lg p-3 text-center">Sin notas todavía.</p>
+            <p className="text-xs text-on-surface-variant bg-surface-container/30 rounded-lg p-3 text-center">Sin notas todavÃ­a.</p>
           )}
         </div>
 
         {/* Entregas */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[["Total", p.deliveryStats?.total ?? 0, "text-white"], ["Leídos", p.deliveryStats?.read ?? 0, "text-primary"], ["Respuestas", p.deliveryStats?.replied ?? 0, "text-success"], ["Fallidos", p.deliveryStats?.failed ?? 0, "text-danger"]].map(([l, v, c]) => (
+          {[["Total", p.deliveryStats?.total ?? 0, "text-white"], ["LeÃ­dos", p.deliveryStats?.read ?? 0, "text-primary"], ["Respuestas", p.deliveryStats?.replied ?? 0, "text-success"], ["Fallidos", p.deliveryStats?.failed ?? 0, "text-danger"]].map(([l, v, c]) => (
             <div key={String(l)} className="bg-surface-container rounded-xl p-3 text-center">
               <p className={cn("text-xl font-bold", c)}>{v}</p>
               <p className="text-[11px] text-on-surface-variant">{l}</p>
@@ -212,7 +212,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               {p.scoreHistory.slice(0, 8).map((s: any, i: number) => (
                 <div key={i} className="flex items-center justify-between bg-surface-container/40 rounded-lg px-3 py-2 border border-white/5">
                   <span className="text-xs text-on-surface-variant">{formatDate(s.classifiedAt)}</span>
-                  <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border", scoreClasses(s.score))}>{s.score} · {s.category || "—"}</span>
+                  <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border", scoreClasses(s.score))}>{s.score} Â· {s.category || "â€”"}</span>
                 </div>
               ))}
             </div>
@@ -240,7 +240,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
                   {selectedConv?.id === c.id && (
                     <div className="border-t border-white/5 max-h-64 overflow-y-auto p-3 space-y-2">
                       {messages.length === 0 ? (
-                        <p className="text-xs text-on-surface-variant text-center py-2">Sin mensajes en esta sesión.</p>
+                        <p className="text-xs text-on-surface-variant text-center py-2">Sin mensajes en esta sesiÃ³n.</p>
                       ) : messages.map((m: any, i: number) => {
                         const isAgent = m.role === "assistant" || m.role === "agent" || m.direction === "outbound";
                         return (
@@ -260,7 +260,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
         </div>
       </div>
 
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Editar contacto" description="Actualiza la información del lead.">
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title="Editar contacto" description="Actualiza la informaciÃ³n del lead.">
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-on-surface-variant">Nombre</label>
@@ -269,7 +269,7 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-on-surface-variant">Teléfono</label>
+              <label className="text-xs font-medium text-on-surface-variant">TelÃ©fono</label>
               <input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-primary mt-1.5" />
             </div>
@@ -349,7 +349,7 @@ export default function LeadsPage() {
 
       <header className="px-4 sm:px-8 py-5 sm:py-8 flex justify-between items-end z-10 flex-none gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight mb-2">Gestión de Leads</h2>
+          <h2 className="text-3xl font-bold text-white tracking-tight mb-2">GestiÃ³n de Leads</h2>
           <p className="text-on-surface-variant font-medium">Revisa, prioriza y da seguimiento a tus prospectos con IA.</p>
         </div>
         <div className="flex gap-3">
@@ -358,25 +358,25 @@ export default function LeadsPage() {
           </button>
           <button onClick={scoreAll} disabled={scoring}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-all font-medium text-sm shadow-[0_0_20px_rgba(125,211,252,0.1)] disabled:opacity-50">
-            {scoring ? <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <span>✦</span>} Score All
+            {scoring ? <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <span>âœ¦</span>} Score All
           </button>
         </div>
       </header>
 
       <main className="flex-1 px-3 sm:px-8 pb-20 sm:pb-24 overflow-y-auto z-10">
-        {/* Toolbar: búsqueda + filtros */}
+        {/* Toolbar: bÃºsqueda + filtros */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <div className="relative flex-1 min-w-[240px] max-w-md">
             <svg className="w-4 h-4 absolute left-3 top-2.5 text-on-surface-variant opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono, email, interés..."
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, telÃ©fono, email, interÃ©s..."
               className="w-full bg-surface-container border border-outline-variant rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-on-surface-variant focus:outline-none focus:border-primary" />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-surface-container border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none">
             <option value="all" className="bg-surface-container text-white">Todos los estados</option>
-            {["nuevo", "calificado", "oportunidad", "propuesta", "cerrado", "opt_out"].map((s) => (
+            {PIPELINE_STAGES.map((s) => (
               <option key={s} value={s} className="bg-surface-container text-white capitalize">{s}</option>
             ))}
           </select>
@@ -390,8 +390,8 @@ export default function LeadsPage() {
           <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))}
             className="bg-surface-container border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none">
             <option value={0} className="bg-surface-container text-white">Score: Todos</option>
-            <option value={80} className="bg-surface-container text-white">Score ≥ 80 (Hot)</option>
-            <option value={50} className="bg-surface-container text-white">Score ≥ 50 (Tibio)</option>
+            <option value={80} className="bg-surface-container text-white">Score â‰¥ 80 (Hot)</option>
+            <option value={50} className="bg-surface-container text-white">Score â‰¥ 50 (Tibio)</option>
           </select>
           <div className="flex gap-2 ml-auto">
             <button onClick={() => setViewMode("list")} className={`p-2.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-primary/20 text-primary border border-primary/30" : "bg-surface-container text-on-surface-variant hover:text-white border border-outline-variant"}`} title="Vista lista">
@@ -405,7 +405,7 @@ export default function LeadsPage() {
 
         {error && (
           <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 mb-6 text-sm text-danger">
-            No se pudo conectar con el backend. Verifica que el Helper Node esté activo.
+            No se pudo conectar con el backend. Verifica que el Helper Node estÃ© activo.
           </div>
         )}
 
@@ -434,8 +434,8 @@ export default function LeadsPage() {
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">AI Score</th>
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Canal</th>
                     <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Pipeline</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Interés</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Acción</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">InterÃ©s</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">AcciÃ³n</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-primary/5">
@@ -454,14 +454,14 @@ export default function LeadsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn("px-3 py-1 rounded-md font-semibold text-xs tracking-wide border", scoreClasses(lead.score))}>
-                          {lead.score || 0} · {scoreLabel(lead.score)}
+                          {lead.score || 0} Â· {scoreLabel(lead.score)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-medium", channelClasses(lead.source))}>{channelLabel(lead.source)}</span>
                       </td>
                       <td className="px-6 py-4"><StatusProgress status={lead.status} /></td>
-                      <td className="px-6 py-4 text-xs text-on-surface-variant max-w-[160px] truncate">{lead.custom_fields?.interest || "—"}</td>
+                      <td className="px-6 py-4 text-xs text-on-surface-variant max-w-[160px] truncate">{lead.custom_fields?.interest || "â€”"}</td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={(e) => { e.stopPropagation(); setDetailLead(lead); }} className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -489,7 +489,7 @@ export default function LeadsPage() {
                       </p>
                     </div>
                   </div>
-                  <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", scoreClasses(lead.score))}>{lead.score || 0} · {scoreLabel(lead.score)}</span>
+                  <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", scoreClasses(lead.score))}>{lead.score || 0} Â· {scoreLabel(lead.score)}</span>
                 </div>
 
                 <div className="py-4 border-y border-white/5 mb-4">
@@ -499,13 +499,13 @@ export default function LeadsPage() {
 
                 {lead.custom_fields?.interest && (
                   <div className="mb-4">
-                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">Interés</p>
+                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wide mb-1">InterÃ©s</p>
                     <span className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">{lead.custom_fields.interest}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between items-center mt-auto">
-                  <div className="text-xs text-on-surface-variant">Último contacto: {formatDate(lead.updated_at || lead.created_at)}</div>
+                  <div className="text-xs text-on-surface-variant">Ãšltimo contacto: {formatDate(lead.updated_at || lead.created_at)}</div>
                   <button onClick={(e) => { e.stopPropagation(); setDetailLead(lead); }} className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold transition-colors">
                     Ver Detalle
                   </button>
@@ -516,7 +516,7 @@ export default function LeadsPage() {
         )}
       </main>
 
-      <Dialog open={importOpen} onClose={() => setImportOpen(false)} title="Importar leads (CSV)" description="Formato: name,phone,email por línea, con encabezado.">
+      <Dialog open={importOpen} onClose={() => setImportOpen(false)} title="Importar leads (CSV)" description="Formato: name,phone,email por lÃ­nea, con encabezado.">
         <ImportCsv onDone={() => { setImportOpen(false); load(); }} />
       </Dialog>
 
@@ -544,7 +544,7 @@ function ImportCsv({ onDone }: { onDone: () => void }) {
       toast("success", "Leads importados", `${d.imported} registros`);
       onDone();
     } catch (e: any) {
-      toast("error", "Importación fallida", e.message);
+      toast("error", "ImportaciÃ³n fallida", e.message);
     } finally {
       setUploading(false);
     }

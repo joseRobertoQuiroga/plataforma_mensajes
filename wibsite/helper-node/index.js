@@ -38,7 +38,7 @@ const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
 const { tracingMiddleware } = require('./services/otelBridge');
 
-// â”€â”€â”€ GlitchTip / Sentry Error Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GlitchTip / Sentry Error Tracking Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
 if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
   try {
@@ -66,17 +66,17 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 
-// â”€â”€â”€ Request ID Middleware (FIRST â€” needed for full traceability) â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Request ID Middleware (FIRST Ã¢â‚¬â€ needed for full traceability) Ã¢â€â‚¬
 app.use((req, res, next) => {
   req.id = req.headers['x-request-id'] || crypto.randomUUID();
   res.setHeader('x-request-id', req.id);
   next();
 });
 
-// â”€â”€â”€ OpenTelemetry tracing (span raÃ­z por request, traza E2E en Elastic) â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ OpenTelemetry tracing (span raÃƒÂ­z por request, traza E2E en Elastic) Ã¢â€â‚¬
 app.use(tracingMiddleware);
 
-// â”€â”€â”€ Security Middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Security Middleware Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.use(authMiddleware);
 app.use(rateLimiter);
 app.use(sanitizerMiddleware);
@@ -87,11 +87,11 @@ app.use(errorTrackerMiddleware()); // auto-tracks 500 errors with full context
 app.use('/webhooks', verifyMetaWebhookSignature);
 app.use(verifyTwilioWebhookSignature);
 
-// â”€â”€â”€ Multi-Tenant Context (se inicializa despuÃ©s del pool PG) â”€â”€â”€â”€
-// La funciÃ³n initTenantMiddleware() se llama en el bloque de DB init
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Multi-Tenant Context (se inicializa despuÃƒÂ©s del pool PG) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// La funciÃƒÂ³n initTenantMiddleware() se llama en el bloque de DB init
 let tenantContextMiddleware = (req, res, next) => next(); // placeholder until DB ready
 
-// â”€â”€â”€ Metrics endpoint (prom-client) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Metrics endpoint (prom-client) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 let metricsMiddleware = null;
 let promCounters = {};
 try {
@@ -153,7 +153,7 @@ try {
 }
 
 
-// â”€â”€â”€ DB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DB Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const { Pool } = require('pg');
 let pool = null;
 try {
@@ -185,12 +185,12 @@ async function query(text, params) {
   }
 }
 
-// â”€â”€â”€ File upload middleware (Excel/CSV) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ File upload middleware (Excel/CSV) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const multer = require('multer');
 const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-// â”€â”€â”€ KB documents: carga de la base de conocimiento en el arranque (RAG R2) â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ KB documents: carga de la base de conocimiento en el arranque (RAG R2) Ã¢â€â‚¬
 function loadKbFromDisk() {
   const kbDir = path.join(__dirname, 'kb-documents');
   try {
@@ -207,7 +207,7 @@ function loadKbFromDisk() {
 }
 loadKbFromDisk();
 
-// â”€â”€â”€ Initialize services after DB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Initialize services after DB Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 initRedis().then(() => console.log('  Conversation store: Redis/In-Memory ready'))  .catch(e => {
     console.warn('  Redis unavailable, using in-memory fallback:', e.message);
     trackFallback('redis', e.message, 'default', null, { module: 'infrastructure' });
@@ -227,13 +227,13 @@ storeFacade.initPgStore(pool);
 initAuditLogger(pool);
 initErrorTracker(pool, promCounters);
 checkpointer.initSummariesPool(pool);
-initConvArchivePool(pool);  // D11: habilita archivado de conversaciones â†’ PG
+initConvArchivePool(pool);  // D11: habilita archivado de conversaciones Ã¢â€ â€™ PG
 console.log(`  Store mode: ${storeFacade.getStoreMode()}`);
 console.log(`  Error tracker: initialized (${pool ? 'PostgreSQL' : 'in-memory fallback'})`);
 console.log(`  Checkpointer (F-14): conversation_summaries ${pool ? 'PostgreSQL' : 'in-memory fallback'}`);
 console.log(`  Conv archiver (D11): ${pool ? 'PostgreSQL' : 'disabled (no pool)'}`);
 
-// D11: archive job â€” corre cada hora para no perder convs por TTL Redis
+// D11: archive job Ã¢â‚¬â€ corre cada hora para no perder convs por TTL Redis
 if (pool) {
   const ARCHIVE_INTERVAL_MS = Number(process.env.CONV_ARCHIVE_INTERVAL_MS) || 3600000; // 1h
   setInterval(async () => {
@@ -250,21 +250,21 @@ setInterval(async () => {
 
 
 
-// â”€â”€â”€ Multi-Tenant Context Middleware (FASE 8) â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Multi-Tenant Context Middleware (FASE 8) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Ahora que tenemos el pool, inicializamos el middleware real
 tenantContextMiddleware = createTenantContextMiddleware(pool);
-// Registrar globalmente: todas las rutas tendrÃ¡n req.tenantId disponible
+// Registrar globalmente: todas las rutas tendrÃƒÂ¡n req.tenantId disponible
 app.use(tenantContextMiddleware);
 console.log('  Tenant context: middleware registered (pool-aware)');
 
-// â”€â”€â”€ JSON File Store (vÃ­a facade unificado services/store.js) â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ JSON File Store (vÃƒÂ­a facade unificado services/store.js) Ã¢â€â‚¬
 // Las funciones locales delegan al facade para evitar caches duplicados
 function getStore() { return storeFacade.getStore(); }
 function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // CAMPAIGNS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/campaigns', async (req, res) => {
   try {
@@ -398,9 +398,9 @@ app.delete('/api/campaigns/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // AGENT CORE - Test Graph
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/agent/test-graph', async (req, res) => {
   try {
@@ -446,7 +446,7 @@ app.post('/api/agent/chat', async (req, res) => {
       };
     }
 
-    // 2. Conocimiento cargado por el usuario (lotes) â†’ contexto del agente
+    // 2. Conocimiento cargado por el usuario (lotes) Ã¢â€ â€™ contexto del agente
     const knowledgeContext = agentKnowledge.buildKnowledgeContext(store);
     if (knowledgeContext) {
       template.industry_knowledge = (template.industry_knowledge || '')
@@ -469,19 +469,19 @@ app.post('/api/agent/chat', async (req, res) => {
       }
     }
 
-    // 3. Multimodal: imagen â†’ descripciÃ³n de visiÃ³n; audio â†’ transcripciÃ³n STT
+    // 3. Multimodal: imagen Ã¢â€ â€™ descripciÃƒÂ³n de visiÃƒÂ³n; audio Ã¢â€ â€™ transcripciÃƒÂ³n STT
     let augmented = String(message || '');
     const conversationIdUsed = conversationId || crypto.randomUUID();
     if (mediaUrl) {
       const description = await mediaProcessor.describeImage({
         url: mediaUrl,
-        prompt: 'Describe esta imagen en detalle para una conversaciÃ³n de ventas: quÃ© contiene, texto legible, contexto comercial.',
+        prompt: 'Describe esta imagen en detalle para una conversaciÃƒÂ³n de ventas: quÃƒÂ© contiene, texto legible, contexto comercial.',
         conversationId: conversationIdUsed,
       }).catch(() => null);
       if (description) {
-        augmented = `[El cliente enviÃ³ una imagen. DescripciÃ³n de visiÃ³n: ${description}]\n${augmented}`;
+        augmented = `[El cliente enviÃƒÂ³ una imagen. DescripciÃƒÂ³n de visiÃƒÂ³n: ${description}]\n${augmented}`;
       } else {
-        augmented = `[El cliente enviÃ³ una imagen (${mediaType || 'adjunto'})]\n${augmented}`;
+        augmented = `[El cliente enviÃƒÂ³ una imagen (${mediaType || 'adjunto'})]\n${augmented}`;
       }
     }
     if (audioBase64) {
@@ -491,9 +491,9 @@ app.post('/api/agent/chat', async (req, res) => {
         conversationId: conversationIdUsed,
       }).catch(() => null);
       if (transcript) {
-        augmented = `[El cliente enviÃ³ un audio. TranscripciÃ³n: ${transcript}]\n${augmented}`;
+        augmented = `[El cliente enviÃƒÂ³ un audio. TranscripciÃƒÂ³n: ${transcript}]\n${augmented}`;
       } else {
-        augmented = `[El cliente enviÃ³ un audio (sin transcripciÃ³n disponible)]\n${augmented}`;
+        augmented = `[El cliente enviÃƒÂ³ un audio (sin transcripciÃƒÂ³n disponible)]\n${augmented}`;
       }
     }
 
@@ -508,9 +508,9 @@ app.post('/api/agent/chat', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // TEMPLATE ENGINE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/agent/templates', async (req, res) => {
   try {
@@ -557,9 +557,9 @@ app.put('/api/agent/templates/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // AUDIT LOGS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/logs', async (req, res) => {
   try {
@@ -576,9 +576,9 @@ app.get('/api/logs', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // LEADS (Campaign recipients)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/campaigns/:id/leads', async (req, res) => {
   try {
@@ -623,9 +623,9 @@ app.get('/api/campaigns/:id/leads', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // EXCEL/CSV UPLOAD
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/campaigns/:id/leads/upload', upload.single('file'), async (req, res) => {
   try {
@@ -652,7 +652,7 @@ app.post('/api/campaigns/:id/leads/upload', upload.single('file'), async (req, r
     // Detect column mapping (case-insensitive)
     const headers = Object.keys(rows[0]);
     const colMap = {
-      phone: headers.find(h => /^(phone|tel|telefono|celular|cel|movil|mÃ³vil|whatsapp)$/i.test(h)),
+      phone: headers.find(h => /^(phone|tel|telefono|celular|cel|movil|mÃƒÂ³vil|whatsapp)$/i.test(h)),
       name: headers.find(h => /^(name|nombre|full_name|cliente|contacto)$/i.test(h)),
       email: headers.find(h => /^(email|e-mail|correo|mail)$/i.test(h)),
     };
@@ -729,9 +729,9 @@ app.post('/api/campaigns/:id/leads/upload', upload.single('file'), async (req, r
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // TRACKING
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/campaigns/track', async (req, res) => {
   try {
@@ -787,9 +787,9 @@ app.get('/api/campaigns/:id/stats', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// LEGACY v1 ENDPOINTS (compatibilidad n8n â€” sin /api/)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// LEGACY v1 ENDPOINTS (compatibilidad n8n Ã¢â‚¬â€ sin /api/)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/campaigns', async (req, res) => {
   try {
@@ -910,9 +910,9 @@ app.get('/campaigns/:id/stats', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // LEAD SCORING
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/leads/import', upload.single('file'), async (req, res) => {
   try {
@@ -986,9 +986,9 @@ app.get('/api/leads/top', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// LEAD PROFILE (MVP-03: ExtracciÃ³n y actualizaciÃ³n de leads)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// LEAD PROFILE (MVP-03: ExtracciÃƒÂ³n y actualizaciÃƒÂ³n de leads)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/leads/:id/profile', async (req, res) => {
   try {
@@ -999,15 +999,15 @@ app.get('/api/leads/:id/profile', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // CHANNEL STATUS (LED indicators)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/channels', async (req, res) => {
   try {
     const store = getStore();
     const channels = store.channels.length > 0 ? store.channels : [
-      { channel: 'whatsapp', status: 'pending', status_message: 'Esperando configuraciÃ³n de Meta', last_checked_at: null, error_count: 0 },
+      { channel: 'whatsapp', status: 'pending', status_message: 'Esperando configuraciÃƒÂ³n de Meta', last_checked_at: null, error_count: 0 },
       { channel: 'messenger', status: 'disconnected', status_message: 'No configurado', last_checked_at: null, error_count: 0 },
       { channel: 'tiktok', status: 'disconnected', status_message: 'No configurado', last_checked_at: null, error_count: 0 },
       { channel: 'sms', status: 'disconnected', status_message: 'No configurado', last_checked_at: null, error_count: 0 },
@@ -1038,9 +1038,9 @@ app.patch('/api/channels/:channel', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // OPT-OUT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/opt-outs', async (req, res) => {
   try {
@@ -1082,9 +1082,9 @@ app.get('/api/opt-outs/check', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // LEAD SCORING ENGINE (rule-based)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 const DEFAULT_SCORING_RULES = {
   weights: {
@@ -1130,7 +1130,7 @@ app.put('/api/scoring/rules', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Shared scoring logic (used by evaluate + evaluate-all) â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Shared scoring logic (used by evaluate + evaluate-all) Ã¢â€â‚¬
 function evaluateLead(lead, config, store) {
   // Only use deliveries specific to this lead (fixed #2)
   const myDeliveries = store.deliveries.filter(d => d.contact_id === lead.id);
@@ -1207,7 +1207,7 @@ app.post('/api/scoring/evaluate', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Evaluate all leads (uses shared logic â€” fixed #1, #2, #11)
+// Evaluate all leads (uses shared logic Ã¢â‚¬â€ fixed #1, #2, #11)
 app.post('/api/scoring/evaluate-all', async (req, res) => {
   try {
     const store = getStore();
@@ -1307,7 +1307,7 @@ app.post('/api/scoring/trigger-inbound', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Campaign: auto-activate scheduled campaigns (on health check or endpoint)
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Campaign: auto-activate scheduled campaigns (on health check or endpoint)
 function activateScheduledCampaigns(store) {
   const now = new Date().toISOString();
   const scheduled = store.campaigns.filter(c => c.status === 'scheduled' && c.scheduled_at && c.scheduled_at <= now);
@@ -1321,7 +1321,7 @@ function activateScheduledCampaigns(store) {
   return activated;
 }
 
-// â”€â”€â”€ Campaign: delivery details per lead
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Campaign: delivery details per lead
 app.get('/api/campaigns/:id/leads/:leadId/deliveries', async (req, res) => {
   try {
     const store = getStore();
@@ -1332,7 +1332,7 @@ app.get('/api/campaigns/:id/leads/:leadId/deliveries', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Opt-out: pre-check before sending (middleware for n8n)
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Opt-out: pre-check before sending (middleware for n8n)
 app.post('/api/opt-outs/check-batch', async (req, res) => {
   try {
     const { phones } = req.body;
@@ -1410,7 +1410,7 @@ app.delete('/api/companies/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Auto-transition scheduled campaigns (called from health + dashboard)
+// â€”â€”â€” Auto-transition scheduled campaigns (called from health + dashboard)
 app.post('/api/campaigns/auto-activate', async (req, res) => {
   try {
     const store = getStore();
@@ -1419,7 +1419,7 @@ app.post('/api/campaigns/auto-activate', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Dashboard: trends data for charts
+// â€”â€”â€” Dashboard: trends data for charts
 app.get('/api/dashboard/trends', async (req, res) => {
   try {
     const store = getStore();
@@ -1443,7 +1443,7 @@ app.get('/api/dashboard/trends', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Dashboard summary
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Dashboard summary
 app.get('/api/dashboard/summary', async (req, res) => {
   try {
     const store = getStore();
@@ -1463,9 +1463,9 @@ app.get('/api/dashboard/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // LEADS CRUD (Individual)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 // Lista de leads con filtros (Wibsite 2.0)
 app.get('/api/leads', async (req, res) => {
@@ -1488,7 +1488,7 @@ app.get('/api/leads', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Crear lead manual (Wibsite 2.0 â€” pipeline FAB, importaciÃ³n, API)
+// Crear lead manual (Wibsite 2.0 Ã¢â‚¬â€ pipeline FAB, importaciÃƒÂ³n, API)
 app.post('/api/leads', async (req, res) => {
   try {
     const { name, phone, email, status, source, campaign_id, custom_fields, company_id } = req.body;
@@ -1502,7 +1502,7 @@ app.post('/api/leads', async (req, res) => {
       phone: phone || null,
       email: email || null,
       source: source || 'manual',
-      status: status || 'nuevo',
+      status: normalizeStage(status),
       score: 0,
       score_data: {},
       custom_fields: custom_fields || {},
@@ -1511,11 +1511,15 @@ app.post('/api/leads', async (req, res) => {
       updated_at: new Date().toISOString(),
     };
     await updateStore(s => s.leads.push(lead));
-    if (lead.campaign_id) await storeFacade.writeLeadToPg(lead.campaign_id, lead).catch(() => {});
+    if (lead.campaign_id) {
+       // write to pg
+       const pgStore = require('./services/pgStore');
+       if(pgStore.LeadStore) pgStore.LeadStore.create(lead).catch(()=>{});
+    }
     await logEvent('lead_created', {
-      level: 'info', message: `Lead creado manualmente: ${lead.name}`,
+      level: 'info', message: 'Lead creado manualmente: ' + lead.name,
       tenantId: req.tenantId || 'default', module: 'leads', flow: 'leads.manual', action: 'lead.created',
-      data: { lead_id: lead.id, name: lead.name, source: lead.source },
+      metadata: { lead_id: lead.id, status: lead.status }
     });
     res.status(201).json(lead);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1549,13 +1553,34 @@ app.patch('/api/leads/:id', async (req, res) => {
   try {
     const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id'];
     let updated = null;
+    let transitionError = null;
+    let oldStatus = null;
+    let newStatus = null;
+
     await updateStore(s => {
       const l = s.leads.find(l => l.id === req.params.id);
       if (!l) return;
+      
+      oldStatus = normalizeStage(l.status);
+
       for (const k of allowed) {
-        if (req.body[k] !== undefined) l[k] = req.body[k];
+        if (req.body[k] !== undefined) {
+          if (k === 'status') {
+            const requestedStatus = normalizeStage(req.body.status);
+            if (!req.body.force_transition && !isValidTransition(oldStatus, requestedStatus)) {
+              transitionError = 'Transicion invalida de ' + oldStatus + ' a ' + requestedStatus;
+              return; 
+            }
+            l[k] = requestedStatus;
+            newStatus = requestedStatus;
+          } else {
+            l[k] = req.body[k];
+          }
+        }
       }
-      // Notas: si llega notes como string, se agrega al historial
+      
+      if (transitionError) return;
+
       if (req.body.notes !== undefined) {
         if (!Array.isArray(l.notes)) l.notes = [];
         l.notes.push({ text: String(req.body.notes), at: new Date().toISOString(), by: req.body.notes_by || 'agente' });
@@ -1564,7 +1589,17 @@ app.patch('/api/leads/:id', async (req, res) => {
       l.updated_at = new Date().toISOString();
       updated = l;
     });
+
+    if (transitionError) return res.status(400).json({ error: transitionError });
     if (!updated) return res.status(404).json({ error: 'Lead not found' });
+
+    if (newStatus && newStatus !== oldStatus && global.pool) {
+      global.pool.query(
+        'INSERT INTO lead_stage_history (lead_id, tenant_id, old_stage, new_stage, changed_by, reason) VALUES ($1, $2, $3, $4, $5, $6)',
+        [updated.id, req.tenantId || 'default', oldStatus, newStatus, req.body.changed_by || 'system', req.body.reason || 'manual']
+      ).catch(e => console.error('[LeadStages] Error logging history:', e.message));
+    }
+
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1585,9 +1620,9 @@ app.delete('/api/leads/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // CAMPAIGN EXPORT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/campaigns/:id/export', async (req, res) => {
   try {
@@ -1615,9 +1650,9 @@ app.get('/api/campaigns/:id/export', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // WEBHOOKS (WhatsApp Meta)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/webhooks/whatsapp', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -1726,9 +1761,9 @@ app.post('/webhooks/whatsapp', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CONVERSATION STATE (MVP-02: Memoria de conversaciÃ³n)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// CONVERSATION STATE (MVP-02: Memoria de conversaciÃƒÂ³n)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/conversations/:tenantId/:conversationId', async (req, res) => {
   try {
@@ -1821,9 +1856,9 @@ app.post('/api/conversations/archive/run', async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// GRUPOS DE CHAT (agrupaciÃ³n manual + clasificaciÃ³n IA)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// GRUPOS DE CHAT (agrupaciÃƒÂ³n manual + clasificaciÃƒÂ³n IA)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/chat-groups', (req, res) => {
   try {
@@ -1893,13 +1928,13 @@ app.post('/api/chat-groups/review-pending', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// NORMALIZACIÃ“N DE MENSAJES (pipeline nativo Wibsite 2.0)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// NORMALIZACIÃƒâ€œN DE MENSAJES (pipeline nativo Wibsite 2.0)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // MESSAGE TEMPLATES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 const DEFAULT_TEMPLATES = [
   {
@@ -1907,17 +1942,17 @@ const DEFAULT_TEMPLATES = [
     name: 'Bienvenida WhatsApp',
     channel: 'whatsapp',
     description: 'Mensaje de bienvenida para nuevos contactos',
-    body: 'Hola {{name}}, gracias por contactarnos. Soy el asistente virtual de {{business}}. Â¿En quÃ© puedo ayudarte hoy?',
+    body: 'Hola {{name}}, gracias por contactarnos. Soy el asistente virtual de {{business}}. Ã‚Â¿En quÃƒÂ© puedo ayudarte hoy?',
     variables: ['name', 'business'],
     category: 'welcome',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'promo-whatsapp',
-    name: 'PromociÃ³n WhatsApp',
+    name: 'PromociÃƒÂ³n WhatsApp',
     channel: 'whatsapp',
     description: 'Oferta especial para leads calientes',
-    body: 'Â¡Hola {{name}}! Tenemos una oferta especial para ti: {{offer}}. VÃ¡lido hasta {{expiry}}. Responde "QUIERO" para mÃ¡s info.',
+    body: 'Ã‚Â¡Hola {{name}}! Tenemos una oferta especial para ti: {{offer}}. VÃƒÂ¡lido hasta {{expiry}}. Responde "QUIERO" para mÃƒÂ¡s info.',
     variables: ['name', 'offer', 'expiry'],
     category: 'promotion',
     created_at: '2026-01-01T00:00:00.000Z',
@@ -1927,7 +1962,7 @@ const DEFAULT_TEMPLATES = [
     name: 'Seguimiento WhatsApp',
     channel: 'whatsapp',
     description: 'Recordatorio amable para leads que no han respondido',
-    body: 'Hola {{name}}, solo querÃ­a recordarte que estamos aquÃ­ para lo que necesites. Â¿Te gustarÃ­a agendar una llamada con nuestro equipo? Responde "SÃ" para coordinar.',
+    body: 'Hola {{name}}, solo querÃƒÂ­a recordarte que estamos aquÃƒÂ­ para lo que necesites. Ã‚Â¿Te gustarÃƒÂ­a agendar una llamada con nuestro equipo? Responde "SÃƒÂ" para coordinar.',
     variables: ['name'],
     category: 'followup',
     created_at: '2026-01-01T00:00:00.000Z',
@@ -1937,7 +1972,7 @@ const DEFAULT_TEMPLATES = [
     name: 'Bienvenida Messenger',
     channel: 'messenger',
     description: 'Mensaje inicial por Messenger',
-    body: 'Â¡Hola {{name}}! ðŸ‘‹ Bienvenido a {{business}}. Estamos para ayudarte. CuÃ©ntanos, Â¿quÃ© te interesa?',
+    body: 'Ã‚Â¡Hola {{name}}! Ã°Å¸â€˜â€¹ Bienvenido a {{business}}. Estamos para ayudarte. CuÃƒÂ©ntanos, Ã‚Â¿quÃƒÂ© te interesa?',
     variables: ['name', 'business'],
     category: 'welcome',
     created_at: '2026-01-01T00:00:00.000Z',
@@ -1947,17 +1982,17 @@ const DEFAULT_TEMPLATES = [
     name: 'Oferta Messenger',
     channel: 'messenger',
     description: 'Oferta con imagen/video para Messenger',
-    body: 'ðŸ”¥ {{name}}, tenemos algo que te va a encantar: {{offer}}. Por tiempo limitado. Â¿Quieres saber mÃ¡s?',
+    body: 'Ã°Å¸â€Â¥ {{name}}, tenemos algo que te va a encantar: {{offer}}. Por tiempo limitado. Ã‚Â¿Quieres saber mÃƒÂ¡s?',
     variables: ['name', 'offer'],
     category: 'promotion',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'promo-tiktok',
-    name: 'PromociÃ³n TikTok DM',
+    name: 'PromociÃƒÂ³n TikTok DM',
     channel: 'tiktok',
     description: 'Mensaje directo promocional en TikTok',
-    body: 'Â¡Hola {{name}}! Vimos que te interesa {{interest}}. Tenemos contenido exclusivo para ti en {{business}}. Â¿Te gustarÃ­a recibir mÃ¡s info?',
+    body: 'Ã‚Â¡Hola {{name}}! Vimos que te interesa {{interest}}. Tenemos contenido exclusivo para ti en {{business}}. Ã‚Â¿Te gustarÃƒÂ­a recibir mÃƒÂ¡s info?',
     variables: ['name', 'interest', 'business'],
     category: 'promotion',
     created_at: '2026-01-01T00:00:00.000Z',
@@ -1967,27 +2002,27 @@ const DEFAULT_TEMPLATES = [
     name: 'Seguimiento TikTok',
     channel: 'tiktok',
     description: 'Engagement follow-up en TikTok',
-    body: 'Hey {{name}}, gracias por seguirnos. Â¿Te gustarÃ­a ser el primero en enterarte de nuestras novedades? Activa la campanita ðŸ””',
+    body: 'Hey {{name}}, gracias por seguirnos. Ã‚Â¿Te gustarÃƒÂ­a ser el primero en enterarte de nuestras novedades? Activa la campanita Ã°Å¸â€â€',
     variables: ['name'],
     category: 'followup',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'notification-sms',
-    name: 'NotificaciÃ³n SMS',
+    name: 'NotificaciÃƒÂ³n SMS',
     channel: 'sms',
-    description: 'Alerta o notificaciÃ³n corta por SMS',
-    body: '{{business}}: Hola {{name}}, {{message}}. MÃ¡s info: {{short_url}}',
+    description: 'Alerta o notificaciÃƒÂ³n corta por SMS',
+    body: '{{business}}: Hola {{name}}, {{message}}. MÃƒÂ¡s info: {{short_url}}',
     variables: ['name', 'business', 'message', 'short_url'],
     category: 'notification',
     created_at: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'promo-sms',
-    name: 'PromociÃ³n SMS',
+    name: 'PromociÃƒÂ³n SMS',
     channel: 'sms',
-    description: 'Oferta corta por SMS (mÃ¡x 160 chars)',
-    body: '{{name}}: Oferta {{offer}} en {{business}}. VÃ¡lido hoy. Responde INFO.',
+    description: 'Oferta corta por SMS (mÃƒÂ¡x 160 chars)',
+    body: '{{name}}: Oferta {{offer}} en {{business}}. VÃƒÂ¡lido hoy. Responde INFO.',
     variables: ['name', 'offer', 'business'],
     category: 'promotion',
     max_length: 160,
@@ -1998,7 +2033,7 @@ const DEFAULT_TEMPLATES = [
     name: 'Newsletter Email',
     channel: 'email',
     description: 'Newsletter mensual para leads',
-    subject: '{{business}} â€” Novedades para {{name}}',
+    subject: '{{business}} Ã¢â‚¬â€ Novedades para {{name}}',
     body: 'Hola {{name}},\n\nEstas son las novedades de {{business}} este mes:\n\n{{content}}\n\nSaludos,\nEl equipo de {{business}}',
     variables: ['name', 'business', 'content'],
     category: 'newsletter',
@@ -2008,9 +2043,9 @@ const DEFAULT_TEMPLATES = [
     id: 'followup-email',
     name: 'Email Seguimiento',
     channel: 'email',
-    description: 'Email de seguimiento post-demo/reuniÃ³n',
-    subject: 'Gracias por tu interÃ©s, {{name}}',
-    body: 'Hola {{name}},\n\nGracias por tu tiempo el {{meeting_date}}. Adjuntamos la informaciÃ³n que solicitaste:\n\n{{attachment_links}}\n\nQuedamos atentos a cualquier pregunta.\n\nSaludos,\n{{business}}',
+    description: 'Email de seguimiento post-demo/reuniÃƒÂ³n',
+    subject: 'Gracias por tu interÃƒÂ©s, {{name}}',
+    body: 'Hola {{name}},\n\nGracias por tu tiempo el {{meeting_date}}. Adjuntamos la informaciÃƒÂ³n que solicitaste:\n\n{{attachment_links}}\n\nQuedamos atentos a cualquier pregunta.\n\nSaludos,\n{{business}}',
     variables: ['name', 'meeting_date', 'attachment_links', 'business'],
     category: 'followup',
     created_at: '2026-01-01T00:00:00.000Z',
@@ -2088,9 +2123,9 @@ app.post('/api/templates/preview', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // AGENT CONFIG (MVP-04: Editor de contexto + Switcher)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/agent/config', async (req, res) => {
   try {
@@ -2138,9 +2173,9 @@ app.get('/api/agent/personalities', (req, res) => {
   res.json(require('./services/agentConfig').PERSONALITY_TYPES);
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// AGENT KNOWLEDGE (Wibsite 2.0 â€” lotes de contexto cargados)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// AGENT KNOWLEDGE (Wibsite 2.0 Ã¢â‚¬â€ lotes de contexto cargados)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/agent/knowledge', (req, res) => {
   try {
@@ -2185,9 +2220,9 @@ app.delete('/api/agent/knowledge/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// AGENT REGISTRY (Wibsite 2.0 â€” multi-agente)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// AGENT REGISTRY (Wibsite 2.0 Ã¢â‚¬â€ multi-agente)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/agents', (req, res) => {
   try {
@@ -2249,32 +2284,32 @@ app.post('/api/agents/:id/activate', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // SEED DATA (mock para pruebas end-to-end)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/seed', (req, res) => {
   try {
     const now = new Date();
 
-    const firstNames = ['MarÃ­a', 'Carlos', 'Ana', 'Luis', 'SofÃ­a', 'Pedro', 'Laura', 'Jorge', 'Valentina', 'Diego', 'Gabriela', 'AndrÃ©s', 'Fernanda', 'Ricardo', 'Isabella'];
-    const lastNames = ['GarcÃ­a', 'RodrÃ­guez', 'MartÃ­nez', 'LÃ³pez', 'HernÃ¡ndez', 'GonzÃ¡lez', 'PÃ©rez', 'MuÃ±oz', 'Rojas', 'DÃ­az', 'Silva', 'Vargas', 'Castro', 'Torres', 'Mendoza'];
-    const interests = ['marketing digital', 'desarrollo web', 'e-commerce', 'IA', 'redes sociales', 'SEO', 'email marketing', 'chatbots', 'analÃ­tica', 'automatizaciÃ³n'];
-    const painPoints = ['poco trÃ¡fico', 'baja conversiÃ³n', 'sin automatizaciÃ³n', 'altos costos', 'falta de leads', 'sin presencia digital', 'procesos manuales', 'poco engagement'];
+    const firstNames = ['MarÃƒÂ­a', 'Carlos', 'Ana', 'Luis', 'SofÃƒÂ­a', 'Pedro', 'Laura', 'Jorge', 'Valentina', 'Diego', 'Gabriela', 'AndrÃƒÂ©s', 'Fernanda', 'Ricardo', 'Isabella'];
+    const lastNames = ['GarcÃƒÂ­a', 'RodrÃƒÂ­guez', 'MartÃƒÂ­nez', 'LÃƒÂ³pez', 'HernÃƒÂ¡ndez', 'GonzÃƒÂ¡lez', 'PÃƒÂ©rez', 'MuÃƒÂ±oz', 'Rojas', 'DÃƒÂ­az', 'Silva', 'Vargas', 'Castro', 'Torres', 'Mendoza'];
+    const interests = ['marketing digital', 'desarrollo web', 'e-commerce', 'IA', 'redes sociales', 'SEO', 'email marketing', 'chatbots', 'analÃƒÂ­tica', 'automatizaciÃƒÂ³n'];
+    const painPoints = ['poco trÃƒÂ¡fico', 'baja conversiÃƒÂ³n', 'sin automatizaciÃƒÂ³n', 'altos costos', 'falta de leads', 'sin presencia digital', 'procesos manuales', 'poco engagement'];
 
     const camp1 = {
       id: crypto.randomUUID(), name: 'Lanzamiento WhatsApp Jul 2026',
-      description: 'PromociÃ³n de lanzamiento para clientes premium',
-      channel: 'whatsapp', message_template: 'Â¡Hola {{name}}! Lanzamos {{product}} con 30% OFF. Usa cÃ³digo WIB30. VÃ¡lido hasta 31/07.',
+      description: 'PromociÃƒÂ³n de lanzamiento para clientes premium',
+      channel: 'whatsapp', message_template: 'Ã‚Â¡Hola {{name}}! Lanzamos {{product}} con 30% OFF. Usa cÃƒÂ³digo WIB30. VÃƒÂ¡lido hasta 31/07.',
       template_name: 'promo-whatsapp', audience_filter: { segment: 'premium' },
       status: 'sending', sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
       scheduled_at: null, started_at: new Date(now - 86400000).toISOString(),
       created_at: new Date(now - 172800000).toISOString(), updated_at: now.toISOString(),
     };
     const camp2 = {
-      id: crypto.randomUUID(), name: 'CampaÃ±a Messenger Julio',
+      id: crypto.randomUUID(), name: 'CampaÃƒÂ±a Messenger Julio',
       description: 'Engagement para leads de Facebook',
-      channel: 'messenger', message_template: 'Â¡Hola {{name}}! Te tenemos una sorpresa ðŸŽ',
+      channel: 'messenger', message_template: 'Ã‚Â¡Hola {{name}}! Te tenemos una sorpresa Ã°Å¸Å½Â',
       template_name: 'welcome-messenger', audience_filter: {},
       status: 'scheduled', sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
       scheduled_at: new Date(now + 86400000).toISOString(), started_at: null,
@@ -2338,8 +2373,8 @@ app.post('/api/seed', (req, res) => {
     }));
 
     const channels = [
-      { channel: 'whatsapp', status: 'connected', status_message: 'Conectado vÃ­a Meta API', last_checked_at: now.toISOString(), error_count: 0 },
-      { channel: 'messenger', status: 'pending', status_message: 'Esperando configuraciÃ³n Meta', last_checked_at: now.toISOString(), error_count: 0 },
+      { channel: 'whatsapp', status: 'connected', status_message: 'Conectado vÃƒÂ­a Meta API', last_checked_at: now.toISOString(), error_count: 0 },
+      { channel: 'messenger', status: 'pending', status_message: 'Esperando configuraciÃƒÂ³n Meta', last_checked_at: now.toISOString(), error_count: 0 },
       { channel: 'tiktok', status: 'disconnected', status_message: 'No configurado', last_checked_at: null, error_count: 0 },
       { channel: 'sms', status: 'disconnected', status_message: 'No configurado', last_checked_at: null, error_count: 0 },
       { channel: 'email', status: 'pending', status_message: 'SMTP pendiente de validar', last_checked_at: now.toISOString(), error_count: 0 },
@@ -2369,9 +2404,9 @@ app.delete('/api/seed', (req, res) => {
   res.json({ message: 'All data cleared' });
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // OPENROUTER LLM (replaces xAI Grok)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
@@ -2432,7 +2467,7 @@ app.post('/api/llm/chat', async (req, res) => {
     } catch (apiErr) {
       res.json({
         model: 'offline',
-        choices: [{ index: 0, message: { role: 'assistant', content: '[LLM offline - modo simulaciÃ³n] Mensaje recibido correctamente.' }, finish_reason: 'stop' }],
+        choices: [{ index: 0, message: { role: 'assistant', content: '[LLM offline - modo simulaciÃƒÂ³n] Mensaje recibido correctamente.' }, finish_reason: 'stop' }],
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
         offline: true,
         error: apiErr.message,
@@ -2457,26 +2492,26 @@ app.post('/api/scoring/evaluate-llm', async (req, res) => {
     const deliveries = store.deliveries.filter(d => d.contact_id === lead_id || d.campaign_id === lead.campaign_id);
     const campaign = store.campaigns.find(c => c.id === lead.campaign_id);
 
-    const prompt = `EvalÃºa este lead de campaÃ±a de marketing y asigna un score de 0-100.
-Responde SOLO con JSON: {"score": <0-100>, "reason": "<explicaciÃ³n breve>", "category": "hot|warm|cold"}
+    const prompt = `EvalÃƒÂºa este lead de campaÃƒÂ±a de marketing y asigna un score de 0-100.
+Responde SOLO con JSON: {"score": <0-100>, "reason": "<explicaciÃƒÂ³n breve>", "category": "hot|warm|cold"}
 
 Datos del lead:
 - Nombre: ${lead.name || 'Desconocido'}
-- TelÃ©fono: ${lead.phone || 'N/A'}
+- TelÃƒÂ©fono: ${lead.phone || 'N/A'}
 - Email: ${lead.email || 'N/A'}
 - Intereses: ${lead.custom_fields?.interest || 'N/A'}
 - Punto de dolor: ${lead.custom_fields?.pain_point || 'N/A'}
 - Segmento: ${lead.custom_fields?.segment || 'standard'}
 - Estado actual: ${lead.status}
 - Score actual (rule-based): ${lead.score}
-- CampaÃ±a: ${campaign?.name || 'N/A'} (canal: ${campaign?.channel || 'N/A'})
+- CampaÃƒÂ±a: ${campaign?.name || 'N/A'} (canal: ${campaign?.channel || 'N/A'})
 - Historial de entregas: ${deliveries.length} eventos
-- Ãšltimo estado de entrega: ${deliveries.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]?.status || 'sin entregas'}
+- ÃƒÅ¡ltimo estado de entrega: ${deliveries.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]?.status || 'sin entregas'}
 
 Criterios:
-- HOT (70-100): lead muy calificado, alta probabilidad de conversiÃ³n
+- HOT (70-100): lead muy calificado, alta probabilidad de conversiÃƒÂ³n
 - WARM (40-69): lead interesado, requiere seguimiento
-- COLD (0-39): lead frÃ­o, necesita nurturing`;
+- COLD (0-39): lead frÃƒÂ­o, necesita nurturing`;
 
     const resp = await axios.post(`${OPENROUTER_BASE}/chat/completions`, {
       model: OPENROUTER_MODEL,
@@ -2534,9 +2569,9 @@ Criterios:
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// KNOWLEDGE BASE (MVP-05: RAG bÃ¡sico)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// KNOWLEDGE BASE (MVP-05: RAG bÃƒÂ¡sico)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get('/api/knowledge-base/health', async (req, res) => {
   try {
@@ -2599,9 +2634,9 @@ app.delete('/api/knowledge-base/documents/:id', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // TWILIO SEND (proxy to avoid credential exposure in n8n)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/twilio/send', async (req, res) => {
   try {
@@ -2673,9 +2708,9 @@ app.post('/api/twilio/typing', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// TWILIO INBOUND WEBHOOK (reemplazo Meta hasta migraciÃ³n)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// TWILIO INBOUND WEBHOOK (reemplazo Meta hasta migraciÃƒÂ³n)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/webhooks/twilio-inbound', async (req, res) => {
   try {
@@ -2768,10 +2803,10 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MULTICANAL WEBHOOKS (Email Â· Telegram Â· WhatsApp Â· TikTok Â· Messenger)
-// Pipeline unificado: normalizar â†’ lead+delivery â†’ media (STT/vision) â†’ agente â†’ responder por el canal
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// MULTICANAL WEBHOOKS (Email Ã‚Â· Telegram Ã‚Â· WhatsApp Ã‚Â· TikTok Ã‚Â· Messenger)
+// Pipeline unificado: normalizar Ã¢â€ â€™ lead+delivery Ã¢â€ â€™ media (STT/vision) Ã¢â€ â€™ agente Ã¢â€ â€™ responder por el canal
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 const { getChannel, listChannels, sendToChannel } = require('./services/channels');
 const { processMedia } = mediaProcessor;
@@ -2829,7 +2864,7 @@ async function handleInboundMessage(channel, normalized) {
   });
   if (inboundLead) await storeFacade.writeLeadToPg(null, inboundLead);
 
-  // Bases multimodales: transcribir audio / describir imagen y aÃ±adir al contexto
+  // Bases multimodales: transcribir audio / describir imagen y aÃƒÂ±adir al contexto
   let agentInput = text || '';
   try {
     const mediaPieces = await processMedia(media || [], {
@@ -2851,7 +2886,7 @@ async function handleInboundMessage(channel, normalized) {
     } else if ((media || []).length) {
       await logEvent('fallback_activated', {
         level: 'warn',
-        message: `Media recibido (${channel}) sin procesar â€” STT/visiÃ³n no configurados o fallaron`,
+        message: `Media recibido (${channel}) sin procesar Ã¢â‚¬â€ STT/visiÃƒÂ³n no configurados o fallaron`,
         tenantId: 'default',
         conversationId,
         module: 'channels',
@@ -2864,7 +2899,7 @@ async function handleInboundMessage(channel, normalized) {
     }
   } catch (e) { /* media best-effort */ }
 
-  // Agente comercial (grafo 8 etapas) â€” responde por el mismo canal
+  // Agente comercial (grafo 8 etapas) Ã¢â‚¬â€ responde por el mismo canal
   try {
     let template = null;
     try { template = templateEngine.loadTemplate(process.env.AGENT_TEMPLATE_ID || 'consultora-software'); }
@@ -2880,7 +2915,7 @@ async function handleInboundMessage(channel, normalized) {
       lead: currentLead || null,
       store: currentStore,
     });
-    const reply = result?.response || 'Â¡Gracias por tu mensaje! Te contactaremos a la brevedad.';
+    const reply = result?.response || 'Ã‚Â¡Gracias por tu mensaje! Te contactaremos a la brevedad.';
     const sent = await sendToChannel(channel, normalized.chatId || senderId, reply);
 
     // Respuesta por voz (G-37): si el mensaje entrante fue de voz y el modo lo permite,
@@ -2907,7 +2942,7 @@ async function handleInboundMessage(channel, normalized) {
     if (voiceSent && !voiceSent.skipped) {
       await logEvent(voiceSent.ok ? 'api_call' : 'error', {
         level: voiceSent.ok ? 'info' : 'warn',
-        message: voiceSent.ok ? `Respuesta de voz enviada a ${senderId}` : `Respuesta de voz fallÃ³: ${voiceSent.error}`,
+        message: voiceSent.ok ? `Respuesta de voz enviada a ${senderId}` : `Respuesta de voz fallÃƒÂ³: ${voiceSent.error}`,
         tenantId: 'default',
         conversationId,
         module: 'channels',
@@ -2921,7 +2956,7 @@ async function handleInboundMessage(channel, normalized) {
 
     await logEvent('api_call', {
       level: sent.ok ? 'info' : 'warn',
-      message: `Respuesta ${channel} a ${senderId} â†’ ${sent.ok ? 'enviada' : sent.error}`,
+      message: `Respuesta ${channel} a ${senderId} Ã¢â€ â€™ ${sent.ok ? 'enviada' : sent.error}`,
       tenantId: 'default',
       conversationId,
       module: 'channels',
@@ -2935,7 +2970,7 @@ async function handleInboundMessage(channel, normalized) {
   } catch (e) {
     await logEvent('webhook_failed', {
       level: 'error',
-      message: `Pipeline multicanal fallÃ³ (${channel}): ${e.message}`,
+      message: `Pipeline multicanal fallÃƒÂ³ (${channel}): ${e.message}`,
       tenantId: 'default',
       conversationId,
       module: 'channels',
@@ -2949,11 +2984,11 @@ async function handleInboundMessage(channel, normalized) {
   }
 }
 
-// â”€â”€â”€ Telegram â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Telegram Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/webhooks/telegram', async (req, res) => {
   const adapter = getChannel('telegram');
   const token = adapter?.WEBHOOK_SECRET || '';
-  if (token && req.query.secret !== token) return res.status(403).json({ error: 'Secret invÃ¡lido' });
+  if (token && req.query.secret !== token) return res.status(403).json({ error: 'Secret invÃƒÂ¡lido' });
   res.json({ ok: true, channel: 'telegram', configured: adapter?.isConfigured() || false });
 });
 
@@ -2965,7 +3000,7 @@ app.post('/webhooks/telegram', async (req, res) => {
     if (secret && req.headers['x-telegram-bot-api-secret-token'] !== secret) {
       await logEvent('security_alert', {
         level: 'security',
-        message: 'Webhook telegram con secret_token invÃ¡lido rechazado',
+        message: 'Webhook telegram con secret_token invÃƒÂ¡lido rechazado',
         tenantId: 'default',
         module: 'channels',
         flow: 'multicanal.inbound',
@@ -2973,10 +3008,10 @@ app.post('/webhooks/telegram', async (req, res) => {
         severity: 'high',
         data: { channel: 'telegram' },
       });
-      return res.status(403).json({ error: 'Secret invÃ¡lido' });
+      return res.status(403).json({ error: 'Secret invÃƒÂ¡lido' });
     }
     if (!adapter.isConfigured()) {
-      console.warn('[telegram] TELEGRAM_BOT_TOKEN no configurado â€” pipeline degradado (sin reply)');
+      console.warn('[telegram] TELEGRAM_BOT_TOKEN no configurado Ã¢â‚¬â€ pipeline degradado (sin reply)');
     }
     const normalized = await adapter.normalizeUpdate(req.body);
     if (!normalized) return res.status(200).json({ ok: true, skipped: true });
@@ -2988,7 +3023,7 @@ app.post('/webhooks/telegram', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ Messenger (Meta) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Messenger (Meta) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/webhooks/messenger', (req, res) => {
   const adapter = getChannel('messenger');
   const token = adapter?.VERIFY_TOKEN || '';
@@ -3004,7 +3039,7 @@ app.post('/webhooks/messenger', async (req, res) => {
     const adapter = getChannel('messenger');
     if (!adapter) return res.status(500).json({ error: 'Adapter messenger no disponible' });
     if (!adapter.isConfigured()) {
-      console.warn('[messenger] MESSENGER_PAGE_TOKEN no configurado â€” pipeline degradado (sin reply)');
+      console.warn('[messenger] MESSENGER_PAGE_TOKEN no configurado Ã¢â‚¬â€ pipeline degradado (sin reply)');
     }
     const normalized = await adapter.normalizeUpdate(req.body);
     if (!normalized) return res.status(200).json({ ok: true, skipped: true });
@@ -3016,7 +3051,7 @@ app.post('/webhooks/messenger', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ Email (inbound provider-agnÃ³stico) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Email (inbound provider-agnÃƒÂ³stico) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.post('/webhooks/email-inbound', async (req, res) => {
   try {
     const adapter = getChannel('email');
@@ -3030,7 +3065,7 @@ app.post('/webhooks/email-inbound', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ TikTok (comentarios, vÃ­a agregador/API aprobada) â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ TikTok (comentarios, vÃƒÂ­a agregador/API aprobada) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.post('/webhooks/tiktok-comments', async (req, res) => {
   try {
     const adapter = getChannel('tiktok');
@@ -3044,13 +3079,13 @@ app.post('/webhooks/tiktok-comments', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ Estado + prueba manual de canales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Estado + prueba manual de canales Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/api/channels/status', async (req, res) => {
   res.json({ data: listChannels() });
 });
 
-// â”€â”€â”€ Resultados E2E de UI (Playwright â†’ SOAC) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// El reporter de Playwright publica aquÃ­ el resultado de cada spec;
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Resultados E2E de UI (Playwright Ã¢â€ â€™ SOAC) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// El reporter de Playwright publica aquÃƒÂ­ el resultado de cada spec;
 // se registra como evento e2e_ui (audit PG + ES logs) con trace/span.
 app.post('/api/internal/ui-results', async (req, res) => {
   try {
@@ -3061,7 +3096,7 @@ app.post('/api/internal/ui-results', async (req, res) => {
     const skipped = result === 'skipped';
     await logEvent('e2e_ui', {
       level: skipped ? 'info' : (ok ? 'info' : 'error'),
-      message: `UI E2E ${spec} â†’ ${result} (${duration_ms || 0}ms)`,
+      message: `UI E2E ${spec} Ã¢â€ â€™ ${result} (${duration_ms || 0}ms)`,
       tenantId: 'default',
       module: 'ui-e2e',
       flow: 'e2e.playwright',
@@ -3098,14 +3133,14 @@ app.get('/api/search', async (req, res) => {
       ? store.leads
           .filter(l => [l.name, l.phone, l.email, l.source].filter(Boolean).some(f => String(f).toLowerCase().includes(q)))
           .slice(0, limit)
-          .map(l => ({ type: 'lead', id: l.id, title: l.name || l.phone || l.id, subtitle: `${l.phone || l.email || ''} Â· score ${l.score ?? 0}`, score: l.score ?? 0 }))
+          .map(l => ({ type: 'lead', id: l.id, title: l.name || l.phone || l.id, subtitle: `${l.phone || l.email || ''} Ã‚Â· score ${l.score ?? 0}`, score: l.score ?? 0 }))
       : [];
 
     const campaigns = q
       ? store.campaigns
           .filter(c => String(c.name || '').toLowerCase().includes(q))
           .slice(0, limit)
-          .map(c => ({ type: 'campaign', id: c.id, title: c.name, subtitle: `${c.status} Â· ${c.channel}` }))
+          .map(c => ({ type: 'campaign', id: c.id, title: c.name, subtitle: `${c.status} Ã‚Â· ${c.channel}` }))
       : [];
 
     res.json({ query: q, total: leads.length + campaigns.length, leads, campaigns });
@@ -3114,13 +3149,13 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ Notificaciones unificadas (portal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Notificaciones unificadas (portal) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 app.get('/api/notifications', async (req, res) => {
   try {
     const summary = await getIncidentSummary({ hours: 24 }).catch(() => ({ incidents: [], fallbacks: [], securityEvents: [], alerts: [] }));
     const notifications = [
-      ...(summary.incidents || []).map(i => ({ type: 'incident', severity: 'high', text: `${i.type || 'incidente'} Ã—${i.count}`, ts: null })),
-      ...(summary.securityEvents || []).map(s => ({ type: 'security', severity: 'medium', text: `${s.type || 'evento de seguridad'} Ã—${s.count}`, ts: null })),
+      ...(summary.incidents || []).map(i => ({ type: 'incident', severity: 'high', text: `${i.type || 'incidente'} Ãƒâ€”${i.count}`, ts: null })),
+      ...(summary.securityEvents || []).map(s => ({ type: 'security', severity: 'medium', text: `${s.type || 'evento de seguridad'} Ãƒâ€”${s.count}`, ts: null })),
       ...(summary.fallbacks || []).map(f => ({ type: 'fallback', severity: 'medium', text: `Fallback activo: ${f.dependency || 'dependencia'}`, ts: null })),
     ].slice(0, 15);
     res.json({ data: notifications, total: notifications.length });
@@ -3158,7 +3193,7 @@ app.post('/api/channels/broadcast', async (req, res) => {
       results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error });
       await logEvent(sent.ok ? 'campaign_sent' : 'error', {
         level: sent.ok ? 'info' : 'warn',
-        message: `Broadcast ${channel} â†’ ${to}: ${sent.ok ? 'enviado' : sent.error}`,
+        message: `Broadcast ${channel} Ã¢â€ â€™ ${to}: ${sent.ok ? 'enviado' : sent.error}`,
         tenantId: req.tenantId || 'default',
         module: 'channels',
         flow: 'multicanal.broadcast',
@@ -3191,7 +3226,7 @@ app.post('/api/channels/test', async (req, res) => {
     const sent = await sendToChannel(channel, to, text);
     await logEvent(sent.ok ? 'api_call' : 'error', {
       level: sent.ok ? 'info' : 'warn',
-      message: `EnvÃ­o de prueba ${channel} â†’ ${sent.ok ? 'ok' : sent.error}`,
+      message: `EnvÃƒÂ­o de prueba ${channel} Ã¢â€ â€™ ${sent.ok ? 'ok' : sent.error}`,
       tenantId: req.tenantId || 'default',
       module: 'channels',
       flow: 'multicanal.outbound',
@@ -3207,12 +3242,12 @@ app.post('/api/channels/test', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // INTERNAL CONTROL CENTER ENDPOINTS
-// Accesibles solo con API key â€” alimentan el panel de superusuario
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Accesibles solo con API key Ã¢â‚¬â€ alimentan el panel de superusuario
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-// GET /api/internal/health-detailed â€” estado extendido de todas las dependencias
+// GET /api/internal/health-detailed Ã¢â‚¬â€ estado extendido de todas las dependencias
 app.get('/api/internal/health-detailed', async (req, res) => {
   try {
     const store = getStore();
@@ -3285,7 +3320,7 @@ app.get('/api/internal/health-detailed', async (req, res) => {
   }
 });
 
-// GET /api/internal/incidents/summary â€” resumen agrupado por mÃ³dulo/severidad
+// GET /api/internal/incidents/summary Ã¢â‚¬â€ resumen agrupado por mÃƒÂ³dulo/severidad
 app.get('/api/internal/incidents/summary', async (req, res) => {
   try {
     const hours = parseInt(req.query.hours || '24');
@@ -3295,7 +3330,7 @@ app.get('/api/internal/incidents/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/incidents â€” listado de incidentes con contexto completo
+// GET /api/internal/incidents Ã¢â‚¬â€ listado de incidentes con contexto completo
 app.get('/api/internal/incidents', async (req, res) => {
   try {
     const { module: mod, severity, status = 'open', tenantId, limit = 50, offset = 0, hours = 72 } = req.query;
@@ -3304,7 +3339,7 @@ app.get('/api/internal/incidents', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/incidents/:id â€” detalle completo de un incidente
+// GET /api/internal/incidents/:id Ã¢â‚¬â€ detalle completo de un incidente
 app.get('/api/internal/incidents/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -3323,7 +3358,7 @@ app.get('/api/internal/incidents/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/internal/incidents/:id/resolve â€” marcar incidente como resuelto
+// POST /api/internal/incidents/:id/resolve Ã¢â‚¬â€ marcar incidente como resuelto
 app.post('/api/internal/incidents/:id/resolve', async (req, res) => {
   try {
     const { resolvedBy, notes } = req.body;
@@ -3336,7 +3371,7 @@ app.post('/api/internal/incidents/:id/resolve', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/security/events â€” eventos de seguridad recientes
+// GET /api/internal/security/events Ã¢â‚¬â€ eventos de seguridad recientes
 app.get('/api/internal/security/events', async (req, res) => {
   try {
     const { hours = 24, type, limit = 100 } = req.query;
@@ -3345,7 +3380,7 @@ app.get('/api/internal/security/events', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/fallback-events â€” historial de fallbacks por dependencia
+// GET /api/internal/fallback-events Ã¢â‚¬â€ historial de fallbacks por dependencia
 app.get('/api/internal/fallback-events', async (req, res) => {
   try {
     const { hours = 24, dependency, limit = 100 } = req.query;
@@ -3354,7 +3389,7 @@ app.get('/api/internal/fallback-events', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/alerts â€” alertas de Prometheus/Alertmanager recibidas
+// GET /api/internal/alerts Ã¢â‚¬â€ alertas de Prometheus/Alertmanager recibidas
 app.get('/api/internal/alerts', async (req, res) => {
   try {
     const { hours = 24, status, limit = 100 } = req.query;
@@ -3363,17 +3398,17 @@ app.get('/api/internal/alerts', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/internal/alerts/webhook â€” receptor de Alertmanager
+// POST /api/internal/alerts/webhook Ã¢â‚¬â€ receptor de Alertmanager
 app.post('/api/internal/alerts/webhook', async (req, res) => {
   try {
     const payload = req.body;
     const alert = await receiveAlert(payload);
-    console.log(`[AlertManager] Alert received: ${alert.alert_name} (${alert.severity}) â€” ${alert.status}`);
+    console.log(`[AlertManager] Alert received: ${alert.alert_name} (${alert.severity}) Ã¢â‚¬â€ ${alert.status}`);
     res.json({ status: 'received', alert_name: alert.alert_name });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/internal/module-status â€” SLI por mÃ³dulo
+// GET /api/internal/module-status Ã¢â‚¬â€ SLI por mÃƒÂ³dulo
 app.get('/api/internal/module-status', async (req, res) => {
   try {
     const store = getStore();
@@ -3410,7 +3445,7 @@ app.get('/api/internal/module-status', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/internal/run-smoke â€” ejecuta smoke checks internos (sin Jest)
+// POST /api/internal/run-smoke Ã¢â‚¬â€ ejecuta smoke checks internos (sin Jest)
 app.post('/api/internal/run-smoke', async (req, res) => {
   const results = [];
   const check = async (name, fn) => {
@@ -3429,7 +3464,7 @@ app.post('/api/internal/run-smoke', async (req, res) => {
   });
   await check('db-connection', async () => {
     if (pool) await pool.query('SELECT 1');
-    else throw new Error('PG pool not initialized â€” using JSON fallback');
+    else throw new Error('PG pool not initialized Ã¢â‚¬â€ using JSON fallback');
   });
   await check('weaviate-health', async () => {
     const ok = await checkWeaviateHealth();
@@ -3460,7 +3495,7 @@ app.post('/api/internal/run-smoke', async (req, res) => {
   });
 });
 
-// GET /api/internal/audit-trail/:requestId â€” traza completa de un request
+// GET /api/internal/audit-trail/:requestId Ã¢â‚¬â€ traza completa de un request
 app.get('/api/internal/audit-trail/:requestId', async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -3481,8 +3516,8 @@ app.get('/api/internal/audit-trail/:requestId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/logs/trace/:conversationId â€” traza E2E por conversaciÃ³n (G-24/F-46)
-// Devuelve quiÃ©n â†’ quÃ© â†’ cÃ³mo â†’ mÃ³dulo â†’ proceso de cada evento de la conversaciÃ³n.
+// GET /api/logs/trace/:conversationId Ã¢â‚¬â€ traza E2E por conversaciÃƒÂ³n (G-24/F-46)
+// Devuelve quiÃƒÂ©n Ã¢â€ â€™ quÃƒÂ© Ã¢â€ â€™ cÃƒÂ³mo Ã¢â€ â€™ mÃƒÂ³dulo Ã¢â€ â€™ proceso de cada evento de la conversaciÃƒÂ³n.
 app.get('/api/logs/trace/:conversationId', async (req, res) => {
   const { conversationId } = req.params;
   try {
@@ -3533,9 +3568,9 @@ app.get('/api/logs/trace/:conversationId', async (req, res) => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // HEALTH + SLI METRICS (MVP-10: KPIs, SLA/SLI monitoring)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 
 let uptimeStart = Date.now();
@@ -3633,10 +3668,10 @@ app.get('/api/sli/metrics', (req, res) => {
   });
 });
 
-// â”€â”€â”€ Wibsite 2.0 â€” CHAT UNIFICADO (reply + media + intereses + agentes) â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Wibsite 2.0 Ã¢â‚¬â€ CHAT UNIFICADO (reply + media + intereses + agentes) Ã¢â€â‚¬Ã¢â€â‚¬
 const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'storage', 'media');
 
-// Subida de media (imagen/audio) para envÃ­o en chat
+// Subida de media (imagen/audio) para envÃƒÂ­o en chat
 app.post('/api/chat/media', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Archivo requerido (campo file)' });
@@ -3653,10 +3688,10 @@ app.post('/api/chat/media', upload.single('file'), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Servir media subida (pÃºblica a nivel helper; nginx la protege con SSO)
+// Servir media subida (pÃƒÂºblica a nivel helper; nginx la protege con SSO)
 app.use('/media', express.static(MEDIA_DIR));
 
-// Reply unificado: envÃ­a por el adaptador del canal con soporte de media/audio
+// Reply unificado: envÃƒÂ­a por el adaptador del canal con soporte de media/audio
 app.post('/api/chat/reply', async (req, res) => {
   try {
     const { channel, to, text, mediaUrl, mediaType, audioBase64, audioFilename } = req.body;
@@ -3707,7 +3742,7 @@ app.post('/api/chat/reply', async (req, res) => {
 
     await logEvent(sent.ok ? 'channel_reply' : 'error', {
       level: sent.ok ? 'info' : 'warn',
-      message: `Reply ${channel} â†’ ${to}: ${sent.ok ? 'enviado' : sent.error}`,
+      message: `Reply ${channel} Ã¢â€ â€™ ${to}: ${sent.ok ? 'enviado' : sent.error}`,
       tenantId: req.tenantId || 'default', module: 'channels', flow: 'multicanal.reply', action: 'channel.reply',
       severity: sent.ok ? null : 'medium', dependency: `${channel}-api`, latencyMs: Date.now() - started,
       data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error, hasMedia: !!(mediaUrl || audioBase64) },
@@ -3719,13 +3754,13 @@ app.post('/api/chat/reply', async (req, res) => {
   }
 });
 
-// AnÃ¡lisis de intereses del pipeline (dashboard)
+// AnÃƒÂ¡lisis de intereses del pipeline (dashboard)
 app.get('/api/interests', (req, res) => {
   try {
     const store = getStore();
     const limit = parseInt(req.query.limit || '12', 10);
     const interestMap = new Map();
-    const STOP = ['para', 'con', 'una', 'como', 'todo', 'esta', 'tiene', 'quiero', 'info', 'hola', 'mensaje', 'gracias', 'puede', 'esto', 'pero', 'mas', 'mÃ¡s', 'buenas', 'dias', 'tarde', 'noche', 'whatsapp', 'telegram'];
+    const STOP = ['para', 'con', 'una', 'como', 'todo', 'esta', 'tiene', 'quiero', 'info', 'hola', 'mensaje', 'gracias', 'puede', 'esto', 'pero', 'mas', 'mÃƒÂ¡s', 'buenas', 'dias', 'tarde', 'noche', 'whatsapp', 'telegram'];
     for (const lead of store.leads) {
       const raw = [
         lead.custom_fields?.interest, lead.custom_fields?.message, lead.custom_fields?.interests,
@@ -3734,7 +3769,7 @@ app.get('/api/interests', (req, res) => {
       const score = lead.score || 0;
       const channel = lead.source || lead.custom_fields?.channel || 'web';
       if (!raw) continue;
-      for (const word of raw.split(/[^a-zÃ¡Ã©Ã­Ã³ÃºÃ±Ã¼0-9#]+/)) {
+      for (const word of raw.split(/[^a-zÃƒÂ¡ÃƒÂ©ÃƒÂ­ÃƒÂ³ÃƒÂºÃƒÂ±ÃƒÂ¼0-9#]+/)) {
         if (!word || word.length < 4 || STOP.includes(word)) continue;
         const prev = interestMap.get(word) || { count: 0, scoreSum: 0, channels: new Set() };
         prev.count++; prev.scoreSum += score; prev.channels.add(channel);
@@ -3749,7 +3784,7 @@ app.get('/api/interests', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Agentes IA (config actual + catÃ¡logo)
+// Agentes IA (config actual + catÃƒÂ¡logo)
 app.get('/api/agents', (req, res) => {
   try {
     const store = getStore();
@@ -3763,7 +3798,7 @@ app.get('/api/agents', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// â”€â”€â”€ Catch-all: API JSON 404 (Wibsite 2.0 â€” UI servida por Next.js) â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Catch-all: API JSON 404 (Wibsite 2.0 Ã¢â‚¬â€ UI servida por Next.js) Ã¢â€â‚¬Ã¢â€â‚¬
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found', path: req.path });
 });
@@ -3778,7 +3813,7 @@ if (require.main === module) {
   const shutdown = async (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`\n${signal} recibido â€” cerrando conexiones...`);
+    console.log(`\n${signal} recibido Ã¢â‚¬â€ cerrando conexiones...`);
     try {
       await closeRedis();
       if (pool) await pool.end();
