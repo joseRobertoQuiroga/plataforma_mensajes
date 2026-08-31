@@ -224,7 +224,7 @@
 | F-13 | Bootstrap agent-core LangChain | G15-01 | POC mini-grafo 2 nodos | Latencia <5s; output correcto | Prod: decisión documentada (go/fallback) |
 | F-14 | Checkpointer memoria profunda | G10-01, G10-02 | 5 turnos + restart → contexto intacto | Estado reanudable idéntico | Prod: TTL y limpieza 7d OK |
 | F-15 | Template engine + validador | G16-01, G16-02, G12-02 | Carga JSONs + merge + inválido→error | Validación consultora+acme OK | Prod: versionadas en BD/git |
-| F-16 | Grafo 8 etapas LangGraph | G15-01 | 5 guiones de prueba | Chat completa ≤8 turnos, p95 <5s | Prod: latencia <5s sostenida |
+| F-16 | Grafo 8 etapas LangGraph | G15-01 | 5 guiones de prueba | Chat completa ≤8 turnos, p95 <5s | ✅ IMPLEMENTADO — 11 nodos (apertura, analyze, calificacion, propuesta, profundizacion, objeciones, cierre, handoff, seguimiento, kb, cotizacion); tests agentGraph 5/5 alineados a F1 (31/08) |
 | F-17 | Guardas confidencialidad+autonomía | G15-02 | 0 datos internal en 20 respuestas | Cotiz final jamás emitida; red deriva | Prod: monitoreo semanal fugas = 0 |
 | F-18 | Dify nodo + fallback OpenRouter | G5-01, G5-04 | Dify up/down → ambos modos | Failover <1s; clasificación OK | Prod: failover ejercido sin incidencia |
 
@@ -234,7 +234,7 @@
 |---|---|---|---|---|---|
 | F-19 | Banco objeciones ejecutable | G15-03 | 8/8 patrones OK + log | "Es muy caro" → reencuadre con nombre | Prod: rate resolución medible |
 | F-20 | Motor temperatura + decay | G15-04 | sim hot/warm/cold + decay | Temperatura visible con motivo en perfil | Prod: decay diario sin errores |
-| F-21 | Sync máquinas comercial↔técnica | G10-01, G15-01 | Mapeo 100% cubierto | Perfil refleja estado comercial | Prod: dashboard comercial ok |
+| F-21 | Sync máquinas comercial↔técnica | G10-01, G15-01 | Mapeo 100% cubierto | Perfil refleja estado comercial | ✅ Verificado 31/08 — proyección a etapas F1 (primer_contacto…comprador/descartado); commercialState.test 5/5 + agentGraph alineados |
 | F-22 | Handoff + briefing automático | G15-06 | trigger score≥70 + "hablar persona" | Briefing en Chatwoot con score+objec.+acción | Prod: humano cierra sin repetir |
 | F-23 | Cola seguimiento con cadencia | G15-05 | intento 2 a +1d; respuesta cancela | Cadencia en horario y canal correcto | Prod: 0 envíos fuera de horario 7d |
 | F-24 | HSM 24h + typing + opt-out | G8-01, G3-05 | ventana cerrada→HSM; baja→opt-out+stop | 0 rechazos Meta; typing visible | Prod: 0 violaciones política 30d |
