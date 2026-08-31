@@ -12,7 +12,7 @@ const PG_SNAPSHOT_TTL = 5000;
 let storeLock = Promise.resolve();
 
 // Snapshot PG (modo pg): lectura unificada desde PostgreSQL con refresco por TTL
-let pgSnapshot = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], channels: [] };
+let pgSnapshot = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], companies: [], channels: [] };
 let pgSnapshotTime = 0;
 let pgSnapshotLoading = null;
 
@@ -34,6 +34,7 @@ async function loadPgSnapshot() {
         optOuts: optOuts || [],
         leads: leads || [],
         scores: scores || [],
+        companies: [],
         channels: [],
       };
       pgSnapshotTime = now;
@@ -62,7 +63,7 @@ function loadJsonStore() {
       return storeCache;
     }
   } catch (e) { /* ignore */ }
-  storeCache = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], channels: [] };
+  storeCache = { campaigns: [], deliveries: [], optOuts: [], leads: [], scores: [], companies: [], channels: [] };
   storeCacheTime = now;
   return storeCache;
 }

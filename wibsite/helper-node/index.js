@@ -8,7 +8,7 @@ const axios = require('axios');
 const { authMiddleware, verifyMetaWebhookSignature, verifyTwilioWebhookSignature } = require('./middleware/auth');
 const { createTenantContextMiddleware, queryWithTenant, getTenantId } = require('./middleware/tenantContext');
 const { rateLimiter } = require('./middleware/rateLimiter');
-const { sanitizerMiddleware } = require('./middleware/sanitizer');
+const { sanitizerMiddleware, normalizationMiddleware } = require('./middleware/sanitizer');
 const { sanitizeMiddleware, logger } = require('./services/piiFilter');
 const { initAuditLogger, logEvent, logFallback, logIncident, createAuditMiddleware } = require('./services/auditLogger');
 const {
@@ -74,6 +74,7 @@ app.use(tracingMiddleware);
 app.use(authMiddleware);
 app.use(rateLimiter);
 app.use(sanitizerMiddleware);
+app.use(normalizationMiddleware);
 app.use(sanitizeMiddleware);
 app.use(createAuditMiddleware('api_call'));
 app.use(errorTrackerMiddleware()); // auto-tracks 500 errors with full context
@@ -1323,6 +1324,68 @@ app.post('/api/opt-outs/check-batch', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// =========================================================================
+// COMPANIES CRUD
+// =========================================================================
+
+app.get('/api/companies', async (req, res) => {
+  try {
+    const store = getStore();
+    res.json(store.companies || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/companies', async (req, res) => {
+  try {
+    const { name, domain, industry } = req.body;
+    if (!name) return res.status(400).json({ error: 'name requerido' });
+    
+    const company = {
+      id: crypto.randomUUID(),
+      tenant_id: getTenantId(req) || 'default',
+      name, domain, industry,
+      created_at: new Date().toISOString()
+    };
+    
+    await updateStore(store => {
+      if (!store.companies) store.companies = [];
+      store.companies.push(company);
+    });
+    
+    res.status(201).json(company);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/companies/:id', async (req, res) => {
+  try {
+    let updated = null;
+    await updateStore(store => {
+      const idx = (store.companies || []).findIndex(c => c.id === req.params.id);
+      if (idx !== -1) {
+        store.companies[idx] = { ...store.companies[idx], ...req.body, id: store.companies[idx].id };
+        updated = store.companies[idx];
+      }
+    });
+    if (!updated) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/companies/:id', async (req, res) => {
+  try {
+    let deleted = false;
+    await updateStore(store => {
+      const idx = (store.companies || []).findIndex(c => c.id === req.params.id);
+      if (idx !== -1) {
+        store.companies.splice(idx, 1);
+        deleted = true;
+      }
+    });
+    if (!deleted) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Auto-transition scheduled campaigns (called from health + dashboard)
 app.post('/api/campaigns/auto-activate', async (req, res) => {
   try {
@@ -1404,11 +1467,12 @@ app.get('/api/leads', async (req, res) => {
 // Crear lead manual (Wibsite 2.0 — pipeline FAB, importación, API)
 app.post('/api/leads', async (req, res) => {
   try {
-    const { name, phone, email, status, source, campaign_id, custom_fields } = req.body;
+    const { name, phone, email, status, source, campaign_id, custom_fields, company_id } = req.body;
     if (!name && !phone && !email) return res.status(400).json({ error: 'name, phone o email requeridos' });
     const lead = {
       id: crypto.randomUUID(),
       campaign_id: campaign_id || null,
+      company_id: company_id || null,
       contact_id: null,
       name: name || phone || 'Desconocido',
       phone: phone || null,
@@ -1449,7 +1513,7 @@ app.get('/api/leads/search', async (req, res) => {
 
 app.patch('/api/leads/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status'];
+    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id'];
     let updated = null;
     await updateStore(s => {
       const l = s.leads.find(l => l.id === req.params.id);
@@ -2747,12 +2811,16 @@ async function handleInboundMessage(channel, normalized) {
     let template = null;
     try { template = templateEngine.loadTemplate(process.env.AGENT_TEMPLATE_ID || 'consultora-software'); }
     catch (e) { template = templateEngine.loadTemplate('default'); }
+    const currentStore = getStore();
+    const currentLead = inboundLead || currentStore.leads.find(l => l.phone === senderId || l.email === senderId);
     const result = await executeCommercialGraph({
       message: agentInput,
       conversationId,
       tenantId: 'default',
       template,
       clientConfig: null,
+      lead: currentLead || null,
+      store: currentStore,
     });
     const reply = result?.response || '¡Gracias por tu mensaje! Te contactaremos a la brevedad.';
     const sent = await sendToChannel(channel, normalized.chatId || senderId, reply);

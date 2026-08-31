@@ -68,4 +68,50 @@ function sanitizerMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { sanitizerMiddleware, sanitizeInput, sanitizeMessages, INJECTION_PATTERNS };
+
+
+function normalizePhone(phone) {
+  if (!phone || typeof phone !== 'string') return phone;
+  // Remove spaces, dashes, parentheses
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  
+  // If it starts with 00, replace with +
+  if (cleaned.startsWith('00')) {
+    cleaned = '+' + cleaned.substring(2);
+  }
+  
+  // Remove any character that is not a digit or a leading +
+  cleaned = cleaned.replace(/(?!^\+)[^\d]/g, '');
+
+  return cleaned;
+}
+
+function normalizeEmail(email) {
+  if (!email || typeof email !== 'string') return email;
+  return email.trim().toLowerCase();
+}
+
+function normalizationMiddleware(req, res, next) {
+  // Apply normalization for leads creation/update and bulk import endpoints
+  if (req.path.startsWith('/api/leads') && (req.method === 'POST' || req.method === 'PATCH')) {
+    if (req.body) {
+      if (req.body.phone) {
+        req.body.phone = normalizePhone(req.body.phone);
+      }
+      if (req.body.email) {
+        req.body.email = normalizeEmail(req.body.email);
+      }
+    }
+  }
+  next();
+}
+
+module.exports = { 
+  sanitizerMiddleware, 
+  sanitizeInput, 
+  sanitizeMessages, 
+  INJECTION_PATTERNS,
+  normalizePhone,
+  normalizeEmail,
+  normalizationMiddleware
+};
