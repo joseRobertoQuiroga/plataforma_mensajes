@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+﻿const crypto = require('crypto');
 
 const DEFAULT_AGENT_CONFIG = {
   business_name: 'Mi Negocio',
@@ -58,7 +58,7 @@ function updateAgentConfig(tenantId, updates, store) {
   const updatableFields = [
     'business_name', 'business_type', 'description', 'personality', 'tone', 'language',
     'products', 'faqs', 'greeting', 'disclaimers', 'business_hours', 'whatsapp_templates',
-    'scoring_thresholds', 'auto_reply_enabled', 'max_messages_per_day',
+    'scoring_thresholds', 'auto_reply_enabled', 'max_messages_per_day', 'custom_fields', // K10
   ];
   for (const field of updatableFields) {
     if (updates[field] !== undefined) existing[field] = updates[field];
