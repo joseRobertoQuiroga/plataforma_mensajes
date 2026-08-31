@@ -405,4 +405,39 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     expect(b.stats.replied).toBe(0);
     expect(res.body.winner).toBe('A');
   });
+
+  // C10: atribución MVP campaña → replies → avance de etapa
+  test('C10: atribución correcta sobre dataset sintético', async () => {
+    const store = storeFacade.getStore();
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({ name: 'C10-attr', message_template: 'Hola {{name}}' });
+    expect(resCamp.status).toBe(201);
+    const campId = resCamp.body.id;
+
+    store.leads.push(
+      { id: 'C10-l1', name: 'Avanzó', phone: '+591C1000001', email: 'c10a@example.com', status: 'interesado', score: 70, entry_stage: 'primer_contacto' },
+      { id: 'C10-l2', name: 'Replied sin avanzar', phone: '+591C1000002', email: 'c10b@example.com', status: 'primer_contacto', score: 40, entry_stage: 'primer_contacto' },
+      { id: 'C10-l3', name: 'Sin reply', phone: '+591C1000003', email: 'c10c@example.com', status: 'primer_contacto', score: 30, entry_stage: 'primer_contacto' }
+    );
+    store.deliveries.push(
+      { id: 'D-C10-1', campaign_id: campId, contact_id: 'C10-l1', status: 'replied', created_at: new Date().toISOString() },
+      { id: 'D-C10-2', campaign_id: campId, contact_id: 'C10-l2', status: 'replied', created_at: new Date().toISOString() },
+      { id: 'D-C10-3', campaign_id: campId, contact_id: 'C10-l3', status: 'delivered', created_at: new Date().toISOString() }
+    );
+
+    const res = await request(app)
+      .get(`/api/campaigns/${campId}/attribution`)
+      .set('x-api-key', API_KEY);
+    expect(res.status).toBe(200);
+    expect(res.body.delivered).toBe(3);
+    expect(res.body.replied).toBe(2);
+    expect(res.body.advanced_stage).toBe(1);
+    expect(res.body.conversion_rate).toBeCloseTo(1 / 3, 3);
+    const l1 = res.body.leads.find(l => l.lead_id === 'C10-l1');
+    expect(l1.advanced_stage).toBe(true);
+    const l2 = res.body.leads.find(l => l.lead_id === 'C10-l2');
+    expect(l2.advanced_stage).toBe(false);
+  });
 });
