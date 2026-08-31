@@ -1052,6 +1052,52 @@ app.get('/api/campaigns/:id/ab-report', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// C10: atribución MVP — campaña → replies → leads que avanzaron etapa (ventas reales diferidas a Frappe)
+// Orden de etapas F1 (leadStages) para detectar avance respecto a la etapa en la que llegó el lead
+const STAGE_ORDER = ['primer_contacto', 'primer_mensaje', 'interesado', 'cotizacion_pendiente', 'posible_comprador', 'comprador'];
+app.get('/api/campaigns/:id/attribution', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Not found' });
+
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id);
+    const campaignLeads = store.leads.filter(l =>
+      deliveries.some(d => d.contact_id === l.id || d.contact_id === l.phone));
+
+    const repliedLeads = [];
+    for (const lead of campaignLeads) {
+      const leadDeliveries = deliveries.filter(d => d.contact_id === lead.id || d.contact_id === lead.phone);
+      const replied = leadDeliveries.some(d => d.status === 'replied');
+      const currentIdx = STAGE_ORDER.indexOf(String(lead.status || '').toLowerCase());
+      const entryIdx = STAGE_ORDER.indexOf(String(lead.entry_stage || 'primer_contacto'));
+      const advanced = replied && currentIdx > entryIdx;
+      repliedLeads.push({
+        lead_id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        score: lead.score,
+        entry_stage: lead.entry_stage || 'primer_contacto',
+        current_stage: lead.status,
+        replied,
+        advanced_stage: advanced,
+      });
+    }
+
+    const replied = repliedLeads.filter(l => l.replied);
+    const advanced = repliedLeads.filter(l => l.advanced_stage);
+    res.json({
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      delivered: deliveries.length,
+      replied: replied.length,
+      advanced_stage: advanced.length,
+      conversion_rate: deliveries.length > 0 ? +(advanced.length / deliveries.length).toFixed(4) : 0,
+      leads: repliedLeads.sort((a, b) => (b.advanced_stage ? 1 : 0) - (a.advanced_stage ? 1 : 0)),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // LEGACY v1 ENDPOINTS (compatibilidad n8n Ã¢â‚¬â€ sin /api/)
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
