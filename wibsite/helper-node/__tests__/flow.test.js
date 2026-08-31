@@ -172,4 +172,61 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     expect(resolveRes.status).toBe(200);
     expect(resolveRes.body.leads.some(l => l.status === 'opted_out')).toBe(false);
   });
+
+  // C9: dry-run resuelve audiencia y bloquea envio sin confirmacion
+  test('C9: start sin dry-run confirmado devuelve 428', async () => {
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({ name: 'C9-no-dryrun', message_template: 'Hola {{name}}', audience_filter: { all: true } });
+    expect(resCamp.status).toBe(201);
+
+    const resStart = await request(app)
+      .post(`/api/campaigns/${resCamp.body.id}/start`)
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resStart.status).toBe(428);
+    expect(resStart.body.error).toBe('dry_run_required');
+  });
+
+  test('C9: dry-run devuelve conteo y costo estimado sin enviar', async () => {
+    const store = storeFacade.getStore();
+    store.leads.push({ id: 'C9-lead-1', name: 'Dry Run Lead', phone: '+591C9000001', email: 'dry1@example.com', status: 'active', score: 50 });
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({ name: 'C9-dryrun-ok', message_template: 'Hola {{name}}', audience_filter: { all: true }, channel: 'whatsapp' });
+    expect(resCamp.status).toBe(201);
+
+    const resDry = await request(app)
+      .post(`/api/campaigns/${resCamp.body.id}/dry-run`)
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resDry.status).toBe(200);
+    expect(resDry.body.audience_total).toBeGreaterThan(0);
+    expect(resDry.body.cost_estimate_usd).toBeGreaterThan(0);
+    expect(resDry.body.channel).toBe('whatsapp');
+  });
+
+  test('C9: dry-run confirmado permite iniciar la campana', async () => {
+    const resCamp = await request(app)
+      .post('/api/campaigns')
+      .set('x-api-key', API_KEY)
+      .send({ name: 'C9-confirmado', message_template: 'Hola {{name}}', audience_filter: { all: true } });
+    const campId = resCamp.body.id;
+
+    const resConfirm = await request(app)
+      .post(`/api/campaigns/${campId}/dry-run/confirm`)
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resConfirm.status).toBe(200);
+    expect(resConfirm.body.status).toBe('dry_run_confirmed');
+
+    const resStart = await request(app)
+      .post(`/api/campaigns/${campId}/start`)
+      .set('x-api-key', API_KEY)
+      .send({});
+    expect(resStart.status).toBe(200);
+    expect(resStart.body.status).toBe('sending');
+  });
 });
