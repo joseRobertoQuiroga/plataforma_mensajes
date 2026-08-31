@@ -305,7 +305,7 @@ const grouped = stages.map((stage) => {
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-on-surface-variant">{formatDate(lead.updated_at || lead.created_at)}</span>
                           {/* MenÃƒÂº tÃƒÂ¡ctil para mover de etapa (mÃƒÂ³vil/tablet Ã¢â‚¬â€ el drag&drop no es tÃƒÂ¡ctil) */}
-                          <StageMenu lead={lead} onMove={moveStage} />
+                          <StageMenu lead={lead} onMove={moveStage} stages={stages} />
                         </div>
                       </div>
                     </div>
