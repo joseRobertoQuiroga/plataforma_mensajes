@@ -1,4 +1,6 @@
-﻿function buildLeadProfile(leadId, store) {
+﻿const { normalizeStage } = require('./leadStages');
+
+function buildLeadProfile(leadId, store) {
   const lead = store.leads.find(l => l.id === leadId);
   if (!lead) return null;
 
@@ -43,6 +45,9 @@
   // K7: Timeline unificada â€” mensajes + cambios de etapa + scores + notas
   const timeline = buildTimeline(lead, deliveries, scores);
 
+  // A9: grupo/segmento del lead (K12 chatGroups)
+  const groupNames = getLeadGroupNames(leadId);
+
   return {
     id: lead.id,
     name: lead.name,
@@ -50,6 +55,8 @@
     email: lead.email,
     source: lead.source,
     status: lead.status,
+    stage: normalizeStage(lead.status),
+    groups: groupNames,
     score: lead.score,
     is_favorite: !!lead.is_favorite, // K6
     company_id: lead.company_id || null,
@@ -65,10 +72,25 @@
     createdAt: lead.created_at,
     updatedAt: lead.updated_at,
     tags: buildTags(lead, deliveryStats, engagementScore, recencyScore),
-    nextAction: suggestNextAction(lead, deliveryStats, engagementScore, recencyScore),
+    nextAction: suggestNextAction(lead, deliveryStats, engagementScore, recencyScore, groupNames),
     notes: lead.notes || [],
     timeline, // K7
   };
+}
+
+// A9: nombres de los grupos manuales (K12) a los que pertenece el lead
+function getLeadGroupNames(leadId) {
+  try {
+    const chatGroups = require('./chatGroups');
+    const ids = chatGroups.getLeadGroups(leadId) || [];
+    const groups = chatGroups.listGroups();
+    return ids
+      .map((id) => groups.find((g) => g.id === id))
+      .filter(Boolean)
+      .map((g) => g.name);
+  } catch (e) {
+    return [];
+  }
 }
 
 function buildTags(lead, deliveryStats, engagementScore, recencyScore) {
@@ -86,11 +108,30 @@ function buildTags(lead, deliveryStats, engagementScore, recencyScore) {
   return tags;
 }
 
-function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore) {
+function suggestNextAction(lead, deliveryStats, engagementScore, recencyScore, groupNames = []) {
+  const stage = normalizeStage(lead.status);
+  const groupHint = groupNames && groupNames.length ? ` | grupos: ${groupNames.join(', ')}` : '';
+
   if (lead.status === 'opted_out') return { action: 'remove_from_campaigns', reason: 'Lead opt-out' };
   if (deliveryStats.total === 0) return { action: 'send_first_message', reason: 'Lead sin contacto inicial' };
   if (deliveryStats.daysSinceContact !== null && deliveryStats.daysSinceContact > 14 && deliveryStats.replied === 0) {
     return { action: 'send_followup', reason: `Sin respuesta en ${deliveryStats.daysSinceContact} dÃ­as` };
+  }
+  // A9: reglas por etapa (pipeline comercial F1)
+  if (stage === 'interesado' && deliveryStats.replied > 0) {
+    return { action: 'send_offer', reason: `Lead interesado que respondiÃ³: enviar oferta/cotizaciÃ³n${groupHint}` };
+  }
+  if (stage === 'cotizacion_pendiente') {
+    return { action: 'send_quote', reason: 'CotizaciÃ³n pendiente: confirmar propuesta y condiciones' };
+  }
+  if (stage === 'posible_comprador') {
+    return { action: 'try_to_close', reason: 'Posible comprador: agendar cierre o llamada de confirmaciÃ³n' };
+  }
+  if (stage === 'comprador') {
+    return { action: 'ask_for_referral', reason: 'Lead comprador: pedir referidos o venta cruzada' };
+  }
+  if (stage === 'descartado') {
+    return { action: 'reactivate', reason: 'Lead descartado: intentar reactivaciÃ³n con nueva propuesta' };
   }
   if (deliveryStats.replied > 0 && lead.score < 70) {
     return { action: 'try_to_close', reason: `Lead ha respondido, score ${lead.score}/100` };
@@ -159,4 +200,4 @@ function buildTimeline(lead, deliveries, scores) {
   return events.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
 }
 
-module.exports = { buildLeadProfile, buildTags, suggestNextAction, buildTimeline };
+module.exports = { buildLeadProfile, buildTags, suggestNextAction, buildTimeline, getLeadGroupNames };
