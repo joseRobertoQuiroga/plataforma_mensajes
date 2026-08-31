@@ -185,3 +185,7 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Oleada 1 and 2 updates
+ALTER TABLE campaign_leads ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT false;
+ALTER TABLE campaign_leads ADD COLUMN IF NOT EXISTS user_tags JSONB DEFAULT '[]'::jsonb;

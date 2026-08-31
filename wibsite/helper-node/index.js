@@ -1497,7 +1497,7 @@ app.get('/api/leads', async (req, res) => {
 // Crear lead manual (Wibsite 2.0 Ã¢â‚¬â€ pipeline FAB, importaciÃƒÂ³n, API)
 app.post('/api/leads', async (req, res) => {
   try {
-    const { name, phone, email, status, source, campaign_id, custom_fields, company_id } = req.body;
+    const { name, phone, email, status, source, campaign_id, custom_fields, company_id, user_tags } = req.body;
     if (!name && !phone && !email) return res.status(400).json({ error: 'name, phone o email requeridos' });
     const lead = {
       id: crypto.randomUUID(),
@@ -1512,6 +1512,7 @@ app.post('/api/leads', async (req, res) => {
       score: 0,
       score_data: {},
       custom_fields: custom_fields || {},
+      user_tags: user_tags || [],
       notes: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1586,7 +1587,7 @@ app.get('/api/leads/search', async (req, res) => {
 
 app.patch('/api/leads/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id', 'is_favorite']; // K6: is_favorite added
+    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id', 'is_favorite', 'user_tags']; // K6 + K4
     let updated = null;
     let transitionError = null;
     let oldStatus = null;

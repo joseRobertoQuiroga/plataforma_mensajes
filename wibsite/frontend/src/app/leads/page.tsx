@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Sheet } from "@/components/ui/sheet";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatDate, channelLabel, channelClasses, scoreClasses, scoreLabel, initials, stateDot, STATE_LABELS } from "@/lib/format";
+import { cn, formatDate, channelLabel, channelClasses, scoreClasses, scoreLabel, initials, stateDot, STATE_LABELS, groupBadge, groupDot } from "@/lib/format";
 
 const HELPER_URL = (process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100") === "/api" ? "" : process.env.NEXT_PUBLIC_HELPER_URL || "http://localhost:3100";
 const HELPER_API_KEY = process.env.NEXT_PUBLIC_HELPER_API_KEY || "";
@@ -20,6 +20,71 @@ function StatusProgress({ status }: { status: string }) {
         ))}
       </div>
       <span className="text-xs text-on-surface-variant ml-1 capitalize">{status || "primer_contacto"}</span>
+    </div>
+  );
+}
+
+// K4: Tags multi-valor con colores por lead
+function UserTagsEditor({ leadId, tags, onSaved }: { leadId: string; tags?: { label: string; color: string }[]; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState("primary");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const save = async (next: { label: string; color: string }[]) => {
+    await fetch(`${HELPER_URL}/api/leads/${leadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-api-key": HELPER_API_KEY },
+      body: JSON.stringify({ user_tags: next }),
+    });
+    onSaved();
+  };
+
+  const addTag = () => {
+    if (!newLabel.trim()) return;
+    save([...(tags || []), { label: newLabel.trim(), color: newColor }]);
+    setNewLabel(""); setOpen(false);
+  };
+
+  return (
+    <div className="relative mt-2" ref={ref}>
+      <div className="flex flex-wrap gap-1 items-center">
+        {(tags || []).map((t, i) => (
+          <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1", groupBadge(t.color))}>
+            {t.label}
+            <button onClick={() => { const n = (tags || []).filter((_, j) => j !== i); save(n); }} className="opacity-60 hover:opacity-100 leading-none">&times;</button>
+          </span>
+        ))}
+        <button onClick={() => setOpen(o => !o)} className="text-[10px] px-1.5 py-0.5 rounded border border-dashed border-white/20 text-on-surface-variant hover:text-white hover:border-white/40 transition-colors">
+          + Tag
+        </button>
+      </div>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 w-52 bg-surface-container-high border border-white/10 rounded-xl shadow-2xl p-3 z-50">
+          <input type="text" placeholder="Nuevo tag…" autoFocus value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addTag()}
+            className="w-full text-xs px-2.5 py-1.5 rounded-lg bg-surface border border-white/10 focus:border-primary outline-none text-white mb-2.5" />
+          <div className="flex gap-1.5 mb-2.5">
+            {["primary","success","warning","danger","secondary","tertiary"].map(c => (
+              <button key={c} onClick={() => setNewColor(c)}
+                className={cn("w-5 h-5 rounded-full flex items-center justify-center transition-transform", groupDot(c), newColor === c ? "scale-125 ring-2 ring-white/30" : "")}>
+              </button>
+            ))}
+          </div>
+          <button onClick={addTag} className="w-full text-xs bg-primary/20 text-primary border border-primary/30 rounded-lg py-1.5 font-medium hover:bg-primary/30 transition-colors">
+            Agregar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -133,9 +198,11 @@ function LeadDetail({ lead, onClose, onChanged }: { lead: any; onClose: () => vo
               <h3 className="text-lg font-bold text-white truncate">{p.name || "Sin nombre"}</h3>
               <p className="text-xs text-on-surface-variant truncate">{p.phone || p.email || "Sin contacto"}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} Ã‚Â· {scoreLabel(p.score)}</span>
+                <span className={cn("text-[11px] px-2 py-0.5 rounded-full border font-semibold", scoreClasses(p.score))}>{p.score ?? 0} · {scoreLabel(p.score)}</span>
                 <span className={cn("text-[11px] px-2 py-0.5 rounded-full border", channelClasses(p.source || "web"))}>{channelLabel(p.source)}</span>
               </div>
+              {/* K4: Tags multi-valor con colores */}
+              <UserTagsEditor leadId={p.id} tags={p.user_tags} onSaved={onChanged} />
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
@@ -446,7 +513,8 @@ export default function LeadsPage() {
   const filtered = leads.filter((l) => {
     if (search.trim()) {
       const q = search.toLowerCase();
-      if (![l.name, l.phone, l.email, l.source, l.custom_fields?.interest].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return false;
+      const tagHit = (l.user_tags || []).some((t: any) => String(t.label).toLowerCase().includes(q));
+      if (!tagHit && ![l.name, l.phone, l.email, l.source, l.custom_fields?.interest].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return false;
     }
     return true;
   });
@@ -611,6 +679,16 @@ export default function LeadsPage() {
                   </div>
                   <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", scoreClasses(lead.score))}>{lead.score || 0} Ã‚Â· {scoreLabel(lead.score)}</span>
                 </div>
+
+                {/* K4: Tags del lead */}
+                {lead.user_tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {lead.user_tags.slice(0, 4).map((t: any, i: number) => (
+                      <span key={i} className={cn("text-[9px] px-1.5 py-0.5 rounded border", groupBadge(t.color))}>{t.label}</span>
+                    ))}
+                    {lead.user_tags.length > 4 && <span className="text-[9px] text-on-surface-variant px-1.5 py-0.5 rounded border border-white/10">+{lead.user_tags.length - 4}</span>}
+                  </div>
+                )}
 
                 <div className="py-4 border-y border-white/5 mb-4">
                   <div className="text-xs text-on-surface-variant mb-2">Estado del Pipeline</div>
