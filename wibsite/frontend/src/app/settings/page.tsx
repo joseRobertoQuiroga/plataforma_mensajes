@@ -196,6 +196,7 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState("");
   const [testLoading, setTestLoading] = useState(false);
   const [testMedia, setTestMedia] = useState<{ url: string; type: string } | null>(null);
+  const [graphResult, setGraphResult] = useState<{ path: string[]; stages: string[]; turnCount: number } | null>(null);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [editingKnowledge, setEditingKnowledge] = useState<any>(null);
   const [agentOpen, setAgentOpen] = useState(false);
@@ -331,6 +332,34 @@ export default function SettingsPage() {
       } catch {
         setTestResult(raw);
       }
+    } catch (e: any) {
+      setTestResult(`Error: ${e.message}`);
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  // R15: Simulador de conversacion expuesto desde settings (grafo de nodos)
+  const testGraph = async () => {
+    if (!testMessage.trim()) return;
+    setTestLoading(true);
+    setTestResult("");
+    setGraphResult(null);
+    try {
+      const res = await fetch(`${HELPER_URL}/api/agent/test-graph`, {
+        method: "POST",
+        headers: { "x-api-key": HELPER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ message: testMessage, conversationId: `sim-${Date.now()}` }),
+      });
+      const d = await res.json();
+      const final = d.final || {};
+      const raw = typeof final.text === "string" ? final.text : final.text?.text || final.response || d.error || JSON.stringify(d);
+      setTestResult(raw);
+      setGraphResult({
+        path: Array.isArray(d.path) ? d.path : [],
+        stages: Array.isArray(d.context?.stages) ? d.context.stages : [],
+        turnCount: d.context?.turnCount ?? d.path?.length ?? 0,
+      });
     } catch (e: any) {
       setTestResult(`Error: ${e.message}`);
     } finally {
@@ -829,6 +858,11 @@ export default function SettingsPage() {
                 className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant border border-outline-variant hover:text-white transition-colors text-sm font-medium disabled:opacity-50">
                 ðŸ–¼ Enviar imagen
               </button>
+              <button onClick={testGraph} disabled={testLoading || !testMessage.trim()}
+                className="px-4 py-2.5 rounded-xl bg-secondary/20 text-secondary border border-secondary/30 hover:bg-secondary/30 transition-colors text-sm font-medium disabled:opacity-50"
+                title="Simula la conversacion recorriendo el grafo comercial y muestra la ruta de nodos">
+                Probar agente (grafo)
+              </button>
               <button onClick={recording ? stopRecording : startRecording} disabled={testLoading}
                 className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface-variant border border-outline-variant hover:text-white transition-colors text-sm font-medium disabled:opacity-50">
                 {recording ? "â¹ Detener grabaciÃ³n" : "ðŸŽ¤ Grabar audio"}
@@ -839,6 +873,24 @@ export default function SettingsPage() {
                 <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Respuesta del agente</p>
                 <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
                   <p className="text-sm text-white whitespace-pre-wrap">{testResult}</p>
+                </div>
+              </div>
+            )}
+            {graphResult && (
+              <div className="mt-4">
+                <p className="text-xs text-on-surface-variant uppercase tracking-wide mb-2">Ruta del grafo ({graphResult.turnCount} nodos)</p>
+                <div className="bg-secondary/10 border border-secondary/20 rounded-xl p-4">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {graphResult.path.map((node, i) => (
+                      <span key={`${node}-${i}`} className="inline-flex items-center gap-1.5">
+                        {i > 0 && <span className="text-on-surface-variant text-xs">→</span>}
+                        <span className="px-2 py-0.5 rounded-md bg-secondary/20 text-secondary border border-secondary/30 text-xs font-medium capitalize">{node}</span>
+                      </span>
+                    ))}
+                  </div>
+                  {graphResult.stages.length > 0 && (
+                    <p className="text-xs text-on-surface-variant mt-3">Etapas: {graphResult.stages.join(" → ")}</p>
+                  )}
                 </div>
               </div>
             )}
