@@ -3532,6 +3532,21 @@ app.post('/api/channels/broadcast', async (req, res) => {
       const started = Date.now();
       const sent = await sendToChannel(channel, to, text, { subject: subject || 'Wibsite Business' });
       results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error });
+      // C8: log de backoff aplicado (reintentos por rate-limit)
+      if (sent.attempts > 1 || sent.backoffAppliedMs > 0) {
+        await logEvent('state_transition', {
+          level: 'info',
+          message: `backoff_aplicado ${channel} → ${to}: ${sent.attempts} intentos, ${sent.backoffAppliedMs}ms espera (rate-limit)`,
+          tenantId: req.tenantId || 'default',
+          module: 'channels',
+          flow: 'multicanal.broadcast',
+          action: 'broadcast.backoff',
+          severity: 'low',
+          dependency: `${channel}-api`,
+          latencyMs: Date.now() - started,
+          data: { channel, to, attempts: sent.attempts, backoffAppliedMs: sent.backoffAppliedMs },
+        });
+      }
       await logEvent(sent.ok ? 'campaign_sent' : 'error', {
         level: sent.ok ? 'info' : 'warn',
         message: `Broadcast ${channel} Ã¢â€ â€™ ${to}: ${sent.ok ? 'enviado' : sent.error}`,

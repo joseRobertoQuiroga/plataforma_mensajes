@@ -244,3 +244,46 @@ describe('Multimodal — mediaProcessor (OpenRouter free tier)', () => {
     expect(pieces[1]).toContain('[Descripción de imagen]');
   });
 });
+
+describe('C8 - Rate-limit inteligente con backoff y reintentos', () => {
+  test('isRateLimitedError detecta errores de limite', () => {
+    expect(channels.isRateLimitedError('Request failed with status code 429')).toBe(true);
+    expect(channels.isRateLimitedError('rate limit exceeded')).toBe(true);
+    expect(channels.isRateLimitedError('too many requests')).toBe(true);
+    expect(channels.isRateLimitedError('400 Bad Request')).toBe(false);
+  });
+
+  test('sendToChannel reintenta con backoff ante rate-limit y luego exito', async () => {
+    const axios = require('axios');
+    let calls = 0;
+    axios.post.mockImplementation(async () => {
+      calls++;
+      if (calls <= 1) {
+        const err = new Error('Request failed with status code 429');
+        throw err;
+      }
+      return { data: { ok: true } };
+    });
+    process.env.TELEGRAM_BOT_TOKEN = 'test-token-c8';
+    process.env.CHANNEL_BACKOFF_MS = '10';
+    const res = await channels.sendToChannel('telegram', '123', 'hola', { maxRetries: 2 });
+    expect(res.ok).toBe(true);
+    expect(res.attempts).toBe(2);
+    expect(res.backoffAppliedMs).toBeGreaterThan(0);
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.CHANNEL_BACKOFF_MS;
+  });
+
+test('sendToChannel agota reintentos si el rate-limit persiste', async () => {
+    const axios = require('axios');
+    axios.post.mockRejectedValue(new Error('429 Too Many Requests'));
+    process.env.TELEGRAM_BOT_TOKEN = 'test-token-c8';
+    process.env.CHANNEL_BACKOFF_MS = '5';
+    const res = await channels.sendToChannel('telegram', '123', 'hola', { maxRetries: 3 });
+    expect(res.ok).toBe(false);
+    expect(res.attempts).toBe(3);
+    expect(res.backoffAppliedMs).toBeGreaterThan(0);
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.CHANNEL_BACKOFF_MS;
+  }, 15000);
+});
