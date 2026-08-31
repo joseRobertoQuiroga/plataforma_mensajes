@@ -2530,7 +2530,7 @@ app.get('/api/templates', (req, res) => {
 
 app.post('/api/templates', (req, res) => {
   try {
-    const { name, channel, description, subject, body, variables, category, max_length } = req.body;
+    const { name, channel, description, subject, body, variables, category, max_length, requires_approval } = req.body;
     if (!name || !channel || !body) return res.status(400).json({ error: 'name, channel, and body are required' });
     const t = {
       id: crypto.randomUUID().substring(0, 12),
@@ -2540,6 +2540,7 @@ app.post('/api/templates', (req, res) => {
       variables: variables || [],
       category: category || 'custom',
       max_length: max_length || null,
+      requires_approval: !!requires_approval, // C12: HSM Meta requiere plantilla aprobada fuera de sesión
       created_at: new Date().toISOString(),
     };
     updateStore(s => {
@@ -2585,6 +2586,38 @@ app.post('/api/templates/preview', (req, res) => {
       character_count: filled.length,
       max_length: t.max_length,
       exceeds_limit: t.max_length ? filled.length > t.max_length : false,
+      // C12: validación por canal — HSM (WhatsApp) requiere aprobación Meta fuera de sesión
+      requires_approval: !!t.requires_approval,
+      channel_valid: channelOkForTemplate(req.body.channel || t.channel, t),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C12: validación de plantilla por canal (HSM vs sesión libre)
+// WhatsApp (Meta) exige plantilla aprobada (requires_approval) fuera de ventana de sesión (24h).
+// Canales como Telegram/email permiten mensajes libres; el flag del template es informativo de requisito.
+function channelOkForTemplate(channel, template) {
+  const c = String(channel || '').toLowerCase();
+  if (c === 'whatsapp') {
+    return template.requires_approval ? { ok: false, reason: 'HSM: requiere plantilla aprobada por Meta (validación simulada sin credenciales reales)' } : { ok: true, reason: 'Sesión activa: mensaje libre permitido' };
+  }
+  return { ok: true, reason: 'Canal sin restricción de plantilla aprobada' };
+}
+
+// GET /api/templates/validate/:id — valida una plantilla para un canal (C12)
+app.get('/api/templates/validate/:id', (req, res) => {
+  try {
+    const { channel } = req.query;
+    const t = (getStore().templates || DEFAULT_TEMPLATES).find(t => t.id === req.params.id);
+    if (!t) return res.status(404).json({ error: 'Template not found' });
+    const validation = channelOkForTemplate(channel || t.channel, t);
+    res.json({
+      template_id: t.id,
+      name: t.name,
+      channel: channel || t.channel,
+      requires_approval: !!t.requires_approval,
+      valid: validation.ok,
+      reason: validation.reason,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3641,10 +3674,20 @@ function pickVariant(to, variants) {
 
 app.post('/api/channels/broadcast', async (req, res) => {
   try {
-    const { channel, message_template, audience = {}, subject } = req.body;
+    const { channel, message_template, audience = {}, subject, template_id } = req.body;
     if (!channel || !message_template) return res.status(400).json({ error: 'channel y message_template requeridos' });
     const adapter = getChannel(channel);
     if (!adapter) return res.status(400).json({ error: `Canal no soportado: ${channel}` });
+
+    // C12: rechazo de plantilla HSM sin aprobación (WhatsApp/Meta, fuera de sesión simulada)
+    if (template_id) {
+      const t = (getStore().templates || DEFAULT_TEMPLATES).find(t => t.id === template_id);
+      if (!t) return res.status(404).json({ error: 'Template not found' });
+      const v = channelOkForTemplate(channel, t);
+      if (!v.ok) {
+        return res.status(400).json({ error: 'template_not_valid_for_channel', message: v.reason, template_id: t.id });
+      }
+    }
 
     const store = getStore();
     // C1: filtro de opt-outs centralizado (store.optOuts + flags del lead)
