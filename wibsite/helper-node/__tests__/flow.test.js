@@ -483,4 +483,41 @@ describe('Flujos de Negocio (Business Flows) â€” pipeline nativo Wibsite 2.
     expect(resTg.status).toBe(200);
     expect(resTg.body.valid).toBe(true);
   });
+
+  // R12: Autorespuestas a comandos MENU/HORARIOS/PRECIO
+  test('R12: comando MENU responde con menú principal sin llamar LLM', async () => {
+    const res = await request(app)
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({ From: 'whatsapp:+59170000001', Body: 'MENU', To: 'whatsapp:+15017250604' });
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe('command');
+    expect(res.body.command).toBe('MENU');
+    expect(res.body.response).toContain('Menú principal');
+    expect(res.body.response).toContain('1');
+    expect(res.body.response).toContain('0');
+  });
+
+  test('R12: comando HORARIOS responde con horario sin llamar LLM', async () => {
+    const res = await request(app)
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({ From: 'whatsapp:+59170000001', Body: 'HORARIOS', To: 'whatsapp:+15017250604' });
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe('command');
+    expect(res.body.command).toBe('HORARIOS');
+    expect(res.body.response).toContain('horario');
+    expect(res.body.response).toContain('09:00');
+  });
+
+  test('R12: comando PRECIO responde con info de precio sin llamar LLM', async () => {
+    const res = await request(app)
+      .post('/webhooks/twilio-inbound')
+      .type('form')
+      .send({ From: 'whatsapp:+59170000001', Body: 'PRECIO', To: 'whatsapp:+15017250604' });
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe('command');
+    expect(res.body.command).toBe('PRECIO');
+    expect(res.body.response).toContain('precio');
+  });
 });

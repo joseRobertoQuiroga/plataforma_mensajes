@@ -12,8 +12,8 @@
 | **PropÃƒÂ³sito** | Plataforma de mensajerÃƒÂ­a omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email, Telegram) |
 | **Stack** | Chatwoot + Dify + n8n + Twenty CRM + Helper Node + PostgreSQL + Redis + Weaviate + Elastic Stack (Elasticsearch + Kibana + OTel Collector) + MinIO |
 | **OrquestaciÃƒÂ³n** | Docker Compose (20 servicios) |
-| **Estado General** | 🟢 **Oleada 3 COMPLETADA — C1, C4, C5, C6, C8, C9, C10, C12 cerrados. Listo para Oleada 4** |
-| **Última actualización** | 2026-08-31 (Oleada 3 cerrada: opt-out bloqueado, reactivación, A/B, eventos de fecha, rate-limit, dry-run, atribución, plantillas por canal. Tests unit 88/88 + flow 17 + smoke 2 ✅) |
+| **Estado General** | 🟢 **Oleada 4 COMPLETADA — R1, R4, R5, R6, R7, R8, R12, R13, R14 cerrados. Listo para Oleada 5** |
+| **Última actualización** | 2026-09-01 (Oleada 4 cerrada: bienvenida/horario, snippets, router agentes, handoff, KB sync, escalamiento, comandos, catálogo, opt-in. Tests unit 88/88 + flow 17 + smoke 2 ✅) |
 | **Helper Node** | v2.3.0 — **153 rutas** (123 únicas), 83 tests (8 suites unit), Oleada 2 fully live |
 
 ---

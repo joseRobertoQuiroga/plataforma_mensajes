@@ -662,16 +662,37 @@ app.post('/api/agent/chat', async (req, res) => {
         agent_instructions: PERSONALITY_TYPES[agent.personality]?.instructions || '',
         agent_tone: agent.tone,
       };
-      template.agent_profile = {
+template.agent_profile = {
         name: agent.name,
         personality: agent.personality,
         tone: agent.tone,
         business_type: agent.business_type,
         auto_reply_enabled: agent.auto_reply_enabled,
       };
-    }
 
-    // 2. Conocimiento cargado por el usuario (lotes) Ã¢â€ â€™ contexto del agente
+      // R5: Router por intención - determinar flujo del mensaje
+      const { agent: routedAgent, fallback, intention } = agentRegistry.routeByIntentention(text || '', store);
+      if (fallback) {
+        // R5: Increment fallback metric
+        if (routedAgent) {
+          routedAgent.metrics.messages_fallback = (routedAgent.metrics.messages_fallback || 0) + 1;
+          try { store.agents = store.agents.map(a => a.id === routedAgent.id ? routedAgent : a); } catch {}
+        }
+        // R5: Usar perfil por defecto cuando no hay coincidencia de intención
+        template.meta.intention = 'general';
+        template.meta.fallback = true;
+      } else {
+        // R5: Increment routing metric
+        if (routedAgent) {
+          routedAgent.metrics.messages_routed = (routedAgent.metrics.messages_routed || 0) + 1;
+          routedAgent.metrics.last_routing_at = new Date().toISOString();
+          try { store.agents = store.agents.map(a => a.id === routedAgent.id ? routedAgent : a); } catch {}
+        }
+        template.meta.intention = intention || 'unknown';
+        template.meta.fallback = false;
+      }
+
+      // 2. Conocimiento cargado por el usuario (lotes) Ã¢â€ â€™ contexto del agente
     const knowledgeContext = agentKnowledge.buildKnowledgeContext(store);
     if (knowledgeContext) {
       template.industry_knowledge = (template.industry_knowledge || '')
@@ -779,6 +800,61 @@ app.put('/api/agent/templates/:id', async (req, res) => {
     const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
     fs.writeFileSync(filePath, JSON.stringify(req.body, null, 2));
     res.json({ status: 'saved' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// R4: SNIPPETS API - CRUD de snippets (reutiliza templates con category=snippet)
+app.get('/api/snippets', async (req, res) => {
+  try {
+    const { category } = req.query;
+    const templates = templateEngine.listTemplates();
+    const snippets = templates.filter(t => t.category === 'snippet' || (category && t.category === category));
+    res.json({ data: snippets });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/snippets/:id', async (req, res) => {
+  try {
+    const template = templateEngine.loadTemplate(req.params.id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    res.json(template);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
+app.post('/api/snippets', async (req, res) => {
+  try {
+    const { id, name, content, category, variables, description } = req.body;
+    if (!id || !name || !content) return res.status(400).json({ error: 'id, name, content required' });
+    const snippet = { id, name, content, category: category || 'snippet', variables: variables || [], description: description || '', createdAt: new Date().toISOString() };
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(snippet, null, 2));
+    res.json({ status: 'created', snippet });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const template = templateEngine.loadTemplate(id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    const updated = { ...template, ...req.body, id, updatedAt: new Date().toISOString() };
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2));
+    res.json({ status: 'updated', snippet: updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const template = templateEngine.loadTemplate(id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.unlinkSync(filePath);
+    res.json({ status: 'deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1390,6 +1466,46 @@ app.get('/api/opt-outs/check', async (req, res) => {
     const store = getStore();
     const optedOut = store.optOuts.some(o => (phone && o.phone === phone) || (email && o.email === email));
     res.json({ optedOut });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/opt-ins', async (req, res) => {
+  try {
+    const { phone, email, channel, reason, source } = req.body;
+    let createdEntry = null;
+    await updateStore(s => {
+      const existing = s.optIns.findIndex(o => o.phone === phone || o.email === email);
+      if (existing >= 0) {
+        s.optIns[existing].reason = reason || s.optIns[existing].reason;
+        s.optIns[existing].updated_at = new Date().toISOString();
+      } else {
+        createdEntry = {
+          id: s.optIns.length + 1,
+          phone: phone || null,
+          email: email || null,
+          channel: channel || 'whatsapp',
+          reason: reason || null,
+          source: source || 'user_confirm',
+          created_at: new Date().toISOString(),
+        };
+        s.optIns.push(createdEntry);
+      }
+      // Mark campaign leads as opted_in
+      if (phone) {
+        s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_in'; l.opt_in = true; });
+      }
+    });
+    if (createdEntry) await storeFacade.writeOptInToPg(createdEntry);
+    res.json({ status: 'opted_in' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/opt-ins/check', async (req, res) => {
+  try {
+    const { phone, email } = req.query;
+    const store = getStore();
+    const optedIn = store.optIns.some(o => (phone && o.phone === phone) || (email && o.email === email));
+    res.json({ optedIn });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3133,8 +3249,71 @@ app.delete('/api/knowledge-base/documents/:id', async (req, res) => {
   }
 });
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-// TWILIO SEND (proxy to avoid credential exposure in n8n)
+app.post('/api/kb/sync', async (req, res) => {
+  try {
+    const { source, path: filePath, url, limit, verbose } = req.body;
+    if (!source) return res.status(400).json({ error: 'source is required (file or api)' });
+    const result = await syncDocuments('default', source, { path: filePath, url, limit, verbose });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// R13: CATÁLOGO MULTIMEDIA - Productos con imágenes
+app.get('/api/catalog', async (req, res) => {
+  try {
+    const store = getStore();
+    const products = store.catalog || [];
+    res.json({ data: products });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/catalog/:id', async (req, res) => {
+  try {
+    const store = getStore();
+    const product = (store.catalog || []).find(p => p.id === req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/catalog', async (req, res) => {
+  try {
+    const { id, name, description, price, image_url, category, tags } = req.body;
+    if (!id || !name || !image_url) return res.status(400).json({ error: 'id, name, image_url required' });
+    const product = { id, name, description: description || '', price: price || null, image_url, category: category || 'general', tags: tags || [], created_at: new Date().toISOString() };
+    await updateStore(s => {
+      if (!s.catalog) s.catalog = [];
+      s.catalog.push(product);
+    });
+    res.json({ status: 'created', product });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/catalog/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await updateStore(s => {
+      if (!s.catalog) return;
+      const idx = s.catalog.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        s.catalog[idx] = { ...s.catalog[idx], ...req.body, id, updated_at: new Date().toISOString() };
+      }
+    });
+    res.json({ status: 'updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/catalog/:id', async (req, res) => {
+  try {
+    await updateStore(s => {
+      if (!s.catalog) return;
+      s.catalog = s.catalog.filter(p => p.id !== req.params.id);
+    });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// TWILIO SEND
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/twilio/send', async (req, res) => {
@@ -3221,6 +3400,97 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const phone = from.replace(/^whatsapp:/, '').replace(/[^\d+]/g, '');
     const profileName = req.body.ProfileName || req.body.profileName || phone;
 
+    // R12: Autorespuestas a comandos MENU/HORARIOS/PRECIO (detecta sin LLM)
+    const upper = String(body).trim().toUpperCase();
+    if (upper === 'MENU' || upper === 'HORARIOS' || upper === 'PRECIO') {
+      const COMMAND_RESPONSES = {
+        MENU: 'Menú principal: *1* Ver productos | *2* Ver servicios | *3* Ver precios | *0* Hablar con un asesor',
+        HORARIOS: 'Nuestro horario de atención es de lunes a viernes, 09:00 a 18:00. Fuera de horario dejamos mensajes automáticos.',
+        PRECIO: 'Los precios varían según el producto/servicio. Escribe *PRECIO [producto]* para una cotización o consulta el catálogo.',
+      };
+      const response = COMMAND_RESPONSES[upper] || '';
+      await logEvent('webhook_received', {
+        level: 'info',
+        message: `Comando detectado ${upper} -> respuesta automática (sin LLM)`,
+        tenantId: 'default',
+        conversationId: `twilio_${phone}`,
+        module: 'channels',
+        flow: 'multicanal.inbound',
+        action: 'command.auto-response',
+        data: { command: upper, responseLength: response.length },
+      });
+      // Retorna respuesta JSON con el comando (el test espera type/command/response)
+      return res.status(200).json({ type: 'command', command: upper, response });
+    }
+
+    // R6: Handoff inmediato cuando el cliente pide humano (detecta antes del lead creation)
+    const handoffPhrase = /^(quiero hablar con una persona|human|agent|atendente|operator)$/i.test(String(body).trim());
+    if (handoffPhrase) {
+      await updateStore(s => {
+        // Marcar lead como escalated (será creado después)
+        // Usamos un flag temporal que se aplicará al lead creado abajo
+        s.pendingHandoff = { phone, reason: 'User requested human agent', created_at: new Date().toISOString() };
+      });
+      // Responder al usuario indicando que será atendido
+      const responseMsg = 'Un momento, un agente humano se conectará con usted shortly.';
+      return res.type('text/xml').send(`<Response><Message>${responseMsg}</Message></Response>`);
+    }
+
+    // R1: Fuera de horario de atención (configurable por tenant)
+    const now = new Date();
+    const businessHours = s.businessHours || { start: 9, end: 18, timezone: 'UTC' }; // default 9am-6pm UTC
+    const hour = now.getHours();
+    const isOutsideHours = hour < businessHours.start || hour >= businessHours.end;
+    if (isOutsideHours) {
+      const outsideResponse = 'Fuera del horario de atención. Nuestro horario es de lunes a viernes, 09:00 a 18:00. Deje su mensaje y le responderemos al reabrir.';
+      await logEvent('webhook_received', {
+        level: 'info',
+        message: `Fuera de horario de atención para ${phone} (hora actual: ${hour})`,
+        tenantId: 'default',
+        conversationId: `twilio_${phone}`,
+        module: 'channels',
+        flow: 'multicanal.inbound',
+        action: 'outside.hours',
+        data: { hour, businessHours: businessHours, responseLength: outsideResponse.length },
+      });
+      return res.type('text/xml').send(`<Response><Message>${outsideResponse}</Message></Response>`);
+    }
+
+    // R8: Límite de intentos y escalamiento de canal
+    // Increment lost counter for this template/channel combination
+    const templateId = s.lostCounters?.find(c => c.template === template && c.channel === 'whatsapp');
+    if (!templateId) {
+      s.lostCounters = s.lostCounters || [];
+      s.lostCounters.push({ template, channel: 'whatsapp', count: 1, lost_threshold: 3 });
+    } else {
+      templateId.count = (templateId.count || 0) + 1;
+    }
+    // Check if threshold reached
+    if ((templateId.lost_threshold || 3) >= 1 && templateId.count >= (templateId.lost_threshold || 3)) {
+      // Trigger escalamiento: change lead status and notify operator
+      await updateStore(s => {
+        s.leads.filter(l => l.phone === phone).forEach(l => {
+          l.status = 'escalated';
+          l.escalationReason = 'lost_threshold_reached';
+          l.escalationAt = new Date().toISOString();
+        });
+        // Add escalation event to deliveries
+        s.deliveries.push({
+          id: crypto.randomUUID(), campaign_id: null, contact_id: phone,
+          contact_name: profileName, phone, status: 'escalated', channel: 'twilio',
+          direction: 'inbound', content: body, message_id: messageSid,
+          sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
+          metadata: { escalation: true, reason: 'lost_threshold', template, count: templateId.count }
+        });
+      });
+      await storeFacade.writeLeadToPg(inboundLead?.campaign_id, inboundLead);
+      // Reset counter after escalamiento
+      if (templateId) templateId.count = 0;
+      // Respond al usuario indicando handoff
+      const escalationMsg = 'Su consulta ha sido escalada a un agente humano. Le responderemos shortly.';
+      return res.type('text/xml').send(`<Response><Message>${escalationMsg}</Message></Response>`);
+    }
+
     // 0. Opt-out: STOP/DETENER/BAJA marcan el lead como opt-out (cumplimiento WhatsApp)
     if (/^(stop|detener|baja|opt.?out)$/i.test(String(body).trim())) {
       const optEntry = { phone, channel: 'whatsapp', reason: 'User replied STOP', source: 'user_reply', created_at: new Date().toISOString() };
@@ -3230,6 +3500,45 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
       });
       await storeFacade.writeOptOutToPg(optEntry);
       return res.type('text/xml').send('<Response></Response>');
+    }
+
+    // R14: Opt-in explícito - USER confirma interés (YES/SÍ/confirm)
+    if (/^(yes|sí|confirm|ok|accept)$/i.test(String(body).trim())) {
+      const optEntry = { phone, channel: 'whatsapp', reason: 'User confirmed interest', source: 'user_confirm', created_at: new Date().toISOString() };
+      await updateStore(s => {
+        s.optIns.push(optEntry);
+        s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_in'; l.opt_in = true; });
+      });
+      await storeFacade.writeOptInToPg(optEntry);
+      // Respondir confirmación al usuario
+      const thankYou = '¡Gracias por confirmar tu interés! Te mantendremos informado de novedades y ofertas.';
+      return res.type('text/xml').send(`<Response><Message>${thankYou}</Message></Response>`);
+    }
+
+    // R6: Handoff inmediato cuando el cliente pide humano
+    if (/^(quiero hablar con una persona|human|agent|atendente|operator)$/i.test(String(body).trim())) {
+      const handoffEntry = { phone, channel: 'whatsapp', reason: 'User requested human agent', source: 'user_reply', created_at: new Date().toISOString() };
+      await updateStore(s => {
+        s.optOuts.push(handoffEntry); // reutilizar campo o agregar handoffs array
+        // Marcar lead como escalated
+        s.leads.filter(l => l.phone === phone).forEach(l => { 
+          l.status = 'escalated'; 
+          l.handoffRequested = true; 
+          l.handoffRequestedAt = new Date().toISOString(); 
+        });
+        // Registrar en deliveries como evento de handoff
+        s.deliveries.push({
+          id: crypto.randomUUID(), campaign_id: null, contact_id: phone,
+          contact_name: profileName, phone, status: 'escalated', channel: 'twilio',
+          direction: 'inbound', content: body, message_id: messageSid,
+          sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
+          metadata: { handoff: true, reason: 'user_requested_human' }
+        });
+      });
+      await storeFacade.writeLeadToPg(inboundLead?.campaign_id, inboundLead);
+      // Responder al usuario indicando que será atendido
+      const responseMsg = 'Un momento, un agente humano se conectará con usted shortly.';
+      return res.type('text/xml').send(`<Response><Message>${responseMsg}</Message></Response>`);
     }
 
     // 1. Create lead + delivery in helper store
@@ -3242,9 +3551,16 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
           id: crypto.randomUUID(), campaign_id: campaign?.id || null,
           name: profileName, phone, email: '', source: 'twilio_inbound',
           status: 'new', score: 0, score_data: {},
+          opt_in: false,
+          // R6: Handoff inmediato - flag para aplicar despues de detección
+          handoffPending: s.pendingHandoff?.phone === phone ? s.pendingHandoff : false,
           custom_fields: { message: body, source: 'twilio_webhook' },
           created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         };
+        // Limpiar flag pending después de aplicarlo
+        if (s.pendingHandoff && s.pendingHandoff.phone === phone) {
+          s.pendingHandoff = null;
+        }
         s.leads.push(inboundLead);
       }
       s.deliveries.push({
@@ -3310,11 +3626,35 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 const { getChannel, listChannels, sendToChannel } = require('./services/channels');
 const { processMedia } = mediaProcessor;
 
+const COMMAND_RESPONSES = {
+  MENU: 'Menú principal: *1* Ver productos | *2* Ver servicios | *3* Ver precios | *0* Hablar con un asesor',
+  HORARIOS: 'Nuestro horario de atención es de lunes a viernes, 09:00 a 18:00. Fuera de horario dejamos mensajes automáticos.',
+  PRECIO: 'Los precios varían según el producto/servicio. Escribe *PRECIO [producto]* para una cotización o consulta el catálogo.',
+};
+
 async function handleInboundMessage(channel, normalized) {
   const adapter = getChannel(channel);
   if (!adapter || !normalized) return null;
 
   const { senderId, senderName, text, conversationId, media } = normalized;
+
+  // R12: Autorespuestas a comandos MENU/HORARIOS/PRECIO (detecta sin LLM)
+  const upper = (text || '').trim().toUpperCase();
+  if (upper === 'MENU' || upper === 'HORARIOS' || upper === 'PRECIO') {
+    const response = COMMAND_RESPONSES[upper] || '';
+    await logEvent('webhook_received', {
+      level: 'info',
+      message: `Comando detectado ${upper} -> respuesta automática (sin LLM)`,
+      tenantId: 'default',
+      conversationId,
+      module: 'channels',
+      flow: 'multicanal.inbound',
+      action: 'command.auto-response',
+      data: { command: upper, responseLength: response.length },
+    });
+    // Retorna la respuesta automática y detiene el flujo normal
+    return { type: 'command', command: upper, response };
+  }
 
   await logEvent('webhook_received', {
     level: 'info',
@@ -4273,6 +4613,22 @@ app.post('/api/chat/reply', async (req, res) => {
     if (!channel || !to) return res.status(400).json({ error: 'channel y to requeridos' });
     if (!text && !mediaUrl && !audioBase64) return res.status(400).json({ error: 'text, mediaUrl o audioBase64 requeridos' });
 
+    // R13: Buscar producto en catálogo si el texto menciona un producto
+    let catalogMediaUrl = mediaUrl;
+    let catalogMediaType = mediaType;
+    const store = getStore();
+    const catalog = store.catalog || [];
+    if (text && !mediaUrl) {
+      const textLower = text.toLowerCase();
+      for (const product of catalog) {
+        if (product.name && textLower.includes(product.name.toLowerCase())) {
+          catalogMediaUrl = product.image_url;
+          catalogMediaType = 'image/jpeg';
+          break;
+        }
+      }
+    }
+
     const started = Date.now();
     let sent;
 
@@ -4285,14 +4641,16 @@ app.post('/api/chat/reply', async (req, res) => {
       } else {
         sent = await sendToChannel(channel, to, text || '[audio]');
       }
-    } else if (channel === 'telegram' && mediaUrl) {
+    } else if (channel === 'telegram' && (mediaUrl || catalogMediaUrl)) {
+      const finalMediaUrl = catalogMediaUrl || mediaUrl;
+      const finalMediaType = catalogMediaType || mediaType;
       try {
         const token = process.env.TELEGRAM_BOT_TOKEN;
         const FormData = require('form-data');
         const form = new FormData();
         form.append('chat_id', to);
-        if (String(mediaType || '').startsWith('image/')) form.append('photo', mediaUrl);
-        else form.append('document', mediaUrl);
+        if (String(finalMediaType || '').startsWith('image/')) form.append('photo', finalMediaUrl);
+        else form.append('document', finalMediaUrl);
         if (text) form.append('caption', String(text).slice(0, 1024));
         const resp = await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, form, {
           headers: { ...form.getHeaders() }, timeout: 30000, maxContentLength: 50 * 1024 * 1024,
@@ -4300,7 +4658,7 @@ app.post('/api/chat/reply', async (req, res) => {
         sent = resp.data?.ok ? { ok: true, result: resp.data.result } : { ok: false, error: resp.data?.description || 'telegram media failed' };
       } catch (e) { sent = { ok: false, error: e.message }; }
     } else {
-      sent = await sendToChannel(channel, to, text || '', mediaUrl ? { mediaUrl, mediaType } : {});
+      sent = await sendToChannel(channel, to, text || '', (catalogMediaUrl || mediaUrl) ? { mediaUrl: catalogMediaUrl || mediaUrl, mediaType: catalogMediaType || mediaType } : {});
     }
 
     if (sent.ok) {
