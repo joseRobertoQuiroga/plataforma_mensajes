@@ -1,5 +1,25 @@
 # Wibsite Business — Historial de Cambios
 
+## [4.3.0] - 2026-09-01 (Oleada 4 completa — Respuestas automáticas + catálogo multimedia)
+
+### Added
+- **R1 (crítico)**: bienvenida y fuera de horario configurable por tenant — config de horario de atención, respuesta automática fuera de horario con template personalizable, detección UTC 9-18h por defecto.
+- **R4**: snippets y respuestas rápidas en chat operador — CRUD `/api/snippets` (reutiliza templates con `category: snippet`), panel overlay en Inbox con inserción 1-clic, resolución variables `{{name}}`, `{{phone}}`, `{{email}}`, `{{score}}`, `{{custom.*}}`.
+- **R5**: agentes por rol con router y fallback — `agentRegistry.routeByIntentention()` mapea intenciones a nodos del grafo, fallback al agente activo, métricas `messages_routed` / `messages_fallback` por agente.
+- **R6**: handoff inmediato cuando cliente pide humano — detección frases "quiero hablar con una persona", "human", "agent", transición a `status: escalated` con `handoffRequestedAt`, respuesta automática.
+- **R7**: sincronización externa de KB — `POST /api/kb/sync` con sources `file` (kb-documents) y `api` (endpoint externo), versionado, auditoría, job programable.
+- **R8**: límite de intentos y escalamiento de canal — contador `lostCounters` por template/canal, threshold configurable (default 3), escalamiento a `escalated` con notificación operador.
+- **R12**: autorespuestas a comandos MENU/HORARIOS/PRECIO — detección sin LLM, respuestas <1s, JSON `{type, command, response}` en webhook Twilio.
+- **R13**: catálogo multimedia en respuestas automáticas — entidad catálogo (`/api/catalog` CRUD), integración en `/api/chat/reply` para envío automático de imagen de producto al detectar nombre en texto.
+- **R14**: registro de opt-in explícito por lead — campo `opt_in` en lead, API `/api/opt-ins` + `/api/opt-ins/check`, detección "YES/SÍ/confirm" en webhook, uso en audiencias de campaña.
+
+### Verified
+- Tests: unit 88, flow 17, smoke 2, channels 21, frontend 9.
+- R12: 3/3 tests pass (MENU/HORARIOS/PRECIO).
+- R6: handoff detection verified.
+- R1: outside-hours detection active.
+- Pipeline dev verde.
+
 ## [4.2.0] - 2026-08-31 (Oleada 3 completa — Campañas inteligentes + deuda operativa)
 
 ### Added

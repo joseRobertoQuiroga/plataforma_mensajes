@@ -90,11 +90,48 @@ function InboxContent() {
   const [recording, setRecording] = useState(false);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [snippets, setSnippets] = useState<any[]>([]);
+  const [snippetPanelOpen, setSnippetPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordTimerRef = useRef<any>(null);
+
+  // ── Snippets ─────────────────────────────────────────
+  const loadSnippets = useCallback(async () => {
+    try {
+      const res = await fetch(`${HELPER_URL}/api/snippets`, {
+        headers: { "x-api-key": HELPER_API_KEY },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSnippets(data.data || []);
+      }
+    } catch {}
+  }, []);
+
+  const resolveSnippetVariables = useCallback((content: string, lead: any) => {
+    if (!lead) return content;
+    return content
+      .replace(/\{\{name\}\}/g, lead.name || '')
+      .replace(/\{\{phone\}\}/g, lead.phone || '')
+      .replace(/\{\{email\}\}/g, lead.email || '')
+      .replace(/\{\{score\}\}/g, String(lead.score || 0))
+      .replace(/\{\{status\}\}/g, lead.status || '')
+      .replace(/\{\{custom\.([^}]+)\}\}/g, (_, key) => lead.custom_fields?.[key] || '');
+  }, []);
+
+  const insertSnippet = useCallback((snippet: any) => {
+    const resolvedContent = resolveSnippetVariables(snippet.content, profile);
+    setMessage((prev) => prev + (prev ? '\n' : '') + resolvedContent);
+    setSnippetPanelOpen(false);
+  }, [profile, resolveSnippetVariables]);
+
+  useEffect(() => {
+    loadSnippets();
+  }, [loadSnippets]);
 
   // ── Grupos de chat ─────────────────────────────────────────
   const [groups, setGroups] = useState<any[]>([]);
@@ -737,8 +774,45 @@ function InboxContent() {
                           <span className={`w-1.5 h-1.5 rounded-full ${groupDot(g.color)}`} />
                           {g.name}
                         </span>
-                      </>
-                    )}
+</>
+            )}
+
+            {/* R4: Snippets panel overlay */}
+            {snippetPanelOpen && snippets.length > 0 && (
+              <>
+                <div className="absolute inset-0 z-30" onClick={() => setSnippetPanelOpen(false)} />
+                <div className="absolute right-12 bottom-16 z-40 w-72 max-h-80 overflow-y-auto bg-surface-container-highest border border-white/10 rounded-xl shadow-2xl p-2 space-y-1">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Snippets</span>
+                    <button onClick={() => setSnippetPanelOpen(false)} className="p-1 rounded text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  <div className="h-px bg-white/5" />
+                  {snippets.map((snippet: any) => (
+                    <button
+                      key={snippet.id}
+                      onClick={() => insertSnippet(snippet)}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-white hover:bg-white/5 transition-colors text-left"
+                      title={snippet.description || snippet.name}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-medium shrink-0">
+                        {snippet.name.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate block">{snippet.name}</span>
+                        <span className="text-[10px] text-on-surface-variant/70 truncate block">
+                          {snippet.content.substring(0, 50) + (snippet.content.length > 50 ? '...' : '')}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                  {snippets.length === 0 && (
+                    <p className="px-2.5 py-4 text-center text-[10px] text-on-surface-variant">No hay snippets disponibles. Crea uno en Templates con categoría 'snippet'.</p>
+                  )}
+                </div>
+              </>
+            )}
                   </div>
                 </div>
               );
@@ -958,6 +1032,17 @@ function InboxContent() {
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8" />
+              </svg>
+            </button>
+            {/* R4: Snippets button */}
+            <button
+              onClick={() => setSnippetPanelOpen((v) => !v)}
+              disabled={!selectedChat || sending}
+              className={`p-2.5 rounded-lg transition-colors shrink-0 ${snippetPanelOpen ? "bg-primary/20 text-primary" : "text-on-surface-variant hover:text-white hover:bg-white/5"} border border-outline-variant`}
+              title="Snippets / Respuestas rápidas"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
             </button>
             <input
