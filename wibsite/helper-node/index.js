@@ -2901,7 +2901,98 @@ app.post('/api/agents/:id/activate', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// A6: Round-robin assignment - next agent in rotation
+app.get('/api/agents/next', (req, res) => {
+  try {
+    const store = getStore();
+    const agent = agentRegistry.roundRobinAssign(store);
+    if (!agent) return res.status(404).json({ error: 'No hay agentes disponibles' });
+    res.json({ agent });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// L3: Route by score+canal - assign agent based on lead score and channel
+app.post('/api/agents/route', (req, res) => {
+  try {
+    const { score = 0, channel = 'whatsapp' } = req.body;
+    const store = getStore();
+    const result = agentRegistry.routeByScoreAndChannel(score, channel, store);
+    if (!result.agent) return res.status(404).json({ error: 'No hay agentes disponibles', reason: result.reason });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// A5: Handoff HITL - cola de handoffs pendientes
+app.get('/api/handoffs', (req, res) => {
+  try {
+    const store = getStore();
+    const handoffs = (store.deliveries || []).filter(d =>
+      d.status === 'escalated' && d.metadata?.handoff
+    );
+    const pending = handoffs.filter(d => !d.metadata?.accepted && !d.metadata?.rejected);
+    const accepted = handoffs.filter(d => d.metadata?.accepted);
+    const rejected = handoffs.filter(d => d.metadata?.rejected);
+    res.json({ pending, accepted, rejected, total: handoffs.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/handoffs/:deliveryId/accept', async (req, res) => {
+  try {
+    const { agent_id } = req.body;
+    const store = getStore();
+    const delivery = (store.deliveries || []).find(d =>
+      d.id === req.params.deliveryId && d.status === 'escalated' && d.metadata?.handoff
+    );
+    if (!delivery) return res.status(404).json({ error: 'Handoff no encontrado' });
+    await updateStore(s => {
+      const d = s.deliveries.find(dd => dd.id === req.params.deliveryId);
+      if (d) {
+        d.metadata = { ...d.metadata, accepted: true, accepted_by: agent_id || 'operator', accepted_at: new Date().toISOString() };
+      }
+      s.leads.filter(l => l.phone === delivery.phone).forEach(l => {
+        l.status = 'in_progress';
+        l.assigned_agent = agent_id || 'operator';
+        l.handoffAcceptedAt = new Date().toISOString();
+      });
+    });
+    await logEvent('handoff_accepted', {
+      tenantId: 'default', conversationId: `twilio_${delivery.phone}`,
+      module: 'handoff', flow: 'handoff.accept',
+      message: `Handoff aceptado por ${agent_id || 'operator'} para ${delivery.phone}`,
+      severity: 'low', data: { phone: delivery.phone, agent_id },
+    });
+    res.json({ status: 'accepted', delivery_id: req.params.deliveryId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/handoffs/:deliveryId/reject', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const store = getStore();
+    const delivery = (store.deliveries || []).find(d =>
+      d.id === req.params.deliveryId && d.status === 'escalated' && d.metadata?.handoff
+    );
+    if (!delivery) return res.status(404).json({ error: 'Handoff no encontrado' });
+    await updateStore(s => {
+      const d = s.deliveries.find(dd => dd.id === req.params.deliveryId);
+      if (d) {
+        d.metadata = { ...d.metadata, rejected: true, reject_reason: reason || 'operator_declined', rejected_at: new Date().toISOString() };
+      }
+      s.leads.filter(l => l.phone === delivery.phone).forEach(l => {
+        l.status = 'new';
+        l.handoffRejectedAt = new Date().toISOString();
+      });
+    });
+    await logEvent('handoff_rejected', {
+      tenantId: 'default', conversationId: `twilio_${delivery.phone}`,
+      module: 'handoff', flow: 'handoff.reject',
+      message: `Handoff rechazado: ${reason || 'operator_declined'} para ${delivery.phone}`,
+      severity: 'medium', data: { phone: delivery.phone, reason },
+    });
+    res.json({ status: 'rejected', delivery_id: req.params.deliveryId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // SEED DATA (mock para pruebas end-to-end)
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 

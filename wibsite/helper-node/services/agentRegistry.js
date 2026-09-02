@@ -5,9 +5,14 @@
  * Soporta múltiples agentes activos (p.ej. "Wally" asesor de ventas, "Yimi"
  * asesora comercial), cada uno con nombre, personalidad, tono y tipo de negocio.
  * El agente activo determina el perfil que usa el pipeline comercial.
+ *
+ * A6: Round-robin assignment distributes new conversations across available agents.
+ * R5: routeByIntentention routes by keyword matching to the most suitable agent.
  */
 
 const crypto = require('crypto');
+
+let _assignmentIndex = 0;
 
 function listAgents(store) {
   return store.agents || [];
@@ -68,6 +73,90 @@ function setActiveAgent(id, store) {
   return agent;
 }
 
+/**
+ * A6: Round-robin assignment — distributes conversations evenly across available agents.
+ * Returns the next agent in rotation (only agents with auto_reply_enabled=true and active=true).
+ */
+function roundRobinAssign(store) {
+  const available = (store.agents || []).filter(a => a.active && a.auto_reply_enabled);
+  if (available.length === 0) return getActiveAgent(store) || null;
+  const idx = _assignmentIndex % available.length;
+  _assignmentIndex = (idx + 1) % available.length;
+  return available[idx];
+}
+
+/**
+ * R5: Route by intention — matches keywords to the most suitable agent.
+ * Returns { agent, fallback, intention }.
+ */
+function routeByIntentention(text, store) {
+  const agents = (store.agents || []).filter(a => a.active);
+  if (agents.length === 0) return { agent: null, fallback: true, intention: null };
+
+  const lower = String(text).toLowerCase();
+
+  const intentKeywords = {
+    ventas: ['comprar', 'precio', 'costo', 'cotizar', 'presupuesto', 'oferta', 'descuento', 'producto'],
+    soporte: ['ayuda', 'soporte', 'problema', 'error', 'no funciona', 'avería', 'reclamo'],
+    general: ['hola', 'info', 'información', 'consulta', 'pregunta'],
+  };
+
+  let bestMatch = null;
+  let bestScore = 0;
+  let matchedIntention = null;
+
+  for (const agent of agents) {
+    const agentType = (agent.business_type || '').toLowerCase();
+    let score = 0;
+    for (const [intention, keywords] of Object.entries(intentKeywords)) {
+      const matched = keywords.filter(k => lower.includes(k));
+      if (matched.length > score) {
+        score = matched.length;
+        if (agentType.includes(intention) || agent.name.toLowerCase().includes(intention)) {
+          score += 2;
+        }
+        matchedIntention = intention;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = agent;
+    }
+  }
+
+  if (bestScore === 0) {
+    return { agent: getActiveAgent(store), fallback: true, intention: null };
+  }
+
+  return { agent: bestMatch, fallback: false, intention: matchedIntention };
+}
+
+/**
+ * L3: Route by score+canal - routes based on lead score and channel.
+ * High-score leads get routed to more experienced agents.
+ * Channel preference can be set per agent via metadata.preferred_channels.
+ */
+function routeByScoreAndChannel(leadScore, channel, store) {
+  const agents = (store.agents || []).filter(a => a.active && a.auto_reply_enabled);
+  if (agents.length === 0) return { agent: getActiveAgent(store), reason: 'no_available_agents' };
+
+  const scored = agents.map(agent => {
+    let score = 0;
+    const prefChannels = agent.metadata?.preferred_channels || ['whatsapp', 'email', 'sms'];
+    if (prefChannels.includes(channel)) score += 3;
+    const maxMsg = agent.max_messages_per_day || 5;
+    if (leadScore >= 70 && maxMsg >= 10) score += 5;
+    else if (leadScore >= 40 && maxMsg >= 5) score += 3;
+    else if (leadScore < 40) score += 1;
+    score += Math.random() * 0.1;
+    return { agent, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return { agent: scored[0].agent, reason: 'score_channel_routing', score: scored[0].score };
+}
+
 module.exports = {
   listAgents, getAgent, createAgent, updateAgent, deleteAgent, getActiveAgent, setActiveAgent,
+  roundRobinAssign, routeByIntentention, routeByScoreAndChannel,
 };
