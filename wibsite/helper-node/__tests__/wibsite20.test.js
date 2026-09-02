@@ -55,7 +55,7 @@ describe('Wibsite 2.0 — Consolidación (puentes eliminados + endpoints nativos
     expect(res.status).toBe(201);
     expect(res.body.id).toBeDefined();
     expect(res.body.name).toBe('Lead Test Manual');
-    expect(res.body.status).toBe('nuevo');
+    expect(res.body.status).toBe('primer_contacto');
     const list = await request(app).get('/api/leads?search=Lead+Test').set(auth);
     expect(list.body.some(l => l.phone === '+59170009999')).toBe(true);
   });

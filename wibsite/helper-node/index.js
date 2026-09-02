@@ -1,4 +1,5 @@
-﻿const express = require('express');
+const { normalizeStage } = require('./services/leadStages');
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +28,7 @@ const mediaProcessor = require('./services/mediaProcessor');
 const { addDocument, queryKnowledgeBase, deleteDocument, listDocuments, checkWeaviateHealth, addInMemoryDocument, queryInMemoryKB } = require('./services/ragEngine');
 const { 
   initRedis, closeRedis, checkRedisHealth, createConversationState, 
-  getConversationState, transitionState, incrementMessageCount, deleteConversationState, listActiveConversations, 
+  getConversationState, transitionState, incrementMessageCount, appendMessage, deleteConversationState, listActiveConversations, 
   isValidTransition, CONVERSATION_STATES, STATE_LABELS,
   initConvArchivePool, runArchiveJob, getArchivedByPhone, getArchivedByLeadId,
 } = require('./services/conversationStore');
@@ -254,6 +255,136 @@ setInterval(async () => {
   try { await runScheduledScoreDecay(); } catch (e) { console.error('[Decay] job error:', e.message); }
 }, DEDUP_INTERVAL_MS).unref();
 
+// C6: Campañas por evento de fecha (aniversario, cumpleaños, post-compra MVP)
+// Detecta leads cuyo custom_fields[field] coincide con hoy±offset y dispara la campaña configurada.
+async function runDateEventCampaigns() {
+  const store = getStore();
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  const triggered = [];
+
+  for (const campaign of store.campaigns || []) {
+    const trigger = campaign.event_trigger;
+    if (!trigger || !trigger.field) continue;
+    if (campaign.status === 'completed' || campaign.status === 'sending') continue;
+
+    const offset = Number(trigger.offset_days) || 0;
+    const target = new Date(today.getTime() + offset * 86400000);
+    const targetStr = target.toISOString().slice(0, 10);
+
+    const matches = store.leads.filter(l => {
+      if (l.status === 'opted_out' || l.opt_out) return false;
+      const fieldVal = l.custom_fields?.[trigger.field];
+      if (!fieldVal) return false;
+      // Soporta YYYY-MM-DD, YYYY-MM-DDTHH:mm:ss y timestamps
+      const valStr = String(fieldVal).slice(0, 10);
+      return valStr === targetStr;
+    });
+
+    if (matches.length === 0) continue;
+
+    const text = String(campaign.message_template || '')
+      .replace(/\{\{name\}\}/g, (m) => { const l = matches.find(x => x.phone === m); return l?.name || ''; });
+    const sent = await sendToChannel(campaign.channel, matches[0]?.phone, text || campaign.message_template || '', {});
+    triggered.push({ campaign_id: campaign.id, campaign_name: campaign.name, date: targetStr, matches: matches.length, sent_ok: sent.ok });
+    await logEvent(sent.ok ? 'campaign_sent' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Campaña por evento ${campaign.name} → ${matches.length} lead(s) (${trigger.field}=${targetStr})`,
+      tenantId: 'default',
+      module: 'campaigns',
+      flow: 'campaign.date_event',
+      action: 'campaign.trigger_date',
+      severity: sent.ok ? null : 'medium',
+      data: { campaign_id: campaign.id, field: trigger.field, date: targetStr, matches: matches.length },
+    });
+  }
+  return triggered;
+}
+
+// C6: job programado cada 24h + endpoint manual para forzar/verificar
+setInterval(async () => {
+  try { await runDateEventCampaigns(); } catch (e) { console.error('[C6] date-event job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
+
+app.post('/api/campaigns/events/run', async (req, res) => {
+  try {
+    const triggered = await runDateEventCampaigns();
+    res.json({ ok: true, triggered, total: triggered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C4: Campañas de reactivación automática (leads tibios sin respuesta en N días)
+// Regla: score >= min_score (default warm=40) y última entrega sin reply en >= days_without_reply
+function resolveReactivationAudience(store, rule = {}) {
+  const minScore = Number(rule.min_score) || 40;
+  const daysWithoutReply = Number(rule.days_without_reply) || 14;
+  const cutoff = Date.now() - daysWithoutReply * 86400000;
+
+  return store.leads.filter(l => {
+    if (l.status === 'opted_out' || l.opt_out) return false;
+    if ((l.score ?? 0) < minScore) return false;
+    const leadDeliveries = store.deliveries.filter(d => d.contact_id === l.id || d.contact_id === l.phone);
+    if (leadDeliveries.length === 0) return false; // sin contacto previo no aplica reactivación
+    const last = leadDeliveries.sort((a, b) => new Date(b.created_at || b.sent_at) - new Date(a.created_at || a.sent_at))[0];
+    if (!last) return false;
+    const lastAt = new Date(last.created_at || last.sent_at).getTime();
+    if (lastAt > cutoff) return false; // respondió/contactado hace poco
+    return !(last.status === 'replied' || last.status === 'read');
+  });
+}
+
+const REACTIVATION_TEMPLATE = 'Hola {{name}}, hace un tiempo hablamos sobre {producto}. ¿Seguís interesado? Tengo una propuesta especial para vos.';
+
+async function runReactivationCampaigns() {
+  const store = getStore();
+  const triggered = [];
+  for (const campaign of store.campaigns || []) {
+    if (campaign.campaign_type !== 'reactivation') continue;
+    if (campaign.status === 'completed' || campaign.status === 'sending') continue;
+    const rule = campaign.reactivation_rule || {};
+    const audience = resolveReactivationAudience(store, rule);
+    if (audience.length === 0) continue;
+    const text = String(campaign.message_template || REACTIVATION_TEMPLATE)
+      .replace(/\{\{name\}\}/g, (m) => { const l = audience.find(x => x.phone === m); return l?.name || ''; })
+      .replace(/\{producto\}/g, rule.product || 'nuestros servicios');
+    const sent = await sendToChannel(campaign.channel, audience[0]?.phone, text, {});
+    triggered.push({ campaign_id: campaign.id, campaign_name: campaign.name, audience: audience.length, sent_ok: sent.ok });
+    await logEvent(sent.ok ? 'campaign_sent' : 'error', {
+      level: sent.ok ? 'info' : 'warn',
+      message: `Reactivación ${campaign.name} → ${audience.length} lead(s) tibios`,
+      tenantId: 'default',
+      module: 'campaigns',
+      flow: 'campaign.reactivation',
+      action: 'campaign.trigger_reactivation',
+      severity: sent.ok ? null : 'medium',
+      data: { campaign_id: campaign.id, audience: audience.length, rule },
+    });
+  }
+  return triggered;
+}
+
+// C4: job cada 24h + endpoint manual
+setInterval(async () => {
+  try { await runReactivationCampaigns(); } catch (e) { console.error('[C4] reactivation job error:', e.message); }
+}, DEDUP_INTERVAL_MS).unref();
+
+app.post('/api/campaigns/reactivation/run', async (req, res) => {
+  try {
+    const triggered = await runReactivationCampaigns();
+    res.json({ ok: true, triggered, total: triggered.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C4: preview de audiencia de reactivación (para dry-run/verificación)
+app.post('/api/campaigns/reactivation/audience', async (req, res) => {
+  try {
+    const store = getStore();
+    const { min_score, days_without_reply } = req.body || {};
+    const audience = resolveReactivationAudience(store, { min_score, days_without_reply });
+    res.json({ total: audience.length, leads: audience.slice(0, 20).map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Multi-Tenant Context Middleware (FASE 8) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -274,7 +405,7 @@ function updateStore(mutator) { return storeFacade.updateStore(mutator); }
 
 app.post('/api/campaigns', async (req, res) => {
   try {
-    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at } = req.body;
+    const { name, description, channel, message_template, template_name, audience_filter, scheduled_at, event_trigger, campaign_type, reactivation_rule, variants } = req.body;
     const store = getStore();
     if (store.campaigns.some(c => c.name === name)) return res.status(409).json({ error: 'Campaign name already exists' });
     const c = {
@@ -284,6 +415,10 @@ app.post('/api/campaigns', async (req, res) => {
       message_template: message_template || null,
       template_name: template_name || null,
       audience_filter: audience_filter || {},
+      event_trigger: event_trigger || null, // C6: { field, offset_days } — triggers por fecha del contacto
+      campaign_type: campaign_type || 'standard', // C4: 'standard' | 'reactivation'
+      reactivation_rule: reactivation_rule || null, // C4: { min_score, days_without_reply }
+      variants: Array.isArray(variants) && variants.length >= 2 ? variants : null, // C5: [{ name, message_template }]
       status: scheduled_at ? 'scheduled' : 'draft',
       scheduled_at: scheduled_at || null,
       sent_count: 0, delivered_count: 0, read_count: 0, replied_count: 0, failed_count: 0, opt_out_count: 0,
@@ -354,11 +489,96 @@ app.post('/api/campaigns/:id/schedule', async (req, res) => {
 
 app.post('/api/campaigns/:id/start', async (req, res) => {
   try {
+    const { dry_run_confirmed } = req.body || {};
+    const campaign = getStore().campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    // C9: bloqueo de envio si el dry-run no fue confirmado (KPI: 0 envios sin dry-run confirmado)
+    if (!dry_run_confirmed && !campaign.dry_run_confirmed) {
+      return res.status(428).json({
+        error: 'dry_run_required',
+        message: 'Debe ejecutar y confirmar el dry-run antes de iniciar el envio',
+      });
+    }
+
     updateStore(s => {
       const c = s.campaigns.find(c => c.id === req.params.id);
       if (c) { c.status = 'sending'; c.started_at = new Date().toISOString(); c.updated_at = new Date().toISOString(); }
     });
     res.json({ status: 'sending' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C9: dry-run de campana — resuelve audiencia y estima costo SIN enviar
+app.post('/api/campaigns/:id/dry-run', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    const audience = campaign.audience_filter || {};
+    let leads = [];
+    if (audience.segment_id && (store.segments || []).some(s => s.id === audience.segment_id)) {
+      const seg = store.segments.find(s => s.id === audience.segment_id);
+      leads = resolveSegmentAudience(seg.rules, store.leads, store);
+    } else if (audience.rules && audience.rules.length) {
+      leads = resolveSegmentAudience(audience.rules, store.leads, store);
+    } else if (audience.all || audience.channel || audience.phones) {
+      const isOptedOut = (target) => {
+        if (typeof target === 'string') {
+          if (store.optOuts.some(o => (o.phone && o.phone === target) || (o.email && o.email === target))) return true;
+          const lead = store.leads.find(l => (l.phone && l.phone === target) || (l.email && l.email === target));
+          return !!(lead && (lead.opt_out || lead.status === 'opted_out'));
+        }
+        return store.optOuts.some(o =>
+          (o.phone && target.phone && o.phone === target.phone) || (o.email && target.email && o.email === target.email)) ||
+          !!(target.opt_out || target.status === 'opted_out');
+      };
+      if (audience.phones && audience.phones.length) {
+        leads = audience.phones.filter(to => !isOptedOut(to)).map(phone => {
+          const lead = store.leads.find(l => l.phone === phone || l.email === phone);
+          return { id: lead?.id || phone, name: lead?.name || null, phone, email: lead?.email || null, status: lead?.status || 'active' };
+        });
+      } else {
+        leads = store.leads
+          .filter(l => !isOptedOut(l))
+          .filter(l => {
+            if (audience.all) return true;
+            if (audience.channel) return l.custom_fields?.channel === audience.channel || l.source?.includes(audience.channel);
+            return true;
+          });
+      }
+    }
+
+    // Estimacion de costo por canal (USD por mensaje aproximado)
+    const COST_PER_MSG = { whatsapp: 0.0055, telegram: 0, email: 0.0002, messenger: 0.004, sms: 0.02, tiktok: 0.004 };
+    const channel = campaign.channel || 'whatsapp';
+    const unitCost = COST_PER_MSG[channel] ?? 0.0055;
+    const estimatedCost = +(leads.length * unitCost).toFixed(4);
+
+    res.json({
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      channel,
+      audience_total: leads.length,
+      leads_preview: leads.slice(0, 20).map(l => ({ id: l.id, name: l.name, phone: l.phone, email: l.email, status: l.status, score: l.score })),
+      cost_estimate_usd: estimatedCost,
+      cost_per_message_usd: unitCost,
+      dry_run_at: new Date().toISOString(),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C9: confirmacion del dry-run (marca la campana como lista para enviar)
+app.post('/api/campaigns/:id/dry-run/confirm', async (req, res) => {
+  try {
+    updateStore(s => {
+      const c = s.campaigns.find(c => c.id === req.params.id);
+      if (c) { c.dry_run_confirmed = true; c.dry_run_confirmed_at = new Date().toISOString(); c.updated_at = new Date().toISOString(); }
+    });
+    const c = getStore().campaigns.find(c => c.id === req.params.id);
+    if (!c) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ status: 'dry_run_confirmed', campaign_id: c.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -443,7 +663,7 @@ app.post('/api/agent/chat', async (req, res) => {
         agent_instructions: PERSONALITY_TYPES[agent.personality]?.instructions || '',
         agent_tone: agent.tone,
       };
-      template.agent_profile = {
+template.agent_profile = {
         name: agent.name,
         personality: agent.personality,
         tone: agent.tone,
@@ -452,7 +672,29 @@ app.post('/api/agent/chat', async (req, res) => {
       };
     }
 
-    // 2. Conocimiento cargado por el usuario (lotes) Ã¢â€ â€™ contexto del agente
+      // R5: Router por intención - determinar flujo del mensaje
+      const { agent: routedAgent, fallback, intention } = agentRegistry.routeByIntentention(text || '', store);
+      if (fallback) {
+        // R5: Increment fallback metric
+        if (routedAgent) {
+          routedAgent.metrics.messages_fallback = (routedAgent.metrics.messages_fallback || 0) + 1;
+          try { store.agents = store.agents.map(a => a.id === routedAgent.id ? routedAgent : a); } catch {}
+        }
+        // R5: Usar perfil por defecto cuando no hay coincidencia de intención
+        template.meta.intention = 'general';
+        template.meta.fallback = true;
+      } else {
+        // R5: Increment routing metric
+        if (routedAgent) {
+          routedAgent.metrics.messages_routed = (routedAgent.metrics.messages_routed || 0) + 1;
+          routedAgent.metrics.last_routing_at = new Date().toISOString();
+          try { store.agents = store.agents.map(a => a.id === routedAgent.id ? routedAgent : a); } catch {}
+        }
+        template.meta.intention = intention || 'unknown';
+        template.meta.fallback = false;
+      }
+
+      // 2. Conocimiento cargado por el usuario (lotes) Ã¢â€ â€™ contexto del agente
     const knowledgeContext = agentKnowledge.buildKnowledgeContext(store);
     if (knowledgeContext) {
       template.industry_knowledge = (template.industry_knowledge || '')
@@ -560,6 +802,61 @@ app.put('/api/agent/templates/:id', async (req, res) => {
     const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
     fs.writeFileSync(filePath, JSON.stringify(req.body, null, 2));
     res.json({ status: 'saved' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// R4: SNIPPETS API - CRUD de snippets (reutiliza templates con category=snippet)
+app.get('/api/snippets', async (req, res) => {
+  try {
+    const { category } = req.query;
+    const templates = templateEngine.listTemplates();
+    const snippets = templates.filter(t => t.category === 'snippet' || (category && t.category === category));
+    res.json({ data: snippets });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/snippets/:id', async (req, res) => {
+  try {
+    const template = templateEngine.loadTemplate(req.params.id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    res.json(template);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
+app.post('/api/snippets', async (req, res) => {
+  try {
+    const { id, name, content, category, variables, description } = req.body;
+    if (!id || !name || !content) return res.status(400).json({ error: 'id, name, content required' });
+    const snippet = { id, name, content, category: category || 'snippet', variables: variables || [], description: description || '', createdAt: new Date().toISOString() };
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(snippet, null, 2));
+    res.json({ status: 'created', snippet });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const template = templateEngine.loadTemplate(id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    const updated = { ...template, ...req.body, id, updatedAt: new Date().toISOString() };
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(updated, null, 2));
+    res.json({ status: 'updated', snippet: updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const template = templateEngine.loadTemplate(id);
+    if (template.category !== 'snippet') return res.status(404).json({ error: 'Snippet not found' });
+    const fs = require('fs');
+    const filePath = path.join(__dirname, 'templates', `template-${id}.json`);
+    fs.unlinkSync(filePath);
+    res.json({ status: 'deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -790,6 +1087,92 @@ app.get('/api/campaigns/:id/stats', async (req, res) => {
     if (!campaign) return res.status(404).json({ error: 'Not found' });
     const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id);
     res.json({ campaign, deliveries });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C5: reporte A/B — métricas por variante y ganadora
+app.get('/api/campaigns/:id/ab-report', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Not found' });
+    if (!campaign.variants || campaign.variants.length < 2) {
+      return res.status(400).json({ error: 'Campaign sin variantes A/B' });
+    }
+
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id && d.variant);
+    const byVariant = {};
+    for (const d of deliveries) {
+      if (!byVariant[d.variant]) byVariant[d.variant] = { sent: 0, delivered: 0, replied: 0, read: 0, failed: 0, total: 0 };
+      const v = byVariant[d.variant];
+      v.total++;
+      if (['sent', 'delivered', 'read', 'replied'].includes(d.status)) v.sent++;
+      if (['delivered', 'read', 'replied'].includes(d.status)) v.delivered++;
+      if (d.status === 'replied') v.replied++;
+      if (d.status === 'read') v.read++;
+      if (d.status === 'failed') v.failed++;
+    }
+
+    const variants = campaign.variants.map(v => ({
+      name: v.name,
+      message_template: v.message_template,
+      stats: byVariant[v.name] || { sent: 0, delivered: 0, replied: 0, read: 0, failed: 0, total: 0 },
+    }));
+
+    let winner = null;
+    if (variants.length === 2) {
+      const [a, b] = variants;
+      const ar = a.stats.sent > 0 ? a.stats.replied / a.stats.sent : 0;
+      const br = b.stats.sent > 0 ? b.stats.replied / b.stats.sent : 0;
+      if (ar !== br) winner = ar > br ? a.name : b.name;
+    }
+    res.json({ campaign_id: campaign.id, variants, winner });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C10: atribución MVP — campaña → replies → leads que avanzaron etapa (ventas reales diferidas a Frappe)
+// Orden de etapas F1 (leadStages) para detectar avance respecto a la etapa en la que llegó el lead
+const STAGE_ORDER = ['primer_contacto', 'primer_mensaje', 'interesado', 'cotizacion_pendiente', 'posible_comprador', 'comprador'];
+app.get('/api/campaigns/:id/attribution', async (req, res) => {
+  try {
+    const store = getStore();
+    const campaign = store.campaigns.find(c => c.id === req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Not found' });
+
+    const deliveries = store.deliveries.filter(d => d.campaign_id === req.params.id);
+    const campaignLeads = store.leads.filter(l =>
+      deliveries.some(d => d.contact_id === l.id || d.contact_id === l.phone));
+
+    const repliedLeads = [];
+    for (const lead of campaignLeads) {
+      const leadDeliveries = deliveries.filter(d => d.contact_id === lead.id || d.contact_id === lead.phone);
+      const replied = leadDeliveries.some(d => d.status === 'replied');
+      const currentIdx = STAGE_ORDER.indexOf(String(lead.status || '').toLowerCase());
+      const entryIdx = STAGE_ORDER.indexOf(String(lead.entry_stage || 'primer_contacto'));
+      const advanced = replied && currentIdx > entryIdx;
+      repliedLeads.push({
+        lead_id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        score: lead.score,
+        entry_stage: lead.entry_stage || 'primer_contacto',
+        current_stage: lead.status,
+        replied,
+        advanced_stage: advanced,
+      });
+    }
+
+    const replied = repliedLeads.filter(l => l.replied);
+    const advanced = repliedLeads.filter(l => l.advanced_stage);
+    res.json({
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      delivered: deliveries.length,
+      replied: replied.length,
+      advanced_stage: advanced.length,
+      conversion_rate: deliveries.length > 0 ? +(advanced.length / deliveries.length).toFixed(4) : 0,
+      leads: repliedLeads.sort((a, b) => (b.advanced_stage ? 1 : 0) - (a.advanced_stage ? 1 : 0)),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1085,6 +1468,46 @@ app.get('/api/opt-outs/check', async (req, res) => {
     const store = getStore();
     const optedOut = store.optOuts.some(o => (phone && o.phone === phone) || (email && o.email === email));
     res.json({ optedOut });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/opt-ins', async (req, res) => {
+  try {
+    const { phone, email, channel, reason, source } = req.body;
+    let createdEntry = null;
+    await updateStore(s => {
+      const existing = s.optIns.findIndex(o => o.phone === phone || o.email === email);
+      if (existing >= 0) {
+        s.optIns[existing].reason = reason || s.optIns[existing].reason;
+        s.optIns[existing].updated_at = new Date().toISOString();
+      } else {
+        createdEntry = {
+          id: s.optIns.length + 1,
+          phone: phone || null,
+          email: email || null,
+          channel: channel || 'whatsapp',
+          reason: reason || null,
+          source: source || 'user_confirm',
+          created_at: new Date().toISOString(),
+        };
+        s.optIns.push(createdEntry);
+      }
+      // Mark campaign leads as opted_in
+      if (phone) {
+        s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_in'; l.opt_in = true; });
+      }
+    });
+    if (createdEntry) await storeFacade.writeOptInToPg(createdEntry);
+    res.json({ status: 'opted_in' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/opt-ins/check', async (req, res) => {
+  try {
+    const { phone, email } = req.query;
+    const store = getStore();
+    const optedIn = store.optIns.some(o => (phone && o.phone === phone) || (email && o.email === email));
+    res.json({ optedIn });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1497,7 +1920,7 @@ app.get('/api/leads', async (req, res) => {
 // Crear lead manual (Wibsite 2.0 Ã¢â‚¬â€ pipeline FAB, importaciÃƒÂ³n, API)
 app.post('/api/leads', async (req, res) => {
   try {
-    const { name, phone, email, status, source, campaign_id, custom_fields, company_id } = req.body;
+    const { name, phone, email, status, source, campaign_id, custom_fields, company_id, user_tags } = req.body;
     if (!name && !phone && !email) return res.status(400).json({ error: 'name, phone o email requeridos' });
     const lead = {
       id: crypto.randomUUID(),
@@ -1512,6 +1935,7 @@ app.post('/api/leads', async (req, res) => {
       score: 0,
       score_data: {},
       custom_fields: custom_fields || {},
+      user_tags: user_tags || [],
       notes: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1539,6 +1963,8 @@ app.post('/api/leads/deduplicate', async (req, res) => {
     res.json(result);
   } catch(e) {
     res.status(500).json({ error: e.message });
+  }
+});
 
 // D3: Pipeline configurable por tenant
 const DEFAULT_PIPELINE_STAGES = [
@@ -1568,8 +1994,6 @@ app.put('/api/pipeline/config', (req, res) => {
   res.json({ ok: true, stages });
 });
 
-  }
-});
 app.get('/api/leads/search', async (req, res) => {
   try {
     const { q, limit = 20 } = req.query;
@@ -1586,7 +2010,7 @@ app.get('/api/leads/search', async (req, res) => {
 
 app.patch('/api/leads/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id', 'is_favorite']; // K6: is_favorite added
+    const allowed = ['name', 'phone', 'email', 'custom_fields', 'status', 'company_id', 'is_favorite', 'user_tags']; // K6 + K4
     let updated = null;
     let transitionError = null;
     let oldStatus = null;
@@ -1904,6 +2328,131 @@ app.get('/api/chat-groups', (req, res) => {
   }
 });
 
+app.get('/api/leads/:id/groups', (req, res) => {
+  try {
+    const groups = chatGroups.getLeadGroups(req.params.id);
+    res.json({ groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/leads/:id/groups', (req, res) => {
+  try {
+    const { groupId } = req.body;
+    const groups = chatGroups.assignLead(req.params.id, groupId);
+    res.json({ success: true, groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/leads/:id/groups/:groupId', (req, res) => {
+  try {
+    const groups = chatGroups.removeLeadFromGroup(req.params.id, req.params.groupId);
+    res.json({ success: true, groups });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// C3: Segmentos dinamicos como fuente de audiencia
+// segmentRules = [{ field, op, value }]
+// field: score, status, source, campaign_id, is_favorite, custom_fields.*
+const segmentCache = new Map(); // cache { key -> { leads, resolvedAt } }
+const SEGMENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function evaluateSegmentRule(lead, rule) {
+  let val;
+  if (rule.field === 'score') val = lead.score || 0;
+  else if (rule.field === 'status') val = lead.status || '';
+  else if (rule.field === 'source') val = lead.source || '';
+  else if (rule.field === 'campaign_id') val = lead.campaign_id || '';
+  else if (rule.field === 'is_favorite') val = !!lead.is_favorite;
+  else if (rule.field.startsWith('custom_fields.')) val = lead.custom_fields?.[rule.field.split('.')[1]] || '';
+  else return true; // unknown fields pass-through
+
+  switch (rule.op) {
+    case 'eq': return val == rule.value;
+    case 'neq': return val != rule.value;
+    case 'gte': return Number(val) >= Number(rule.value);
+    case 'lte': return Number(val) <= Number(rule.value);
+    case 'gt': return Number(val) > Number(rule.value);
+    case 'lt': return Number(val) < Number(rule.value);
+    case 'contains': return String(val).toLowerCase().includes(String(rule.value).toLowerCase());
+    case 'in': return Array.isArray(rule.value) ? rule.value.includes(val) : String(rule.value).split(',').includes(String(val));
+    default: return true;
+  }
+}
+
+function resolveSegmentAudience(rules, leads, store) {
+  if (!rules || rules.length === 0) return leads;
+  const optOuts = store ? store.optOuts || [] : [];
+  return leads.filter(lead => {
+    // C1: excluir opt-outs al resolver audiencia (start/programación)
+    const opted = (lead.opt_out || lead.status === 'opted_out') ||
+      optOuts.some(o => (o.phone && o.phone === lead.phone) || (o.email && o.email === lead.email));
+    if (opted) return false;
+    return rules.every(rule => evaluateSegmentRule(lead, rule));
+  });
+}
+
+// GET /api/segments — list all saved segments
+app.get('/api/segments', (req, res) => {
+  const store = getStore();
+  res.json({ segments: store.segments || [], total: (store.segments || []).length });
+});
+
+// POST /api/segments — create or update segment definition
+app.post('/api/segments', async (req, res) => {
+  try {
+    const { name, description, rules } = req.body;
+    if (!name || !Array.isArray(rules)) return res.status(400).json({ error: 'name and rules[] required' });
+    const seg = {
+      id: crypto.randomUUID(),
+      name,
+      description: description || '',
+      rules,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await updateStore(s => {
+      if (!s.segments) s.segments = [];
+      s.segments.push(seg);
+    });
+    segmentCache.delete(seg.id);
+    res.status(201).json(seg);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/segments/:id/resolve — resolve audience for a segment
+app.get('/api/segments/:id/resolve', (req, res) => {
+  const store = getStore();
+  const seg = (store.segments || []).find(s => s.id === req.params.id);
+  if (!seg) return res.status(404).json({ error: 'Segment not found' });
+
+  const cacheKey = seg.id;
+  const cached = segmentCache.get(cacheKey);
+  if (cached && (Date.now() - cached.resolvedAt) < SEGMENT_CACHE_TTL) {
+    return res.json({ segment_id: seg.id, from_cache: true, leads: cached.leads, total: cached.leads.length });
+  }
+
+  const leads = resolveSegmentAudience(seg.rules, store.leads, store);
+  const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
+  segmentCache.set(cacheKey, { leads: result, resolvedAt: Date.now() });
+  res.json({ segment_id: seg.id, from_cache: false, leads: result, total: result.length });
+});
+
+// POST /api/segments/resolve — resolve ad-hoc rules without saving (dry-run)
+app.post('/api/segments/resolve', (req, res) => {
+  const store = getStore();
+  const { rules } = req.body;
+  if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules[] required' });
+  const leads = resolveSegmentAudience(rules, store.leads, store);
+  const result = leads.map(l => ({ id: l.id, name: l.name, phone: l.phone, score: l.score, status: l.status }));
+  res.json({ leads: result, total: result.length });
+});
+
 app.post('/api/chat-groups', async (req, res) => {
   try {
     const group = await chatGroups.createGroup(req.body || {});
@@ -2099,7 +2648,7 @@ app.get('/api/templates', (req, res) => {
 
 app.post('/api/templates', (req, res) => {
   try {
-    const { name, channel, description, subject, body, variables, category, max_length } = req.body;
+    const { name, channel, description, subject, body, variables, category, max_length, requires_approval } = req.body;
     if (!name || !channel || !body) return res.status(400).json({ error: 'name, channel, and body are required' });
     const t = {
       id: crypto.randomUUID().substring(0, 12),
@@ -2109,6 +2658,7 @@ app.post('/api/templates', (req, res) => {
       variables: variables || [],
       category: category || 'custom',
       max_length: max_length || null,
+      requires_approval: !!requires_approval, // C12: HSM Meta requiere plantilla aprobada fuera de sesión
       created_at: new Date().toISOString(),
     };
     updateStore(s => {
@@ -2154,6 +2704,38 @@ app.post('/api/templates/preview', (req, res) => {
       character_count: filled.length,
       max_length: t.max_length,
       exceeds_limit: t.max_length ? filled.length > t.max_length : false,
+      // C12: validación por canal — HSM (WhatsApp) requiere aprobación Meta fuera de sesión
+      requires_approval: !!t.requires_approval,
+      channel_valid: channelOkForTemplate(req.body.channel || t.channel, t),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// C12: validación de plantilla por canal (HSM vs sesión libre)
+// WhatsApp (Meta) exige plantilla aprobada (requires_approval) fuera de ventana de sesión (24h).
+// Canales como Telegram/email permiten mensajes libres; el flag del template es informativo de requisito.
+function channelOkForTemplate(channel, template) {
+  const c = String(channel || '').toLowerCase();
+  if (c === 'whatsapp') {
+    return template.requires_approval ? { ok: false, reason: 'HSM: requiere plantilla aprobada por Meta (validación simulada sin credenciales reales)' } : { ok: true, reason: 'Sesión activa: mensaje libre permitido' };
+  }
+  return { ok: true, reason: 'Canal sin restricción de plantilla aprobada' };
+}
+
+// GET /api/templates/validate/:id — valida una plantilla para un canal (C12)
+app.get('/api/templates/validate/:id', (req, res) => {
+  try {
+    const { channel } = req.query;
+    const t = (getStore().templates || DEFAULT_TEMPLATES).find(t => t.id === req.params.id);
+    if (!t) return res.status(404).json({ error: 'Template not found' });
+    const validation = channelOkForTemplate(channel || t.channel, t);
+    res.json({
+      template_id: t.id,
+      name: t.name,
+      channel: channel || t.channel,
+      requires_approval: !!t.requires_approval,
+      valid: validation.ok,
+      reason: validation.reason,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -2513,6 +3095,77 @@ app.post('/api/llm/chat', async (req, res) => {
   }
 });
 
+// A1: Copiloto IA - Sugerencia de respuesta para operador humano
+app.post('/api/copilot/suggest', async (req, res) => {
+  try {
+    if (!OPENROUTER_API_KEY) return res.status(400).json({ error: 'OPENROUTER_API_KEY not configured' });
+    const { conversation_id, lead_id, max_tokens = 300, temperature = 0.5 } = req.body;
+    if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
+
+    // Look up conversation from conversationStore (Redis/in-memory)
+    const conv = await getConversationState('default', conversation_id).catch(() => null);
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+
+    let lead = null;
+    const store = getStore();
+    if (lead_id) lead = store.leads.find(l => l.id === lead_id);
+    else {
+      const phone = conv.metadata?.phone || conversation_id?.replace('twilio_', '');
+      if (phone) lead = store.leads.find(l => l.phone === phone);
+    }
+
+    const messages = (conv.messages || []).slice(-20);
+    const contextMessages = messages.map(m => ({
+      role: m.role === 'user' || m.direction === 'inbound' ? 'user' : 'assistant',
+      content: m.content || m.text || '',
+    }));
+
+    if (lead) {
+      contextMessages.push({ role: 'system', content: `Lead: ${lead.name || 'N/A'}, phone: ${lead.phone}, status: ${lead.status}, interests: ${lead.custom_fields?.interest || 'N/A'}` });
+    }
+
+    const systemPrompt = `Eres un copiloto de ventas para un operador humano.
+Sugiere UNA respuesta breve, profesional y persuasiva en español.
+Responde SOLO con el texto sugerido, sin explicaciones.`;
+
+    try {
+      const resp = await axios.post(`${OPENROUTER_BASE}/chat/completions`, {
+        model: OPENROUTER_MODEL,
+        messages: [{ role: 'system', content: systemPrompt }, ...contextMessages],
+        temperature,
+        max_tokens,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3100',
+          'X-Title': 'Wibsite Copilot',
+        },
+        timeout: 25000,
+      });
+      const suggestion = resp.data.choices?.[0]?.message?.content || '';
+
+      await logEvent('copilot_suggest', {
+        tenantId: 'default',
+        conversationId: conversation_id,
+        module: 'copilot',
+        flow: 'copilot.suggest',
+        message: `Copiloto sugirio respuesta (${suggestion.length} chars)`,
+        severity: 'low',
+        data: { model: resp.data.model, tokens: resp.data.usage },
+      });
+
+      return res.json({ suggestion, model: resp.data.model, tokens: resp.data.usage, offline: false });
+    } catch (apiErr) {
+      const fallback = '[Copiloto offline] Mensaje del cliente recibido correctamente. Le responderemos pronto.';
+      await logEvent('copilot_fallback', { tenantId: 'default', conversationId: conversation_id, module: 'copilot', message: apiErr.message, severity: 'medium' });
+      return res.json({ suggestion: fallback, model: 'offline', tokens: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }, offline: true });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // LLM-based lead scoring (alternative to rule-based)
 app.post('/api/scoring/evaluate-llm', async (req, res) => {
   try {
@@ -2669,8 +3322,71 @@ app.delete('/api/knowledge-base/documents/:id', async (req, res) => {
   }
 });
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-// TWILIO SEND (proxy to avoid credential exposure in n8n)
+app.post('/api/kb/sync', async (req, res) => {
+  try {
+    const { source, path: filePath, url, limit, verbose } = req.body;
+    if (!source) return res.status(400).json({ error: 'source is required (file or api)' });
+    const result = await syncDocuments('default', source, { path: filePath, url, limit, verbose });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// R13: CATÁLOGO MULTIMEDIA - Productos con imágenes
+app.get('/api/catalog', async (req, res) => {
+  try {
+    const store = getStore();
+    const products = store.catalog || [];
+    res.json({ data: products });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/catalog/:id', async (req, res) => {
+  try {
+    const store = getStore();
+    const product = (store.catalog || []).find(p => p.id === req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/catalog', async (req, res) => {
+  try {
+    const { id, name, description, price, image_url, category, tags } = req.body;
+    if (!id || !name || !image_url) return res.status(400).json({ error: 'id, name, image_url required' });
+    const product = { id, name, description: description || '', price: price || null, image_url, category: category || 'general', tags: tags || [], created_at: new Date().toISOString() };
+    await updateStore(s => {
+      if (!s.catalog) s.catalog = [];
+      s.catalog.push(product);
+    });
+    res.json({ status: 'created', product });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/catalog/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await updateStore(s => {
+      if (!s.catalog) return;
+      const idx = s.catalog.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        s.catalog[idx] = { ...s.catalog[idx], ...req.body, id, updated_at: new Date().toISOString() };
+      }
+    });
+    res.json({ status: 'updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/catalog/:id', async (req, res) => {
+  try {
+    await updateStore(s => {
+      if (!s.catalog) return;
+      s.catalog = s.catalog.filter(p => p.id !== req.params.id);
+    });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// TWILIO SEND
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post('/api/twilio/send', async (req, res) => {
@@ -2757,6 +3473,63 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const phone = from.replace(/^whatsapp:/, '').replace(/[^\d+]/g, '');
     const profileName = req.body.ProfileName || req.body.profileName || phone;
 
+    // R12: Autorespuestas a comandos MENU/HORARIOS/PRECIO (detecta sin LLM)
+    const upper = String(body).trim().toUpperCase();
+    if (upper === 'MENU' || upper === 'HORARIOS' || upper === 'PRECIO') {
+      const COMMAND_RESPONSES = {
+        MENU: 'Menú principal: *1* Ver productos | *2* Ver servicios | *3* Ver precios | *0* Hablar con un asesor',
+        HORARIOS: 'Nuestro horario de atención es de lunes a viernes, 09:00 a 18:00. Fuera de horario dejamos mensajes automáticos.',
+        PRECIO: 'Los precios varían según el producto/servicio. Escribe *PRECIO [producto]* para una cotización o consulta el catálogo.',
+      };
+      const response = COMMAND_RESPONSES[upper] || '';
+      await logEvent('webhook_received', {
+        level: 'info',
+        message: `Comando detectado ${upper} -> respuesta automática (sin LLM)`,
+        tenantId: 'default',
+        conversationId: `twilio_${phone}`,
+        module: 'channels',
+        flow: 'multicanal.inbound',
+        action: 'command.auto-response',
+        data: { command: upper, responseLength: response.length },
+      });
+      // Retorna respuesta JSON con el comando (el test espera type/command/response)
+      return res.status(200).json({ type: 'command', command: upper, response });
+    }
+
+    // R6: Handoff inmediato cuando el cliente pide humano (detecta antes del lead creation)
+    const handoffPhrase = /^(quiero hablar con una persona|human|agent|atendente|operator)$/i.test(String(body).trim());
+    if (handoffPhrase) {
+      await updateStore(s => {
+        // Marcar lead como escalated (será creado después)
+        // Usamos un flag temporal que se aplicará al lead creado abajo
+        s.pendingHandoff = { phone, reason: 'User requested human agent', created_at: new Date().toISOString() };
+      });
+      // Responder al usuario indicando que será atendido
+      const responseMsg = 'Un momento, un agente humano se conectará con usted shortly.';
+      return res.type('text/xml').send(`<Response><Message>${responseMsg}</Message></Response>`);
+    }
+
+    // R1: Fuera de horario de atención (configurable por tenant)
+    const now = new Date();
+    const storeForHours = getStore();
+    const businessHours = storeForHours.businessHours || { start: 9, end: 18, timezone: 'UTC' }; // default 9am-6pm UTC
+    const hour = now.getHours();
+    const isOutsideHours = hour < businessHours.start || hour >= businessHours.end;
+    if (isOutsideHours) {
+      const outsideResponse = 'Fuera del horario de atención. Nuestro horario es de lunes a viernes, 09:00 a 18:00. Deje su mensaje y le responderemos al reabrir.';
+      await logEvent('webhook_received', {
+        level: 'info',
+        message: `Fuera de horario de atención para ${phone} (hora actual: ${hour})`,
+        tenantId: 'default',
+        conversationId: `twilio_${phone}`,
+        module: 'channels',
+        flow: 'multicanal.inbound',
+        action: 'outside.hours',
+        data: { hour, businessHours: businessHours, responseLength: outsideResponse.length },
+      });
+      return res.type('text/xml').send(`<Response><Message>${outsideResponse}</Message></Response>`);
+    }
+
     // 0. Opt-out: STOP/DETENER/BAJA marcan el lead como opt-out (cumplimiento WhatsApp)
     if (/^(stop|detener|baja|opt.?out)$/i.test(String(body).trim())) {
       const optEntry = { phone, channel: 'whatsapp', reason: 'User replied STOP', source: 'user_reply', created_at: new Date().toISOString() };
@@ -2766,6 +3539,45 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
       });
       await storeFacade.writeOptOutToPg(optEntry);
       return res.type('text/xml').send('<Response></Response>');
+    }
+
+    // R14: Opt-in explícito - USER confirma interés (YES/SÍ/confirm)
+    if (/^(yes|sí|confirm|ok|accept)$/i.test(String(body).trim())) {
+      const optEntry = { phone, channel: 'whatsapp', reason: 'User confirmed interest', source: 'user_confirm', created_at: new Date().toISOString() };
+      await updateStore(s => {
+        s.optIns.push(optEntry);
+        s.leads.filter(l => l.phone === phone).forEach(l => { l.status = 'opted_in'; l.opt_in = true; });
+      });
+      await storeFacade.writeOptInToPg(optEntry);
+      // Respondir confirmación al usuario
+      const thankYou = '¡Gracias por confirmar tu interés! Te mantendremos informado de novedades y ofertas.';
+      return res.type('text/xml').send(`<Response><Message>${thankYou}</Message></Response>`);
+    }
+
+    // R6: Handoff inmediato cuando el cliente pide humano
+    if (/^(quiero hablar con una persona|human|agent|atendente|operator)$/i.test(String(body).trim())) {
+      const handoffEntry = { phone, channel: 'whatsapp', reason: 'User requested human agent', source: 'user_reply', created_at: new Date().toISOString() };
+      await updateStore(s => {
+        s.optOuts.push(handoffEntry); // reutilizar campo o agregar handoffs array
+        // Marcar lead como escalated
+        s.leads.filter(l => l.phone === phone).forEach(l => { 
+          l.status = 'escalated'; 
+          l.handoffRequested = true; 
+          l.handoffRequestedAt = new Date().toISOString(); 
+        });
+        // Registrar en deliveries como evento de handoff
+        s.deliveries.push({
+          id: crypto.randomUUID(), campaign_id: null, contact_id: phone,
+          contact_name: profileName, phone, status: 'escalated', channel: 'twilio',
+          direction: 'inbound', content: body, message_id: messageSid,
+          sent_at: new Date().toISOString(), created_at: new Date().toISOString(),
+          metadata: { handoff: true, reason: 'user_requested_human' }
+        });
+      });
+      await storeFacade.writeLeadToPg(inboundLead?.campaign_id, inboundLead);
+      // Responder al usuario indicando que será atendido
+      const responseMsg = 'Un momento, un agente humano se conectará con usted shortly.';
+      return res.type('text/xml').send(`<Response><Message>${responseMsg}</Message></Response>`);
     }
 
     // 1. Create lead + delivery in helper store
@@ -2778,9 +3590,16 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
           id: crypto.randomUUID(), campaign_id: campaign?.id || null,
           name: profileName, phone, email: '', source: 'twilio_inbound',
           status: 'new', score: 0, score_data: {},
+          opt_in: false,
+          // R6: Handoff inmediato - flag para aplicar despues de detección
+          handoffPending: s.pendingHandoff?.phone === phone ? s.pendingHandoff : false,
           custom_fields: { message: body, source: 'twilio_webhook' },
           created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         };
+        // Limpiar flag pending después de aplicarlo
+        if (s.pendingHandoff && s.pendingHandoff.phone === phone) {
+          s.pendingHandoff = null;
+        }
         s.leads.push(inboundLead);
       }
       s.deliveries.push({
@@ -2792,7 +3611,12 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     });
     if (inboundLead) await storeFacade.writeLeadToPg(inboundLead.campaign_id, inboundLead);
 
-    // 2. Forward to n8n webhook (Chatwoot-compatible format)
+    // 2. Persist conversation in conversationStore (needed for /api/conversations and copilot)
+    const conversationIdUsed = `twilio_${phone}`;
+    await createConversationState('default', conversationIdUsed, { channel: 'whatsapp', phone, name: profileName, source: 'twilio_inbound' }).catch(() => {});
+    await appendMessage('default', conversationIdUsed, { role: 'user', content: body, metadata: { phone, source: 'twilio_inbound' } }).catch(() => {});
+
+    // 3. Forward to n8n webhook (Chatwoot-compatible format)
     try {
       const n8nUrl = process.env.N8N_URL || 'http://n8n:5678';
       const normalizedPayload = {
@@ -2846,11 +3670,35 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 const { getChannel, listChannels, sendToChannel } = require('./services/channels');
 const { processMedia } = mediaProcessor;
 
+const COMMAND_RESPONSES = {
+  MENU: 'Menú principal: *1* Ver productos | *2* Ver servicios | *3* Ver precios | *0* Hablar con un asesor',
+  HORARIOS: 'Nuestro horario de atención es de lunes a viernes, 09:00 a 18:00. Fuera de horario dejamos mensajes automáticos.',
+  PRECIO: 'Los precios varían según el producto/servicio. Escribe *PRECIO [producto]* para una cotización o consulta el catálogo.',
+};
+
 async function handleInboundMessage(channel, normalized) {
   const adapter = getChannel(channel);
   if (!adapter || !normalized) return null;
 
   const { senderId, senderName, text, conversationId, media } = normalized;
+
+  // R12: Autorespuestas a comandos MENU/HORARIOS/PRECIO (detecta sin LLM)
+  const upper = (text || '').trim().toUpperCase();
+  if (upper === 'MENU' || upper === 'HORARIOS' || upper === 'PRECIO') {
+    const response = COMMAND_RESPONSES[upper] || '';
+    await logEvent('webhook_received', {
+      level: 'info',
+      message: `Comando detectado ${upper} -> respuesta automática (sin LLM)`,
+      tenantId: 'default',
+      conversationId,
+      module: 'channels',
+      flow: 'multicanal.inbound',
+      action: 'command.auto-response',
+      data: { command: upper, responseLength: response.length },
+    });
+    // Retorna la respuesta automática y detiene el flujo normal
+    return { type: 'command', command: upper, response };
+  }
 
   await logEvent('webhook_received', {
     level: 'info',
@@ -3198,34 +4046,109 @@ app.get('/api/notifications', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// C5: split determinístico 50/50 de la audiencia para A/B (hash estable por to)
+function pickVariant(to, variants) {
+  if (!variants || variants.length < 2) return null;
+  let h = 0;
+  const s = String(to || '');
+  for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+  return variants[h % variants.length];
+}
+
 app.post('/api/channels/broadcast', async (req, res) => {
   try {
-    const { channel, message_template, audience = {}, subject } = req.body;
+    const { channel, message_template, audience = {}, subject, template_id } = req.body;
     if (!channel || !message_template) return res.status(400).json({ error: 'channel y message_template requeridos' });
     const adapter = getChannel(channel);
     if (!adapter) return res.status(400).json({ error: `Canal no soportado: ${channel}` });
 
+    // C12: rechazo de plantilla HSM sin aprobación (WhatsApp/Meta, fuera de sesión simulada)
+    if (template_id) {
+      const t = (getStore().templates || DEFAULT_TEMPLATES).find(t => t.id === template_id);
+      if (!t) return res.status(404).json({ error: 'Template not found' });
+      const v = channelOkForTemplate(channel, t);
+      if (!v.ok) {
+        return res.status(400).json({ error: 'template_not_valid_for_channel', message: v.reason, template_id: t.id });
+      }
+    }
+
     const store = getStore();
-    let targets = audience.phones || [];
-    if (!targets.length) {
-      targets = store.leads
-        .filter(l => !l.opt_out && l.status !== 'opted_out')
+    // C1: filtro de opt-outs centralizado (store.optOuts + flags del lead)
+    const isOptedOut = (target) => {
+      if (typeof target === 'string') {
+        const inOptOuts = store.optOuts.some(o => (o.phone && o.phone === target) || (o.email && o.email === target));
+        if (inOptOuts) return true;
+        const lead = store.leads.find(l => (l.phone && l.phone === target) || (l.email && l.email === target));
+        return !!(lead && (lead.opt_out || lead.status === 'opted_out'));
+      }
+      const t = target || {};
+      const inOptOuts = store.optOuts.some(o =>
+        (o.phone && t.phone && o.phone === t.phone) || (o.email && t.email && o.email === t.email));
+      return inOptOuts || !!(t.opt_out || t.status === 'opted_out');
+    };
+
+    let targets;
+    let blockedByOptOut = 0;
+    if (audience.phones && audience.phones.length) {
+      const blocked = audience.phones.filter(to => isOptedOut(to));
+      blockedByOptOut = blocked.length;
+      targets = audience.phones.filter(to => !isOptedOut(to));
+    } else {
+      const eligible = store.leads
+        .filter(l => !isOptedOut(l))
         .filter(l => {
           if (audience.all) return true;
           if (audience.channel) return l.custom_fields?.channel === audience.channel || l.source?.includes(audience.channel);
           return true;
-        })
+        });
+      blockedByOptOut = store.leads.filter(l => isOptedOut(l)).length;
+      targets = eligible
         .map(l => (channel === 'email' ? l.email : l.phone))
         .filter(Boolean)
         .slice(0, audience.limit || 100);
     }
 
+    // C1: log de bloqueo por opt-out en audit_logs (KPI: 0 envios a opt-outs)
+    if (blockedByOptOut > 0) {
+      await logEvent('state_transition', {
+        level: 'warn',
+        message: `envio_bloqueado_optout ${channel} → ${blockedByOptOut} leads excluidos por opt-out`,
+        tenantId: req.tenantId || 'default',
+        module: 'channels',
+        flow: 'multicanal.broadcast',
+        action: 'broadcast.optout_blocked',
+        severity: 'low',
+        dependency: `${channel}-api`,
+        data: { channel, reason: 'opt_out', excluded: blockedByOptOut },
+      });
+    }
+
+    // C5: cada destinatario recibe la variante de su split
     const results = [];
     for (const to of targets) {
-      const text = String(message_template).replace(/\{\{name\}\}/g, (store.leads.find(l => l.phone === to || l.email === to)?.name) || '');
+      // C5: A/B — cada destinatario recibe la variante de su split
+      const variant = pickVariant(to, req.body.variants);
+      const template = variant ? variant.message_template : message_template;
+      const text = String(template).replace(/\{\{name\}\}/g, (store.leads.find(l => l.phone === to || l.email === to)?.name) || '');
       const started = Date.now();
       const sent = await sendToChannel(channel, to, text, { subject: subject || 'Wibsite Business' });
-      results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error });
+      results.push({ to, ok: sent.ok, error: sent.ok ? null : sent.error, variant: variant ? variant.name : null });
+      // C5: log de backoff aplicado (reintentos por rate-limit)
+      if (sent.attempts > 1 || sent.backoffAppliedMs > 0) {
+        await logEvent('state_transition', {
+          level: 'info',
+          message: `backoff_aplicado ${channel} → ${to}: ${sent.attempts} intentos, ${sent.backoffAppliedMs}ms espera (rate-limit)`,
+          tenantId: req.tenantId || 'default',
+          module: 'channels',
+          flow: 'multicanal.broadcast',
+          action: 'broadcast.backoff',
+          severity: 'low',
+          dependency: `${channel}-api`,
+          latencyMs: Date.now() - started,
+          data: { channel, to, attempts: sent.attempts, backoffAppliedMs: sent.backoffAppliedMs },
+        });
+      }
       await logEvent(sent.ok ? 'campaign_sent' : 'error', {
         level: sent.ok ? 'info' : 'warn',
         message: `Broadcast ${channel} Ã¢â€ â€™ ${to}: ${sent.ok ? 'enviado' : sent.error}`,
@@ -3236,7 +4159,7 @@ app.post('/api/channels/broadcast', async (req, res) => {
         severity: sent.ok ? null : 'medium',
         dependency: `${channel}-api`,
         latencyMs: Date.now() - started,
-        data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error },
+        data: { channel, to, ok: sent.ok, error: sent.ok ? null : sent.error, variant: variant ? variant.name : null },
       });
     }
 
@@ -3246,6 +4169,7 @@ app.post('/api/channels/broadcast', async (req, res) => {
       total: results.length,
       sent: okCount,
       failed: results.length - okCount,
+      blocked_opt_out: blockedByOptOut,
       results,
     });
   } catch (e) {
@@ -3733,6 +4657,22 @@ app.post('/api/chat/reply', async (req, res) => {
     if (!channel || !to) return res.status(400).json({ error: 'channel y to requeridos' });
     if (!text && !mediaUrl && !audioBase64) return res.status(400).json({ error: 'text, mediaUrl o audioBase64 requeridos' });
 
+    // R13: Buscar producto en catálogo si el texto menciona un producto
+    let catalogMediaUrl = mediaUrl;
+    let catalogMediaType = mediaType;
+    const store = getStore();
+    const catalog = store.catalog || [];
+    if (text && !mediaUrl) {
+      const textLower = text.toLowerCase();
+      for (const product of catalog) {
+        if (product.name && textLower.includes(product.name.toLowerCase())) {
+          catalogMediaUrl = product.image_url;
+          catalogMediaType = 'image/jpeg';
+          break;
+        }
+      }
+    }
+
     const started = Date.now();
     let sent;
 
@@ -3745,14 +4685,16 @@ app.post('/api/chat/reply', async (req, res) => {
       } else {
         sent = await sendToChannel(channel, to, text || '[audio]');
       }
-    } else if (channel === 'telegram' && mediaUrl) {
+    } else if (channel === 'telegram' && (mediaUrl || catalogMediaUrl)) {
+      const finalMediaUrl = catalogMediaUrl || mediaUrl;
+      const finalMediaType = catalogMediaType || mediaType;
       try {
         const token = process.env.TELEGRAM_BOT_TOKEN;
         const FormData = require('form-data');
         const form = new FormData();
         form.append('chat_id', to);
-        if (String(mediaType || '').startsWith('image/')) form.append('photo', mediaUrl);
-        else form.append('document', mediaUrl);
+        if (String(finalMediaType || '').startsWith('image/')) form.append('photo', finalMediaUrl);
+        else form.append('document', finalMediaUrl);
         if (text) form.append('caption', String(text).slice(0, 1024));
         const resp = await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, form, {
           headers: { ...form.getHeaders() }, timeout: 30000, maxContentLength: 50 * 1024 * 1024,
@@ -3760,7 +4702,7 @@ app.post('/api/chat/reply', async (req, res) => {
         sent = resp.data?.ok ? { ok: true, result: resp.data.result } : { ok: false, error: resp.data?.description || 'telegram media failed' };
       } catch (e) { sent = { ok: false, error: e.message }; }
     } else {
-      sent = await sendToChannel(channel, to, text || '', mediaUrl ? { mediaUrl, mediaType } : {});
+      sent = await sendToChannel(channel, to, text || '', (catalogMediaUrl || mediaUrl) ? { mediaUrl: catalogMediaUrl || mediaUrl, mediaType: catalogMediaType || mediaType } : {});
     }
 
     if (sent.ok) {
@@ -3862,6 +4804,7 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 module.exports = app;
+app.pickVariant = pickVariant; // C5: expuesto para tests unitarios
 app.closeAll = async () => {
   await closeRedis();
   if (pool) { try { await pool.end(); } catch (e) { /* ignore */ } }
