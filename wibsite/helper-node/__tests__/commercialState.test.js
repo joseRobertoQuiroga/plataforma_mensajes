@@ -2,25 +2,25 @@ const { projectCommercial, registerHook } = require('../services/agentCore/comme
 const conversationStore = require('../services/conversationStore');
 
 describe('F-21 Sincronizacion maquina comercial ↔ tecnica', () => {
-  test('mapeo de tabla CTX-07 §3: tecnicos → comerciales', () => {
+  test('mapeo maquina tecnica → etapas pipeline F1', () => {
     const casos = [
-      ['greeting', 'nuevo'],
-      ['discovery', 'calificando'],
-      ['qualification', 'calificando'],
-      ['proposal', 'propuesta_enviada'],
-      ['objections', 'en_objeción'],
-      ['closing', 'agendado/cerrado'],
-      ['post_sale', 'agendado/cerrado'],
-      ['support', 'reactivado'],
-      ['escalated', 'derivado_a_humano'],
+      ['greeting', 'primer_contacto'],
+      ['discovery', 'primer_mensaje'],
+      ['qualification', 'interesado'],
+      ['proposal', 'cotizacion_pendiente'],
+      ['objections', 'cotizacion_pendiente'],
+      ['closing', 'posible_comprador'],
+      ['post_sale', 'comprador'],
+      ['support', 'interesado'],
+      ['escalated', 'interesado'],
     ];
     for (const [tecnico, comercial] of casos) {
       expect(projectCommercial({ machineState: tecnico }).state).toBe(comercial);
     }
   });
 
-  test('lost_threshold → perdido', () => {
-    expect(projectCommercial({ machineState: 'post_sale', lost: true }).state).toBe('perdido');
+  test('lost_threshold → descartado', () => {
+    expect(projectCommercial({ machineState: 'post_sale', lost: true }).state).toBe('descartado');
   });
 
   test('seguimiento sin respuesta + temperatura baja → enfriándose', () => {
@@ -40,7 +40,7 @@ describe('F-21 Sincronizacion maquina comercial ↔ tecnica', () => {
     await conversationStore.transitionState('tenant-f21', 'conv-f21', 'discovery', 'test');
     const updated = await conversationStore.getConversationState('tenant-f21', 'conv-f21');
     expect(updated.state).toBe('discovery');
-    expect(updated.metadata.commercial_state).toBe('calificando');
+    expect(updated.metadata.commercial_state).toBe('primer_mensaje');
     unregister();
     await conversationStore.deleteConversationState('tenant-f21', 'conv-f21');
   });

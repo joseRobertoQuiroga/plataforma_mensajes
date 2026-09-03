@@ -10,7 +10,7 @@
 | # | Documentación | Código/Runtime real | Acción |
 |---|---------------|---------------------|--------|
 | D1 | "Telegram: falta conectar token" (ESTADO-GENERAL) | `telegram configured=true` | Validar envío real con bot (BotFather) → cerrar brecha |
-| D2 | "~120-130 rutas helper" | **136 rutas** (111 únicas) | ✅ Confirmado 30/08; métrica oficial 136 |
+| D2 | "~120-130 rutas helper" | **153 rutas** (123 únicas) | ✅ Confirmado 31/08; métrica oficial 153 (Oleada 2: segments/groups/companies/archive) |
 | D3 | "TeVS 11/11, 13/13, 14/14" (docs previos) | **14 tests** (10/14 en CI dev; 4 de entorno informativos) | Usar 14 tests como catálogo oficial; 10/14 gate funcional |
 | D4 | "Twenty `/api/twenty/health`" (COMPONENTES) | 404 runtime; módulo no localizado en index.js | Re-localizar endpoints Twenty en código (SPIKE) |
 | D5 | "n8n 3 workflows activos" | healthz ok; activación vía SQL documentada, toggle UI pendiente | Verificar activos en runtime (SPIKE) |
@@ -35,7 +35,7 @@
 | # | Ítem | Qué falta |
 |---|------|-----------|
 | V1 | Unit tests helper (176/22 suites) | Re-ejecutar `npm test` en el estado actual (commit 8f4141e) |
-| V2 | Endpoints Twenty CRM | Localizar rutas reales en código y probar sync |
+| V2 | Endpoints Twenty CRM | ✅ CERRADO (31/08): **Twenty fuera de alcance (ADR-010)** — no está en compose, sin rutas en index.js, 404 en runtime. No aplica |
 | V3 | Multimodal (STT/visión/TTS) | Probar en runtime con OPENROUTER_STT_MODEL |
 | V4 | Dashboards Kibana (traces+metrics+logs) | Validar visualización de los 3 datastreams |
 | V5 | Load test k6 | Re-ejecutar tras cambios recientes |

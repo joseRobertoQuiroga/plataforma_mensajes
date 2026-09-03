@@ -1,4 +1,4 @@
-﻿# Wibsite Business Ã¢â‚¬â€ Estado General del Proyecto
+# Wibsite Business Ã¢â‚¬â€ Estado General del Proyecto
 
 > Documento vivo de desarrollo Ã¢â‚¬â€ Refleja el estado actual del proyecto en tiempo real
 
@@ -12,13 +12,13 @@
 | **PropÃƒÂ³sito** | Plataforma de mensajerÃƒÂ­a omnicanal con IA para PYMEs (WhatsApp, Messenger, TikTok, SMS, Email, Telegram) |
 | **Stack** | Chatwoot + Dify + n8n + Twenty CRM + Helper Node + PostgreSQL + Redis + Weaviate + Elastic Stack (Elasticsearch + Kibana + OTel Collector) + MinIO |
 | **OrquestaciÃƒÂ³n** | Docker Compose (20 servicios) |
-| **Estado General** | ðŸŸ¢ **Oleada 1 completada, iniciando Oleada 2 (SegmentaciÃ³n y Grupos)** |
-| **Ãšltima actualizaciÃ³n** | 2026-08-30 (verificaciÃ³n en vivo: Oleada 1 completada. Ciclo de vida F1, pipeline configurable, timeline unificada. Tests 83/83 en dev) |
-| **Helper Node** | v2.2.0 Ã¢â‚¬â€ ~130 rutas, 176 tests (22 suites) |
+| **Estado General** | 🟢 **Oleada 4 COMPLETADA — R1, R4, R5, R6, R7, R8, R12, R13, R14 cerrados. Listo para Oleada 5** |
+| **Última actualización** | 2026-09-01 (Oleada 4 cerrada: bienvenida/horario, snippets, router agentes, handoff, KB sync, escalamiento, comandos, catálogo, opt-in. Tests unit 88/88 + flow 17 + smoke 2 ✅) |
+| **Helper Node** | v2.3.0 — **153 rutas** (123 únicas), 83 tests (8 suites unit), Oleada 2 fully live |
 
 ---
 
-## Barra de Progreso por ÃƒÂrea
+## Barra de Progreso por ÃƒÂ rea
 
 ```
 Infraestructura         Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë† 100%  Ã¢Å“â€¦  +Authelia, Elastic Stack, MinIO (compose 20 servicios)
@@ -72,7 +72,7 @@ Dual-Write PG           Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢�
 | **Chatwoot** | Ã¢Å“â€¦ Servicio OK + bridge Twilio | UI funcional, webhook n8n configurable, push inbound `/api/chatwoot/push` | Configurar inbox WhatsApp nativo (opcional) |
 | **Dify** | Ã¢Å“â€¦ Completo | Workflow clasificador funcional con OpenRouter | Ã¢â‚¬â€ |
 | **n8n** | Ã¢Å“â€¦ Servicio OK, Ã¢Å¡Â Ã¯Â¸Â Config pendiente | Workflows importados, body parser bug conocido | Activar workflows UI, crear credenciales |
-| **Twenty CRM** | Ã¢Å“â€¦ Completo | API key JWT, 10 campos custom, sync funcional | Ã¢â‚¬â€ |
+| **Twenty CRM** | ❌ **CANCELADO (ADR-010, 31/08)** — fuera de alcance por decisión técnica; frontera única = frontend unificado; resto de contenedores = motores de backend | Ã¢â‚¬â€ |
 | **Helper Node** | Ã¢Å“â€¦ Completo | ~108 rutas (~35+ grupos), dashboard SPA, PostgreSQL + JSON fallback | Ã¢â‚¬â€ |
 | **Elasticsearch** | Ã¢Å“â€¦ Operativo | Datastreams traces/metrics/logs con ILM rollover 1d + delete 30d (15/08) | Ã¢â‚¬â€ |
 | **Kibana** | Ã¢Å“â€¦ Operativo | UI observabilidad en :5601 | Ã¢â‚¬â€ |

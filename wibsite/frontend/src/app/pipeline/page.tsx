@@ -44,7 +44,7 @@ const stageOf = (status?: string, stages = DEFAULT_STAGES) => {
   return stages[0]?.id || "primer_contacto";
 };
 
-function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: string) => void }) {
+function StageMenu({ lead, onMove, stages }: { lead: any; onMove: (id: string, status: string) => void; stages: any[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -74,7 +74,7 @@ function StageMenu({ lead, onMove }: { lead: any; onMove: (id: string, status: s
             Mover a etapa
           </div>
           <div className="p-1">
-            {stages.map((s) => (
+            {stages.map((s: any) => (
               <button
                 key={s.id}
                 onClick={(e) => { e.stopPropagation(); setOpen(false); onMove(lead.id, s.id); }}
@@ -305,7 +305,7 @@ const grouped = stages.map((stage) => {
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] text-on-surface-variant">{formatDate(lead.updated_at || lead.created_at)}</span>
                           {/* MenÃƒÂº tÃƒÂ¡ctil para mover de etapa (mÃƒÂ³vil/tablet Ã¢â‚¬â€ el drag&drop no es tÃƒÂ¡ctil) */}
-                          <StageMenu lead={lead} onMove={moveStage} />
+                          <StageMenu lead={lead} onMove={moveStage} stages={stages} />
                         </div>
                       </div>
                     </div>
@@ -401,7 +401,7 @@ const grouped = stages.map((stage) => {
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="flex flex-wrap gap-1.5">
-                {stages.map((s) => (
+                {stages.map((s: any) => (
                   <button key={s.id} onClick={() => moveStage(detailLead.id, s.id)}
                     className={cn("px-3 py-1 text-[11px] rounded-full border transition-colors capitalize",
                       String(detailLead.status || "nuevo") === s.id ? "bg-success/15 text-success border-success/30" : "bg-surface-container border-outline-variant text-on-surface-variant hover:text-white")}>

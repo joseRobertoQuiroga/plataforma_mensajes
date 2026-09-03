@@ -4,4 +4,8 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/helpers/'],
   clearMocks: true,
   openHandlesTimeout: 10000,
+  transformIgnorePatterns: ['/node_modules/(?!(supertest)/)'],
+  transform: {
+    '^.+\\.js$': 'babel-jest',
+  },
 };

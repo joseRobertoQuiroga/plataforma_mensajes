@@ -42,7 +42,7 @@ Resumen de estado de las 68 funcionalidades RAG:
 | ID | Ítem | Acción |
 |---|---|---|
 | V1 | Unit tests helper — **re-ejecutados 30/08** (24 suites, 83 tests unit en pipeline dev) | ✅ Cerrado parcial: pipeline #58 green |
-| V2 | Localizar/probar endpoints Twenty CRM (404 `/api/twenty/health`) | SPIKE en código |
+| V2 | Localizar/probar endpoints Twenty CRM (404 `/api/twenty/health`) | ✅ **CERRADO 31/08 (ADR-010)**: Twenty fuera de alcance por decisión técnica — no está en compose ni en index.js; 404 en runtime con API key válida. `contact_id` = referencia genérica de CRM |
 | V3 | Validar multimodal STT/visión/TTS en runtime | Configurar `OPENROUTER_STT_MODEL` |
 | V4 | Validar dashboards Kibana (traces+metrics+logs) | Kibana :5601 |
 | V5 | Re-ejecutar load test (k6 + simulador) | `scripts/load/` |
@@ -97,9 +97,9 @@ Resumen de estado de las 68 funcionalidades RAG:
 | Ítem | Resolución |
 |---|---|
 | Telegram "sin token" | Código confirma `configured=true` → solo validación real pendiente (P8) |
-| "~120-130 rutas" | **136 rutas** en `index.js` |
+| "~120-130 rutas" | **153 rutas** en `index.js` (123 únicas, 31/08) |
 | TeVS 11/13 → 14/14 | **14 tests** (10/14 CI dev + 4 entorno informativos) — pipeline #58 |
-| Twenty health 404 | Módulo reorganizado → V2 |
+| Twenty health 404 | **ADR-010 (31/08)**: Twenty fuera de alcance por decisión técnica — frontera única = frontend unificado; contenedores restantes = motores de backend. V2 cerrado |
 | "Hub central / Dashboard SPA" | **Hub eliminado** (d17b09c); frontend Next.js unificado — docs/índices corregidos 30/08 |
 | "22 suites · 176 tests" | **24 suites** — TESTING-INDEX actualizado |
 | "Labels 34" (02-ESTANDARES) | **48 labels reales** (15 area, 5 roadmap, 11 type) — actualizado 30/08 |

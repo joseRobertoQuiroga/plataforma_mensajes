@@ -29,7 +29,7 @@
 | Aspecto | Valor verificado |
 |---------|------------------|
 | Versión | package.json **v2.1.1** (health API confirma) |
-| Rutas | **136 rutas** `app.*` en `helper-node/index.js` (111 únicas) — confirmado 30/08 |
+| Rutas | **153 rutas** `app.*` en `helper-node/index.js` (123 únicas) — confirmado 31/08 (Oleada 2: +segments, +leads/groups, +companies, +archive, +deduplicate) |
 | Módulos (código) | conversationStore (9 estados), agentCore (grafo 9 nodos + guards + checkpointer), ragEngine, antiHallucination, templateEngine (3+ plantillas), leadProfile (SPICED/MEDDIC 13 campos), quoteEngine (8 servicios), auditLogger (24 eventos), piiFilter, otelBridge, channels (5 adapters), mediaProcessor, **chatGroups, agentKnowledge, agentRegistry (nuevos)** |
 | Persistencia | dual-write JSON+PG (facade) + RLS 7 políticas + tenantContext |
 
@@ -40,7 +40,7 @@
 | **Vista única** | `frontend/` Next.js standalone con **15 páginas** en `src/app/` (dashboard, chat, leads, pipeline, campaigns, templates, reports, automation, settings, …) |
 | Comunicación | Proxy en `next.config.ts`: `/api/*` y `/webhooks/*` → helper (o vía nginx en prod) |
 | Hub estático | `hub/` **ELIMINADO** (commit `d17b09c`) — sustituido por el frontend |
-| Módulos externos | n8n, Dify, Chatwoot, Twenty se usan como **motores** (APIs/backends) sin exponer sus UI como frontera |
+| Módulos externos | n8n, Dify, Chatwoot se usan como **motores** (APIs/backends) sin exponer sus UI como frontera. **Twenty CRM FUERA DE ALCANCE (ADR-010, 31/08)**: no está en el compose ni tiene rutas en el helper; la frontera única es el frontend unificado y el resto de contenedores son motores internos del backend |
 
 ## 4. IA y automatización
 
@@ -48,7 +48,7 @@
 |------------|-------------------|
 | Dify | Workflow clasificador con OpenRouter (7 modelos); fallback + circuit breaker en agentCore |
 | n8n | 3 workflows importados; healthz ok; activación UI pendiente |
-| Twenty CRM | Sync 10 campos custom (verificación directa pendiente: endpoint `twenty` no localizado en index.js → código reorganizado) |
+| Twenty CRM | **FUERA DE ALCANCE (ADR-010, 31/08)** — no está en `docker-compose.yml` (18 servicios sin Twenty), no hay rutas `/api/twenty/*` en `index.js`, 404 en runtime con API key válida. `contact_id` queda como referencia genérica de CRM |
 | OpenRouter | API key presente en `.env`; LLM real en flujo (doc 15/08) |
 
 ## 5. Calidad y CI/CD (verificado 30/08)
@@ -84,7 +84,7 @@
 | Doc dice | Código/runtime real | Tratamiento |
 |----------|---------------------|-------------|
 | "Telegram: falta conectar token" | `telegram configured=true` en `/api/channels/status` | **Código es la verdad** → Telegram operativo (validación con bot real pendiente) |
-| "~120-130 rutas" | **136 rutas** en index.js | Código es la verdad |
+| "~120-130 rutas" | **153 rutas** en index.js (123 únicas) | Código es la verdad |
 | "TeVS 11/11" / "13/13" / "14/14" | **14 tests** (10 CI dev + 4 entorno informativos) | Pipeline es la verdad |
 | "Twenty endpoint /api/twenty/health" | 404 en runtime | Endpoint no verificado → pendiente de re-verificación |
 | "Hub central / Dashboard SPA en helper" | **Hub eliminado**; frontend Next.js unificado | Decisión técnica 30/08 → maestro G13 actualizado |

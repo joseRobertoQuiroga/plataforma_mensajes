@@ -205,8 +205,119 @@ function queryInMemoryKB(tenantId, queryText, limit = 5) {
   return results.slice(0, limit);
 }
 
+async function syncDocuments(tenantId, source, options = {}) {
+  /**
+   * Sync knowledge base documents from an external source.
+   * 
+   * Supported sources:
+   * - 'file': sync from local kb-documents folder
+   * - 'api': sync from external API endpoint
+   * 
+   * Options:
+   * - path: local file path (for 'file' source)
+   * - url: API endpoint URL (for 'api' source)
+   * - limit: max documents to sync
+   * - verbose: log detailed information
+   */
+  const verbose = options.verbose !== false;
+  const results = { synced: 0, failed: 0, updated: 0, errors: [] };
+  let fallback = 'weaviate';
+
+  try {
+    fallback = 'memory';
+    let documents = [];
+
+    if (source === 'file') {
+      const filePath = options.path || path.join(__dirname, '..', 'kb-documents');
+      // Read all .txt files from the kb-documents directory
+      const fs = require('fs');
+      const files = fs.readdirSync(filePath).filter(f => f.endsWith('.txt'));
+      for (const file of files) {
+        try {
+          const content = fs.readFileSync(path.join(filePath, file), 'utf-8');
+          const title = file.replace('.txt', '');
+          const docResult = await addDocument(tenantId, title, content, file, 'text/plain', ['synced', source]);
+          if (docResult.error) {
+            results.failed++;
+            results.errors.push({ file, error: docResult.error });
+          } else {
+            results.synced++;
+            results.updated++;
+          }
+        } catch (e) {
+          results.failed++;
+          results.errors.push({ file, error: e.message });
+        }
+      }
+    } else if (source === 'api') {
+      const url = options.url;
+      if (!url) {
+        results.errors.push({ error: 'API URL is required for source=api' });
+        return results;
+      }
+      try {
+        const resp = await axios.get(url, { timeout: 30000 });
+        const data = resp.data;
+        // Support both array and object with documents property
+        const docs = Array.isArray(data) ? data : (data.documents || []);
+        for (const doc of docs) {
+          try {
+            const title = doc.title || 'Untitled';
+            const content = doc.content || '';
+            const sourceName = doc.source || url;
+            const docResult = await addDocument(tenantId, title, content, sourceName, doc.contentType || 'text/plain', ['synced', source, ...(doc.tags || [])]);
+            if (docResult.error) {
+              results.failed++;
+              results.errors.push({ doc: title, error: docResult.error });
+            } else {
+              results.synced++;
+              results.updated++;
+            }
+          } catch (e) {
+            results.failed++;
+            results.errors.push({ doc: doc.title || 'unknown', error: e.message });
+          }
+        }
+      } catch (e) {
+        results.errors.push({ error: e.message });
+        results.failed++;
+      }
+    } else {
+      results.errors.push({ error: `Unknown source: ${source}. Supported: 'file', 'api'` });
+    }
+
+    // Audit log
+    await logEvent('kb_sync', {
+      level: 'info',
+      message: `KB sync completed: ${results.synced} synced, ${results.failed} failed`,
+      tenantId,
+      module: 'knowledge-base',
+      action: 'sync',
+      data: { source, results, fallback },
+    });
+
+    if (verbose) {
+      console.log(`[KB Sync] Source: ${source}, Synced: ${results.synced}, Failed: ${results.failed}, Updated: ${results.updated}`);
+    }
+
+    return results;
+  } catch (e) {
+    results.errors.push({ error: e.message });
+    results.failed++;
+    await logEvent('kb_sync', {
+      level: 'error',
+      message: `KB sync failed: ${e.message}`,
+      tenantId,
+      module: 'knowledge-base',
+      action: 'sync',
+      data: { source, error: e.message, fallback },
+    });
+    return results;
+  }
+}
+
 module.exports = {
   checkWeaviateHealth, ensureWeaviateSchema, addDocument, queryKnowledgeBase,
-  deleteDocument, listDocuments, addInMemoryDocument, queryInMemoryKB,
+  deleteDocument, listDocuments, syncDocuments, addInMemoryDocument, queryInMemoryKB,
   chunkDocument,
 };

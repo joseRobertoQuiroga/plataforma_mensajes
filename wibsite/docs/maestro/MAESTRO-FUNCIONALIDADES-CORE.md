@@ -16,7 +16,7 @@
 | G4 | Leads y scoring | 4 | CTX-04 §6 | TEC-02 §G4 |
 | G5 | IA y agentes (Dify) | 4 | CTX-04 §11 | TEC-02 §G5 |
 | G6 | Automatización (n8n) | 4 | CTX-02 M5 | TEC-02 §G6 |
-| G7 | CRM (Twenty) | 4 | CTX-03 | TEC-02 §G7 |
+| G7 | CRM (Twenty) — **cancelado ADR-010** | 0 | ADR-010 | TEC-02 §G7 (histórico) |
 | G8 | Canales y webhooks | 4 | CTX-04 §10 | TEC-02 §G8 |
 | G9 | Seguridad | 4 | CTX-01 §5.3 | TEC-02 §G9 |
 | G10 | Memoria y contexto | 2 | CTX-07 §3 | TEC-02 §G10 |
@@ -58,7 +58,20 @@
 | RAG-G3-02 | Gestión de leads de campaña | `helper-node/index.js` | `POST/GET /api/campaigns/:id/leads`, `POST .../leads/upload` (multer+xlsx, autodetección, dedup, custom_fields) | Carga masiva Excel/CSV sin SQL; probado >1000 filas 0.13s | ✅ | ADR-010 |
 | RAG-G3-03 | Tracking de entregas | `helper-node/index.js` | `POST /api/campaigns/track` (upsert delivery, recalcula contadores, +10 score si replied), `GET /:id/stats` | Estados sent/delivered/read/replied/failed | ✅ | TEC-02 §G3 |
 | RAG-G3-04 | Plantillas de mensaje | `helper-node/index.js` | `GET/POST/DELETE /api/templates[/:id]`, `POST /preview` (variables `{{name}}`, validación max_length), 11 defaults × 5 canales | Plantillas multi-canal reutilizables; candidatas a banco de objeciones/reactivación (CTX-04) | ✅ | ADR-011 |
-| RAG-G3-05 | Opt-out | `helper-node/index.js` | `POST /api/opt-outs`, `GET /api/opt-outs/check` (público), detección "STOP" en webhook Meta | Cumplimiento anti-spam (Meta ToS); falta bloqueo automático de envíos | 🟡 | CTX-04 §10.2, TAREAS §8 |
+| RAG-G3-05 | Opt-out | `helper-node/index.js` | `POST /api/opt-outs`, `GET /api/opt-outs/check` (público), detección "STOP" en webhook Meta, **C1: bloqueo automático de envíos** (`isOptedOut` en broadcast + audiencia de segmentos, log `envio_bloqueado_optout`, `blocked_opt_out`) | Cumplimiento anti-spam (Meta ToS); KPI 0 envíos a opt-outs ✅ | ✅ (Oleada 3) | CTX-04 §10.2, ADR-010 |
+| RAG-G3-06 | Rate-limit inteligente | `helper-node/services/channels/index.js` | `sendToChannel` con reintentos (max 3) y backoff exponencial ante 429/rate/limit, respeta `rate_limit_reset_at`, log `backoff_aplicado` | Envíos sin bloqueos por límite (C8, Oleada 3) | ✅ (Oleada 3) | C8 #47 |
+| RAG-G3-07 | Dry-run y confirmación | `helper-node/index.js` | `POST /api/campaigns/:id/dry-run` (audiencia + costo por canal + preview), `dry-run/confirm`, bloqueo `start` con 428 | 0 envíos sin dry-run confirmado (C9, Oleada 3) | ✅ (Oleada 3) | C9 #48 |
+| RAG-G3-08 | Campañas inteligentes | `helper-node/index.js` | C4 reactivación (`campaign_type: reactivation`, score≥40 + sin reply en N días, job 24h), C5 A/B (`variants[]`, split 50/50 hash estable, `ab-report`), C6 eventos de fecha (`event_trigger {field, offset_days}`, job 24h), C10 atribución (`attribution`: replies + avance etapa F1) | Automatización de campañas (Oleada 3) | ✅ (Oleada 3) | C4 #44, C5 #45, C6 #46, C10 #49 |
+| RAG-G3-09 | Validación plantillas por canal | `helper-node/index.js` | `requires_approval` en templates, `GET /api/templates/validate/:id?channel=`, rechazo 400 `template_not_valid_for_channel` en broadcast (HSM WhatsApp vs sesión libre) | 0 envíos con plantilla no válida para el canal (C12, Oleada 3) | ✅ (Oleada 3) | C12 #50 |
+| RAG-G3-10 | Bienvenida y fuera de horario | `helper-node/index.js` | Config `businessHours` (default 9-18 UTC), detección automática fuera de horario, template configurable, respuesta inmediata | 0 mensajes sin respuesta fuera de horario (R1, Oleada 4) | ✅ (Oleada 4) | R1 #54 |
+| RAG-G3-11 | Snippets / Respuestas rápidas | `helper-node/index.js` + `frontend/src/app/chat/page.tsx` | CRUD `/api/snippets` (category=snippet), panel overlay Inbox, inserción 1-clic, resolución variables `{{name}}` `{{phone}}` `{{email}}` `{{score}}` `{{custom.*}}` | Tiempo respuesta operador -20% (R4, Oleada 4) | ✅ (Oleada 4) | R4 #55 |
+| RAG-G3-12 | Router agentes por intención | `helper-node/services/agentRegistry.js` | `routeByIntentention()` mapea patrones a `intentions[]` del agente, fallback a agente activo, métricas `messages_routed`/`messages_fallback` | Routing por intención operativo (R5, Oleada 4) | ✅ (Oleada 4) | R5 #56 |
+| RAG-G3-13 | Handoff inmediato a humano | `helper-node/index.js` | Detección frases "quiero hablar con una persona"/human/agent → `status: escalated`, `handoffRequestedAt`, respuesta automática | ≥90% handoffs pedidos cumplidos <1 turno (R6, Oleada 4) | ✅ (Oleada 4) | R6 #57 |
+| RAG-G3-14 | Sync KB externa | `helper-node/services/ragEngine.js` | `syncDocuments()` sources `file` + `api`, job programable, versionado, auditoría | KB actualizada sin intervención manual (R7, Oleada 4) | ✅ (Oleada 4) | R7 #58 |
+| RAG-G3-15 | Escalamiento por límite intentos | `helper-node/index.js` | `lostCounters` por template/canal, threshold configurable (default 3), escalamiento a `escalated` + notificación operador | 100% cadencias agotadas generan escalamiento (R8, Oleada 4) | ✅ (Oleada 4) | R8 #59 |
+| RAG-G3-16 | Comandos autoservicio | `helper-node/index.js` | MENU/HORARIOS/PRECIO sin LLM, respuesta <1s, JSON `{type,command,response}` | Comandos respondidos <1s sin costo LLM (R12, Oleada 4) | ✅ (Oleada 4) | R12 #60 |
+| RAG-G3-17 | Catálogo multimedia | `helper-node/index.js` | CRUD `/api/catalog`, integración en `/api/chat/reply` para auto-envío imagen producto | Catálogo visible en conversaciones (R13, Oleada 4) | ✅ (Oleada 4) | R13 #61 |
+| RAG-G3-18 | Opt-in explícito | `helper-node/index.js` | Campo `opt_in` en lead, API `/api/opt-ins` + `/check`, detección YES/SÍ/confirm en webhook | 100% campañas con audiencia opt-in (R14, Oleada 4) | ✅ (Oleada 4) | R14 #62 |
 
 ## G4 — Leads y scoring
 
@@ -87,14 +100,16 @@
 | RAG-G6-03 | Nurturing automático | Diseño: ROAD 5.1 | schedule 6h + reglas JSON (`nurturing-rules.js`) | Ejecutor de la cadencia de seguimiento (G15-05) | 🔴 | CTX-04 §4 |
 | RAG-G6-04 | Onboarding de clientes | Diseño: CTX-01 §5.3 | workflow "un botón, nuevo cliente" (org + workspace Dify + inbox Chatwoot + plantillas) | Automatización del alta SaaS | 🔴 | CTX01 §5.3 |
 
-## G7 — CRM (Twenty)
+## G7 — CRM (Twenty) — **FUERA DE ALCANCE (ADR-010, 31/08)**
+
+> **Decisión técnica (31/08):** Twenty CRM ya NO se usa en este proyecto. La frontera única es el frontend unificado (`wibsite/frontend/`), y los contenedores restantes operan únicamente como motores de backend. El perfil de lead propio del helper (`leadProfile.js`) es la fuente de verdad del CRM interno. `contact_id` en leads queda como referencia genérica de CRM. Verificado: Twenty ausente de `docker-compose.yml` (18 servicios), sin rutas `/api/twenty/*` en `index.js` (404 en runtime con API key válida). Issue V2 cerrado; issues pospuestos K2/K3 no dependen más de Twenty.
 
 | ID | Funcionalidad | Path | Funciones/Endpoints | Cómo se abarca | Estado | Refs |
 |---|---|---|---|---|---|---|
-| RAG-G7-01 | Sync helper→Twenty | `helper-node/index.js` | `POST /api/twenty/sync` (upsert por phone/email, paginación), `POST /sync-all`, `GET /health` | Person con datos + campos custom; `contact_id` guardado | ✅ | ADR-017 |
-| RAG-G7-02 | Campos custom | Twenty metadata API | 10 campos en `people` (painPoints, interests, leadSource… + prefijo `lead` por namespace global) | Persistencia de señales de calificación | ✅ | ADR-012 |
-| RAG-G7-03 | Bidireccionalidad y eventos | — | Webhook Twenty→helper; sync por evento (`temperature_change`, `handoff`); `Modo_Conversación` | CRM como registro vivo (línea de tiempo única) | 🔴 | CTX-03 §6, OT-06 |
-| RAG-G7-04 | Modelo metodológico | — | Campos SPICED/MEDDIC/`lead_fit_score`/`qualification_stage`; 3 pipelines por `ContactType` | El CRM ordena y califica según metodología de venta | 🔴 | CTX-03 §3-4, OT-06 |
+| RAG-G7-01 | Sync helper→Twenty | `helper-node/index.js` | `POST /api/twenty/sync` (upsert por phone/email, paginación), `POST /sync-all`, `GET /health` | Person con datos + campos custom; `contact_id` guardado | ❌ **Cancelado (ADR-010)** — rutas nunca existieron en el estado actual; no se implementarán | ADR-010 |
+| RAG-G7-02 | Campos custom | Twenty metadata API | 10 campos en `people` (painPoints, interests, leadSource… + prefijo `lead` por namespace global) | Persistencia de señales de calificación | ❌ **Cancelado (ADR-010)** — el perfil de lead en `leadProfile.js` + `custom_fields` es la fuente de verdad | ADR-010 |
+| RAG-G7-03 | Bidireccionalidad y eventos | — | Webhook Twenty→helper; sync por evento (`temperature_change`, `handoff`); `Modo_Conversación` | CRM como registro vivo (línea de tiempo única) | ❌ **Cancelado (ADR-010)** — timeline unificada nativa en `leadProfile.buildTimeline` (K7) | ADR-010 |
+| RAG-G7-04 | Modelo metodológico | — | Campos SPICED/MEDDIC/`lead_fit_score`/`qualification_stage`; 3 pipelines por `ContactType` | El CRM ordena y califica según metodología de venta | 🟡 Sustituido por el pipeline F1 propio (6+2 etapas, `leadStages.js`) + score del helper | ADR-010, CTX-03 |
 
 ## G8 — Canales y webhooks
 
@@ -224,7 +239,7 @@
 | F-13 | Bootstrap agent-core LangChain | G15-01 | POC mini-grafo 2 nodos | Latencia <5s; output correcto | Prod: decisión documentada (go/fallback) |
 | F-14 | Checkpointer memoria profunda | G10-01, G10-02 | 5 turnos + restart → contexto intacto | Estado reanudable idéntico | Prod: TTL y limpieza 7d OK |
 | F-15 | Template engine + validador | G16-01, G16-02, G12-02 | Carga JSONs + merge + inválido→error | Validación consultora+acme OK | Prod: versionadas en BD/git |
-| F-16 | Grafo 8 etapas LangGraph | G15-01 | 5 guiones de prueba | Chat completa ≤8 turnos, p95 <5s | Prod: latencia <5s sostenida |
+| F-16 | Grafo 8 etapas LangGraph | G15-01 | 5 guiones de prueba | Chat completa ≤8 turnos, p95 <5s | ✅ IMPLEMENTADO — 11 nodos (apertura, analyze, calificacion, propuesta, profundizacion, objeciones, cierre, handoff, seguimiento, kb, cotizacion); tests agentGraph 5/5 alineados a F1 (31/08) |
 | F-17 | Guardas confidencialidad+autonomía | G15-02 | 0 datos internal en 20 respuestas | Cotiz final jamás emitida; red deriva | Prod: monitoreo semanal fugas = 0 |
 | F-18 | Dify nodo + fallback OpenRouter | G5-01, G5-04 | Dify up/down → ambos modos | Failover <1s; clasificación OK | Prod: failover ejercido sin incidencia |
 
@@ -234,7 +249,7 @@
 |---|---|---|---|---|---|
 | F-19 | Banco objeciones ejecutable | G15-03 | 8/8 patrones OK + log | "Es muy caro" → reencuadre con nombre | Prod: rate resolución medible |
 | F-20 | Motor temperatura + decay | G15-04 | sim hot/warm/cold + decay | Temperatura visible con motivo en perfil | Prod: decay diario sin errores |
-| F-21 | Sync máquinas comercial↔técnica | G10-01, G15-01 | Mapeo 100% cubierto | Perfil refleja estado comercial | Prod: dashboard comercial ok |
+| F-21 | Sync máquinas comercial↔técnica | G10-01, G15-01 | Mapeo 100% cubierto | Perfil refleja estado comercial | ✅ Verificado 31/08 — proyección a etapas F1 (primer_contacto…comprador/descartado); commercialState.test 5/5 + agentGraph alineados |
 | F-22 | Handoff + briefing automático | G15-06 | trigger score≥70 + "hablar persona" | Briefing en Chatwoot con score+objec.+acción | Prod: humano cierra sin repetir |
 | F-23 | Cola seguimiento con cadencia | G15-05 | intento 2 a +1d; respuesta cancela | Cadencia en horario y canal correcto | Prod: 0 envíos fuera de horario 7d |
 | F-24 | HSM 24h + typing + opt-out | G8-01, G3-05 | ventana cerrada→HSM; baja→opt-out+stop | 0 rechazos Meta; typing visible | Prod: 0 violaciones política 30d |
