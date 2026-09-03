@@ -1,0 +1,119 @@
+﻿{
+  "id": "template-event-hall",
+  "name": "Plantilla Salón de Eventos",
+  "sector": "event_hall",
+  "description": "Plantilla para venues de eventos sociales: bodas, XV años, corporativos, etc.",
+  "meta": {
+    "version": "1.0",
+    "sector_id": "event_hall",
+    "created_at": "2026-09-01"
+  },
+  "greeting": "¡Hola {{name}}! Soy asesora de eventos en {{venue_name}}. ¿En qué te puedo ayudar?",
+  "commercial_params": {
+    "min_ticket": 5000,
+    "avg_ticket": 25000,
+    "payment_methods": ["transferencia", "efectivo", "tarjeta_credito"],
+    "currency": "MXN",
+    "booking_deposit_pct": 30,
+    "cancellation_policy": "Reembolso 100% 30 días antes, 50% 15 días antes, 0% menos de 7 días"
+  },
+  "fit_criteria": {
+    "required_fields": ["event_type", "guest_count", "event_date", "budget_range"],
+    "weight": {
+      "budget_match": 0.30,
+      "date_availability": 0.30,
+      "guest_fit": 0.20,
+      "event_type_fit": 0.20
+    },
+    "event_types": ["boda", "xv_anos", "corporativo", "bautizo", "cumpleanos", "conferencia"],
+    "venue_capacity": { "min": 20, "max": 500 }
+  },
+  "temperature_scoring": {
+    "fit": {
+      "weight": 0.30,
+      "factors": {
+        "budget_match": { "weight": 0.40, "score_formula": "min(budget / avg_ticket, 1.0)" },
+        "date_available": { "weight": 0.35, "score_formula": "1.0 if available else 0.3" },
+        "guest_fit": { "weight": 0.25, "score_formula": "1.0 if guests <= capacity else max(0, 1 - (guests - capacity) / capacity)" }
+      }
+    },
+    "engagement": {
+      "weight": 0.40,
+      "factors": {
+        "replies_count": { "weight": 0.45, "score_formula": "min(replies / 5, 1.0)" },
+        "inbound_ratio": { "weight": 0.35, "score_formula": "inbound / max(total, 1)" },
+        "recency": { "weight": 0.20, "score_formula": "max(1 - hours_since_last / 72, 0)" }
+      }
+    },
+    "intent": {
+      "weight": 0.30,
+      "factors": {
+        "date_proximity": { "weight": 0.45, "score_formula": "max(1 - days_until_event / 90, 0)" },
+        "budget_committed": { "weight": 0.30, "score_formula": "1.0 if budget_confirmed else 0.2" },
+        "deposit_paid": { "weight": 0.25, "score_formula": "1.0 if deposit else 0.0" }
+      }
+    },
+    "decay": { "rate_per_day": 0.02, "min_score": 0.1 }
+  },
+  "followup": {
+    "lost_threshold": 30,
+    "business_hours": { "start": 9, "end": 20, "timezone": "America/Mexico_City" },
+    "sequence": [
+      { "step": 0, "delay_minutes": 0, "type": "confirmation", "message": "¡Gracias por contactarnos, {{name}}! Te envío la info de disponibilidad para tu {{event_type}} del {{event_date}}.", "condition": "always" },
+      { "step": 1, "delay_minutes": 120, "type": "value_prop", "message": "{{name}}, nuestro salón tiene capacidad para {{capacity}} personas. Incluye: mobiliario, iluminación, estacionamiento y coordinator el día del evento. ¿Te gustaría agendar una visita?", "condition": "no_reply" },
+      { "step": 2, "delay_days": 1, "type": "social_proof", "message": "Hola {{name}}, te comparto testimonios de clientes recientes: {{social_proof}}. ¿Tienes alguna duda?", "condition": "no_reply" },
+      { "step": 3, "delay_days": 3, "type": "urgency", "message": "{{name}}, tu fecha del {{event_date}} se está llenando. ¿Ya decidiste reservar? Puedo apartarla con solo el {{deposit_pct}}% de anticipo.", "condition": "no_reply" },
+      { "step": 4, "delay_days": 7, "type": "value_add", "message": "Hola {{name}}, como promoción de esta semana: el upgrade a paquete premium (DJ + buffet) con 15% de descuento. ¿Te interesa?", "condition": "no_reply" },
+      { "step": 5, "delay_days": 14, "type": "final_followup", "message": "{{name}}, es mi último mensaje sobre tu evento. Si decides avanzar, aquí estoy. ¡Éxito con la planeación!", "condition": "no_reply" }
+    ]
+  },
+  "objections": [
+    {
+      "index": 0,
+      "triggers": ["caro", "precio", "costo", "presupuesto", "dinero"],
+      "response_pattern": "Entiendo, {{name}}. Nuestros paquetes inician en ${{min_ticket}}. Incluimos todo lo necesario para que no tengas sorpresas. ¿Cuál es tu presupuesto aproximado? Así te armo una propuesta a la medida.",
+      "triggers_followup": false
+    },
+    {
+      "index": 1,
+      "triggers": ["comparar", "otras opciones", "otro lugar", "diferentes", "buscar"],
+      "response_pattern": "¡Claro! Te recomiendo comparar. Pregunta por: capacidad exacta, qué incluye (mobiliario, audio, coordinador), póliza de cancelación, y si tienen restricciones de horario. Nosotros somos transparentes en todo. ¿Quieres que te envíe nuestra ficha técnica?",
+      "triggers_followup": false
+    },
+    {
+      "index": 2,
+      "triggers": ["no se si", "dudando", "pensarlo", "despues"],
+      "response_pattern": "Tranquilo/a {{name}}, sin presión. Solo recuerda que las fechas de fin de semana en {{event_type}} se apartan rápido. ¿Quieres que te mande info por si acaso?",
+      "triggers_followup": false
+    },
+    {
+      "index": 3,
+      "triggers": ["socio", "esposa", "esposo", "pareja", "familia", "mama", "papa"],
+      "response_pattern": "¡Por supuesto! Es una decisión importante. ¿Quieres que te mande un resumen con fotos, precios y disponibilidad para que lo revisen juntos?",
+      "triggers_followup": true
+    },
+    {
+      "index": 4,
+      "triggers": ["fecha", "disponible", "disponibilidad", "agosto", "septiembre"],
+      "response_pattern": "La fecha {{event_date}} está sujeta a disponibilidad. Te recomiendo apartarla cuanto antes. ¿Quieres que la verifique ahora mismo?",
+      "triggers_followup": false
+    }
+  ],
+  "autonomy": {
+    "green": ["qualify", "send_info", "schedule_visit", "answer_questions"],
+    "yellow": ["pricing", "offer_discount", "schedule_tour"],
+    "red": ["commit", "close", "payment", "contract"]
+  },
+  "handoff": {
+    "trigger_score": 70,
+    "trigger_event": "high_intent",
+    "strategy": "assign_best_agent",
+    "briefing_template": "BRIEFING HANDOFF — EVENTO\n\nCliente: {{lead_name}}\nTipo de evento: {{event_type}}\nFecha: {{event_date}}\nInvitados: {{guest_count}}\nPresupuesto: ${{budget_range}}\n\nResumen de conversación:\n{{conversation_summary}}\n\nTemperatura: {{temperature_category}} ({{temperature_score}}/100)\n\nPróxima acción recomendada: {{next_action}}"
+  },
+  "snippets": {
+    "pricing": "Nuestros paquetes inician en ${{min_ticket}}. Incluyen: salón, mobiliario, iluminación básica, estacionamiento y coordinator.\n\nUpgrade disponible: DJ, buffet, barra, decoración premium.",
+    "visit": "¿Te gustaría conocer nuestras instalaciones? Agenda una visita sin compromiso. Te muestro el salón y opciones de decoración y resolvemos todas tus dudas.\n\nHorarios: Lun-Dom 10:00-20:00",
+    "availability": "Verificando disponibilidad para {{event_date}}...\n\n{{availability_status}}\n\nPara confirmar la fecha se requiere anticipo del {{deposit_pct}}%.",
+    "cancellation": "Nuestra póliza de cancelación:\n• 30+ días antes: reembolso 100%\n• 15-29 días: reembolso 50%\n• Menos de 7 días: sin reembolso\n\n¿Tienes alguna preocupación al respecto?"
+  }
+}

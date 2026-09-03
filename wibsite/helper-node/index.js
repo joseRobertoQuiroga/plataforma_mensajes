@@ -1,4 +1,4 @@
-const { normalizeStage } = require('./services/leadStages');
+﻿const { normalizeStage } = require('./services/leadStages');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -48,6 +48,11 @@ const clientConfig = require('./services/clientConfig');
 const autonomyZones = require('./services/autonomyZones');
 const handoffBriefing = require('./services/handoffBriefing');
 
+// Oleada 7: Multi-tenant + SaaS Ops
+const { TenantHierarchy, tenantMiddleware } = require('./services/tenantHierarchy');
+const planRegistry = require('./services/planRegistry');
+const { OnboardingEngine } = require('./services/onboardingEngine');
+
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GlitchTip / Sentry Error Tracking Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
 if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
@@ -82,6 +87,9 @@ app.use((req, res, next) => {
   res.setHeader('x-request-id', req.id);
   next();
 });
+
+// Oleada 7: Tenant context (x-tenant-id header)
+app.use(tenantMiddleware);
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ OpenTelemetry tracing (span raÃƒÂ­z por request, traza E2E en Elastic) Ã¢â€â‚¬
 app.use(tracingMiddleware);
@@ -3102,6 +3110,141 @@ app.post('/api/handoffs/briefing', (req, res) => {
     const { lead = {}, conversation_history = [], template_id = 'template-consultora-software', delivery_history = [] } = req.body;
     const result = handoffBriefing.generateBriefing(lead, conversation_history, template_id, delivery_history);
     res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ==========================================
+// OLEADA 7 — MULTI-TENANT + SAAS OPS
+// ==========================================
+
+// G18-01: Jerarquía y modelo de tenants
+app.post('/api/tenants/platforms', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const platform = hierarchy.createPlatform(req.body);
+    res.json(platform);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tenants', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const tenant = hierarchy.createTenant(req.body.parent_id, req.body);
+    res.json(tenant);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tenants/branches', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const branch = hierarchy.createBranch(req.body.parent_id, req.body);
+    res.json(branch);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tenants/users', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const user = hierarchy.createUser(req.body.parent_id, req.body);
+    res.json(user);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tenants/:id', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const entity = hierarchy.get(req.params.id);
+    if (!entity) return res.status(404).json({ error: 'Entity not found' });
+    res.json(entity);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tenants/:id/ancestors', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const ancestors = hierarchy.getAncestors(req.params.id);
+    res.json({ ancestors });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tenants/:id/descendants', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const descendants = hierarchy.getDescendants(req.params.id);
+    res.json({ descendants });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/tenants/:id', (req, res) => {
+  try {
+    const hierarchy = new TenantHierarchy();
+    const deleted = hierarchy.delete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Entity not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// G18-03: Planes + Subscriptions
+app.get('/api/plans', (req, res) => {
+  try {
+    const plans = planRegistry.listPlans();
+    res.json({ plans });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/plans/:planId', (req, res) => {
+  try {
+    const plan = planRegistry.getPlan(req.params.planId);
+    if (!plan) return res.status(404).json({ error: 'Plan not found' });
+    res.json(plan);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/subscriptions', (req, res) => {
+  try {
+    const sub = planRegistry.createSubscription(req.body.tenant_id, req.body.plan_id, req.body.billing || {});
+    res.json(sub);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/subscriptions/:subId', (req, res) => {
+  try {
+    const sub = planRegistry.getSubscription(req.params.subId);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+    res.json(sub);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/subscriptions/:subId/status', (req, res) => {
+  try {
+    const sub = planRegistry.updateSubscriptionStatus(req.params.subId, req.body.status);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+    res.json(sub);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/tenants/:tenantId/limit/:metric', (req, res) => {
+  try {
+    const result = planRegistry.checkLimit(req.params.tenantId, req.params.metric, parseInt(req.query.amount) || 1);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// F-53: Auto-onboarding (<5 min)
+app.post('/api/onboarding/demo', (req, res) => {
+  try {
+    const engine = new OnboardingEngine();
+    const result = engine.createDemoTenant(req.body.name, req.body.sector);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/onboarding/validate', (req, res) => {
+  try {
+    const engine = new OnboardingEngine();
+    const validation = engine.validateOnboarding(req.body);
+    res.json(validation);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
