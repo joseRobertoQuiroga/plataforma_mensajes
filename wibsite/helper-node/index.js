@@ -40,6 +40,14 @@ const checkpointer = require('./services/agentCore/checkpointer');
 const templateEngine = require('./services/templateEngine');
 const { tracingMiddleware } = require('./services/otelBridge');
 
+// Oleada 6: Vendedor + Plantillas de negocio
+const objectionEngine = require('./services/objectionEngine');
+const leadTemperature = require('./services/leadTemperature');
+const followupCadence = require('./services/followupCadence');
+const clientConfig = require('./services/clientConfig');
+const autonomyZones = require('./services/autonomyZones');
+const handoffBriefing = require('./services/handoffBriefing');
+
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GlitchTip / Sentry Error Tracking Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
 if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
@@ -2990,6 +2998,110 @@ app.post('/api/handoffs/:deliveryId/reject', async (req, res) => {
       severity: 'medium', data: { phone: delivery.phone, reason },
     });
     res.json({ status: 'rejected', delivery_id: req.params.deliveryId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==========================================
+// OLEADA 6 — LOGICA DE VENDEDOR + PLANTILLAS
+// ==========================================
+
+// V1: Banco de objeciones ejecutable
+app.post('/api/objections/match', (req, res) => {
+  try {
+    const { message, template_id = 'template-consultora-software', lead = {} } = req.body;
+    if (!message) return res.status(400).json({ error: 'message required' });
+    const result = objectionEngine.matchObjection(message, template_id, lead);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/objections/templates', (req, res) => {
+  try {
+    const templates = objectionEngine.listTemplates();
+    res.json({ templates });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// V2: Temperatura del lead 3D
+app.post('/api/leads/temperature', (req, res) => {
+  try {
+    const { lead = {}, template_id = 'template-consultora-software', delivery_history = [] } = req.body;
+    const result = leadTemperature.calculateTemperature(lead, template_id, delivery_history);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// V3: Cadencia de seguimiento
+app.post('/api/followup/next', (req, res) => {
+  try {
+    const { lead = {}, template_id = 'template-consultora-software', last_contact_date = null } = req.body;
+    const result = followupCadence.getNextFollowup(lead, template_id, last_contact_date);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// V4: Config por cliente
+app.get('/api/clients/configs', (req, res) => {
+  try {
+    const configs = clientConfig.listClientConfigs();
+    res.json({ configs });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/clients/configs/:clientId', (req, res) => {
+  try {
+    const config = clientConfig.loadClientConfig(req.params.clientId);
+    if (!config) return res.status(404).json({ error: 'Client config not found' });
+    res.json(config);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/clients/configs/:clientId', (req, res) => {
+  try {
+    const saved = clientConfig.saveClientConfig(req.params.clientId, req.body);
+    res.json(saved);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/clients/configs/:clientId', (req, res) => {
+  try {
+    const deleted = clientConfig.deleteClientConfig(req.params.clientId);
+    if (!deleted) return res.status(404).json({ error: 'Client config not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/clients/configs/:clientId/merge/:templateId', (req, res) => {
+  try {
+    const merged = clientConfig.mergeWithTemplate(req.params.clientId, req.params.templateId);
+    res.json(merged);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// V5: Zonas de autonomia
+app.post('/api/autonomy/check', (req, res) => {
+  try {
+    const { action, lead = {}, template_id = 'template-consultora-software' } = req.body;
+    if (!action) return res.status(400).json({ error: 'action required' });
+    const result = autonomyZones.getAutonomyZone(action, lead, template_id);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/autonomy/zones', (req, res) => {
+  try {
+    const template_id = req.query.template_id || 'template-consultora-software';
+    const zones = autonomyZones.getZones(template_id);
+    res.json({ zones });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// V6: Handoff + briefing extendido
+app.post('/api/handoffs/briefing', (req, res) => {
+  try {
+    const { lead = {}, conversation_history = [], template_id = 'template-consultora-software', delivery_history = [] } = req.body;
+    const result = handoffBriefing.generateBriefing(lead, conversation_history, template_id, delivery_history);
+    res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
