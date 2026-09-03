@@ -53,6 +53,13 @@ const { TenantHierarchy, tenantMiddleware } = require('./services/tenantHierarch
 const planRegistry = require('./services/planRegistry');
 const { OnboardingEngine } = require('./services/onboardingEngine');
 
+
+// Oleada 8: Quality + Validation
+const { CommercialFlowValidator } = require('./services/commercialFlowValidator');
+const { DataValidationEngine } = require('./services/dataValidationEngine');
+const { AdversarialQuestionEngine } = require('./services/adversarialEngine');
+const { AgentBehaviorSuite } = require('./services/agentBehaviorSuite');
+
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GlitchTip / Sentry Error Tracking Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
 if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
@@ -3245,6 +3252,131 @@ app.post('/api/onboarding/validate', (req, res) => {
     const engine = new OnboardingEngine();
     const validation = engine.validateOnboarding(req.body);
     res.json(validation);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ==========================================
+// OLEADA 8 — QUALITY + VALIDATION
+// ==========================================
+
+// G15-01: Validador de flujo comercial 8 etapas
+app.post('/api/flow/validate', (req, res) => {
+  try {
+    const { messages = [], template_id = 'template-consultora-software' } = req.body;
+    const validator = new CommercialFlowValidator();
+    const result = validator.validateConversation(messages, template_id);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/flow/stages', (req, res) => {
+  try {
+    const validator = new CommercialFlowValidator();
+    res.json({ stages: validator.getFlowDiagram() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/flow/suggest-next', (req, res) => {
+  try {
+    const { current_stage, lead = {} } = req.body;
+    const validator = new CommercialFlowValidator();
+    const suggestion = validator.suggestNextStage(current_stage, lead);
+    res.json({ current_stage, suggestion, valid_next: validator.getStageInfo(current_stage).valid_next });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// F-48: Validación datos/contexto (checks diarios)
+app.get('/api/validation/checks', (req, res) => {
+  try {
+    const engine = new DataValidationEngine();
+    const checks = engine.getCheckDefinitions();
+    res.json({ checks });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/validation/run', async (req, res) => {
+  try {
+    const engine = new DataValidationEngine();
+    const result = await engine.runDailyChecks(req.query.tenant_id);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// F-49: Plantillas contexto cerrado (50 preguntas adversariales)
+app.get('/api/adversarial/questions', (req, res) => {
+  try {
+    const engine = new AdversarialQuestionEngine();
+    const { category, severity } = req.query;
+    let questions = engine.questions;
+    if (category) questions = questions.filter(q => q.category === category);
+    if (severity) questions = questions.filter(q => q.severity === severity);
+    res.json({ total: questions.length, questions });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/adversarial/stats', (req, res) => {
+  try {
+    const engine = new AdversarialQuestionEngine();
+    res.json(engine.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/adversarial/evaluate', (req, res) => {
+  try {
+    const { question_id, response } = req.body;
+    const engine = new AdversarialQuestionEngine();
+    const result = engine.evaluateResponse(question_id, response);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/adversarial/batch', (req, res) => {
+  try {
+    const { evaluations = [] } = req.body;
+    const engine = new AdversarialQuestionEngine();
+    const result = engine.evaluateBatch(evaluations);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/adversarial/forbidden', (req, res) => {
+  try {
+    const engine = new AdversarialQuestionEngine();
+    res.json({ forbidden_topics: engine.getForbiddenTopics() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// F-47: Suite comportamiento agente (20+ guiones CTX-04)
+app.get('/api/agent-behavior/scripts', (req, res) => {
+  try {
+    const suite = new AgentBehaviorSuite();
+    res.json(suite.listScripts());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/agent-behavior/scripts/:scriptId', (req, res) => {
+  try {
+    const suite = new AgentBehaviorSuite();
+    const script = suite.getScript(req.params.scriptId);
+    if (!script) return res.status(404).json({ error: 'Script not found' });
+    res.json(script);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/agent-behavior/evaluate', (req, res) => {
+  try {
+    const { script_id, responses = [] } = req.body;
+    const suite = new AgentBehaviorSuite();
+    const result = suite.evaluateScript(script_id, responses);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/agent-behavior/run-all', (req, res) => {
+  try {
+    const suite = new AgentBehaviorSuite();
+    res.json(suite.runAll());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
