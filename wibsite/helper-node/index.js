@@ -60,6 +60,18 @@ const { DataValidationEngine } = require('./services/dataValidationEngine');
 const { AdversarialQuestionEngine } = require('./services/adversarialEngine');
 const { AgentBehaviorSuite } = require('./services/agentBehaviorSuite');
 
+
+// Oleada 9: Remaining Issues + Security
+const { SecretManager, secretMiddleware } = require('./services/secretManager');
+const { PgStoreNew: PgStore } = require('./services/pgStoreNew');
+const { N8nIntegration } = require('./services/n8nIntegration');
+const { InboundFlowHandler } = require('./services/inboundFlowHandler');
+const { ContactEnrichment } = require('./services/contactEnrichment');
+const { CampaignQueue } = require('./services/campaignQueue');
+const { AICampaignTemplates } = require('./services/aiCampaignTemplates');
+const { AgentSegmentation } = require('./services/agentSegmentation');
+const { ContactGroups } = require('./services/contactGroups');
+
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GlitchTip / Sentry Error Tracking Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const GLITCHTIP_DSN = process.env.GLITCHTIP_DSN;
 if (GLITCHTIP_DSN && GLITCHTIP_DSN.startsWith('http')) {
@@ -3368,6 +3380,481 @@ app.post('/api/agent-behavior/evaluate', (req, res) => {
   try {
     const { script_id, responses = [] } = req.body;
     const suite = new AgentBehaviorSuite();
+
+// ==========================================
+// OLEADA 9 — REMAINING ISSUES + SECURITY
+// ==========================================
+
+// #15 F6: Security Hardening + #10 T1: Secret Management
+app.post('/api/secrets', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    const result = mgr.storeSecret(req.body.name, req.body.value);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/secrets', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    res.json({ secrets: mgr.listSecrets() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/secrets/:name', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    const value = mgr.getSecret(req.params.name);
+    if (!value) return res.status(404).json({ error: 'Secret not found' });
+    res.json({ name: req.params.name, value });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/secrets/:name', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    const deleted = mgr.deleteSecret(req.params.name);
+    if (!deleted) return res.status(404).json({ error: 'Secret not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/secrets/validate', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    const result = mgr.validateKeyStrength(req.body.key);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/secrets/:name/rotate', (req, res) => {
+  try {
+    const mgr = new SecretManager();
+    const result = mgr.rotateSecret(req.params.name);
+    if (!result) return res.status(404).json({ error: 'Secret not found' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #5 P1: PostgreSQL Store
+app.get('/api/pg/stats', (req, res) => {
+  try {
+    const store = new PgStore();
+    res.json(store.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/pg/insert/:table', (req, res) => {
+  try {
+    const store = new PgStore();
+    const record = store.insert(req.params.table, req.body);
+    res.json(record);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/pg/find/:table', (req, res) => {
+  try {
+    const store = new PgStore();
+    const filter = req.query || {};
+    const records = store.findAll(req.params.table, filter);
+    res.json({ records, count: records.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/pg/:table/:id', (req, res) => {
+  try {
+    const store = new PgStore();
+    const record = store.findById(req.params.table, req.params.id);
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+    res.json(record);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/pg/:table/:id', (req, res) => {
+  try {
+    const store = new PgStore();
+    const updated = store.update(req.params.table, req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Record not found' });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/pg/:table/:id', (req, res) => {
+  try {
+    const store = new PgStore();
+    const deleted = store.delete(req.params.table, req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Record not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #6 P3: n8n Integration
+app.get('/api/n8n/workflows', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    res.json({ workflows: n8n.listWorkflows(req.query.tenant_id) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/n8n/workflows/:id', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    const wf = n8n.getWorkflow(req.params.id);
+    if (!wf) return res.status(404).json({ error: 'Workflow not found' });
+    res.json(wf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/n8n/workflows', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    const wf = n8n.createWorkflow(req.body);
+    res.json(wf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/n8n/workflows/:id/activate', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    const wf = n8n.activateWorkflow(req.params.id);
+    if (!wf) return res.status(404).json({ error: 'Workflow not found' });
+    res.json(wf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/n8n/workflows/:id/deactivate', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    const wf = n8n.deactivateWorkflow(req.params.id);
+    if (!wf) return res.status(404).json({ error: 'Workflow not found' });
+    res.json(wf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/n8n/webhooks', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    res.json({ routes: n8n.getWebhookRoutes() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/n8n/health', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    res.json(n8n.getHealthStatus());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/n8n/credentials', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    const result = n8n.storeCredential(req.body.name, req.body.credential);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/n8n/credentials', (req, res) => {
+  try {
+    const n8n = new N8nIntegration();
+    res.json({ credentials: n8n.listCredentials() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #14 V6: Flujo inbound real
+app.post('/api/inbound/process', async (req, res) => {
+  try {
+    const handler = new InboundFlowHandler();
+    const result = await handler.processInbound(req.body);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/inbound/evidence', (req, res) => {
+  try {
+    const handler = new InboundFlowHandler();
+    res.json({ evidence: handler.getEvidenceLog(), stats: handler.getStats() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/inbound/evidence/:traceId', (req, res) => {
+  try {
+    const handler = new InboundFlowHandler();
+    const evidence = handler.getEvidenceByTraceId(req.params.traceId);
+    if (!evidence) return res.status(404).json({ error: 'Evidence not found' });
+    res.json(evidence);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #93 K3: Enriquecimiento de datos
+app.post('/api/enrichment/enrich', async (req, res) => {
+  try {
+    const enrichment = new ContactEnrichment();
+    const result = await enrichment.enrichContact(req.body.lead_id, req.body.contact_data, req.body.sources);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/enrichment/bulk', (req, res) => {
+  try {
+    const enrichment = new ContactEnrichment();
+    const result = enrichment.enrichBulk(req.body.leads, req.body.sources);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/enrichment/sources', (req, res) => {
+  try {
+    const enrichment = new ContactEnrichment();
+    res.json({ sources: enrichment.getEnrichmentSources() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/enrichment/cache-stats', (req, res) => {
+  try {
+    const enrichment = new ContactEnrichment();
+    res.json(enrichment.getCacheStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #91 C13: Colas campaña multi-tenant
+app.post('/api/campaign-queue/enqueue', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    const batch = queue.enqueue(req.body.campaign_id, req.body.recipients, req.body.tenant_id, req.body.plan_id);
+    res.json(batch);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/campaign-queue/dequeue', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    const batch = queue.dequeue();
+    if (!batch) return res.json({ message: 'Queue empty' });
+    res.json(batch);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/campaign-queue/:batchId/process', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    const result = queue.processNext(req.params.batchId);
+    if (!result) return res.status(404).json({ error: 'Batch not found' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/campaign-queue/stats', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    res.json(queue.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/campaign-queue/plans', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    res.json({ plans: queue.getAllPlanConfigs() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/campaign-queue/tenant/:tenantId', (req, res) => {
+  try {
+    const queue = new CampaignQueue();
+    res.json({ batches: queue.getQueueByTenant(req.params.tenantId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #88 F5: Plantillas campaña por IA
+app.get('/api/ai-templates', (req, res) => {
+  try {
+    const engine = new AICampaignTemplates();
+    res.json({ templates: engine.listTemplates(req.query.category) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/ai-templates/:id', (req, res) => {
+  try {
+    const engine = new AICampaignTemplates();
+    const tmpl = engine.getTemplate(req.params.id);
+    if (!tmpl) return res.status(404).json({ error: 'Template not found' });
+    res.json(tmpl);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ai-templates/recommend', (req, res) => {
+  try {
+    const engine = new AICampaignTemplates();
+    const recommendations = engine.recommend(req.body.lead_data, req.body.campaign_type);
+    res.json({ recommendations });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ai-templates/:id/personalize', (req, res) => {
+  try {
+    const engine = new AICampaignTemplates();
+    const message = engine.generatePersonalizedMessage(req.params.id, req.body.step_index || 0, req.body.lead_data);
+    if (!message) return res.status(404).json({ error: 'Template or step not found' });
+    res.json({ message });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/ai-templates/stats', (req, res) => {
+  try {
+    const engine = new AICampaignTemplates();
+    res.json(engine.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #35 F3: Segmentación activa por agente
+app.get('/api/segments', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    res.json({ segments: seg.listSegments(req.query.tenant_id) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/segments', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const segment = seg.createSegment(req.body);
+    res.json(segment);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/segments/:id', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const segment = seg.getSegment(req.params.id);
+    if (!segment) return res.status(404).json({ error: 'Segment not found' });
+    res.json(segment);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/segments/:id', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const updated = seg.updateSegment(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Segment not found' });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/segments/:id', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const deleted = seg.deleteSegment(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Segment not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/segments/:id/assign', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const result = seg.assignLeadsToSegment(req.params.id, req.body.leads);
+    if (!result) return res.status(404).json({ error: 'Segment not found' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/segments/filter', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    const filtered = seg.filterLeads(req.body.leads, req.body.filters);
+    res.json({ count: filtered.length, leads: filtered });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/segments/stats', (req, res) => {
+  try {
+    const seg = new AgentSegmentation();
+    res.json(seg.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// #34 F2: Grupos contactos + agrupador IA
+app.get('/api/contact-groups', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    res.json({ groups: groups.listGroups(req.query.tenant_id) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/contact-groups', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const group = groups.createGroup(req.body);
+    res.json(group);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/contact-groups/:id', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const group = groups.getGroup(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    res.json(group);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/contact-groups/:id', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const updated = groups.updateGroup(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Group not found' });
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/contact-groups/:id', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const deleted = groups.deleteGroup(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Group not found' });
+    res.json({ status: 'deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/contact-groups/:id/members', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const result = groups.addMembers(req.params.id, req.body.lead_ids);
+    if (!result) return res.status(404).json({ error: 'Group not found' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/contact-groups/:id/members', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const result = groups.removeMembers(req.params.id, req.body.lead_ids);
+    if (!result) return res.status(404).json({ error: 'Group not found' });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/contact-groups/ai-group', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    const result = groups.aiGroupleads(req.body.leads, req.body.criteria);
+    res.json({ groups: result });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/contact-groups/lead/:leadId', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    res.json({ groups: groups.getGroupsForLead(req.params.leadId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/contact-groups/stats', (req, res) => {
+  try {
+    const groups = new ContactGroups();
+    res.json(groups.getStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
     const result = suite.evaluateScript(script_id, responses);
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
